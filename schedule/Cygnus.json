@@ -4,7 +4,7 @@
       "action": "set_setting",
       "params": {
         "exp_ms": {
-          "stack_l": 30000,
+          "stack_l": 20000,
           "continuous": 500
         }
       }
