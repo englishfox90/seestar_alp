@@ -683,8 +683,9 @@ class RoofAutomation:
             return
         running = self.phase == IMAGING and not self._adopted
         if not running:
-            if self.phase == IDLE and self._heater_on:
-                self._set_heater(scope, False, s, "session ended")
+            # Unknown counts too: a restart can leave it on from the last session.
+            if self.phase == IDLE and self._heater_on is not False and state.parked is True:
+                self._set_heater(scope, False, s, "parked")
             return
         if self._dew is None:
             if self._heater_on is not True:

@@ -1188,7 +1188,8 @@ def _heater_calls(rig):
 
 def test_dew_off_when_margin_is_wide_and_start_state_is_confirmed(dew_rig):
     dew_rig.settle_and_start()
-    assert _heater_calls(dew_rig) == [0]
+    # Once while parked (state unknown after a restart), once after start-up.
+    assert _heater_calls(dew_rig) == [0, 0]
 
 
 def test_dew_turns_on_with_hysteresis(dew_rig):
@@ -1197,19 +1198,19 @@ def test_dew_turns_on_with_hysteresis(dew_rig):
     dew_rig.settle_and_start()
     dew_rig.dew.reading = DewReading(12.0, 8.0, "test")  # margin 4
     dew_rig.tick(10)
-    assert _heater_calls(dew_rig) == [0, 30]
+    assert _heater_calls(dew_rig) == [0, 0, 30]
     dew_rig.dew.reading = DewReading(12.0, 7.0, "test")  # margin 5: holds
     dew_rig.tick(10)
-    assert _heater_calls(dew_rig) == [0, 30]
+    assert _heater_calls(dew_rig) == [0, 0, 30]
     dew_rig.dew.reading = DewReading(12.0, 6.0, "test")  # margin 6: off
     dew_rig.tick(10)
-    assert _heater_calls(dew_rig) == [0, 30, 0]
+    assert _heater_calls(dew_rig) == [0, 0, 30, 0]
 
 
 def test_dew_stays_on_with_no_weather_data(dew_rig):
     dew_rig.dew.reading = None
     dew_rig.settle_and_start()
-    assert _heater_calls(dew_rig) == [30]
+    assert _heater_calls(dew_rig) == [0, 30]
 
 
 def test_dew_off_when_session_parks(dew_rig):
@@ -1217,14 +1218,14 @@ def test_dew_off_when_session_parks(dew_rig):
 
     dew_rig.dew.reading = DewReading(12.0, 11.0, "test")
     dew_rig.settle_and_start()
-    assert _heater_calls(dew_rig) == [30]
+    assert _heater_calls(dew_rig) == [0, 30]
     dew_rig.safety = UNSAFE
     dew_rig.tick()
     dew_rig.tick(31)
     dew_rig.set_scope(sched_state="stopped", parked=True, item_number=0)
     dew_rig.tick(10)
     dew_rig.tick(10)
-    assert _heater_calls(dew_rig) == [30, 0]
+    assert _heater_calls(dew_rig) == [0, 30, 0]
 
 
 def test_dew_leaves_a_foreign_session_alone(dew_rig):
@@ -1260,3 +1261,13 @@ def test_dew_point_and_smallest_margin_wins():
     assert monitor.read(None).source == "b"
     assert monitor.read(None).source == "b"
     assert len(calls) == 1  # cached
+
+
+def test_dew_turned_off_after_a_restart_while_parked_only(dew_rig):
+    dew_rig.tick()
+    assert _heater_calls(dew_rig) == [0]
+    dew_rig.scope.calls.clear()
+    dew_rig.auto._heater_on = None
+    dew_rig.set_scope(parked=False)
+    dew_rig.tick(10)
+    assert _heater_calls(dew_rig) == []  # arm open, maybe someone else's session
