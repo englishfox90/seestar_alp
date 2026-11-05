@@ -15,8 +15,9 @@
   .dash-headline { font-size: 1.25rem; font-weight: 650; margin: 0; overflow-wrap: anywhere; }
   .dash-track { list-style: none; display: flex; margin: 0; padding: 0; }
   .dash-step { position: relative; flex: 1 1 0; min-width: 0; text-align: center; font-size: 0.72rem; opacity: 0.55; }
-  /* The line runs from the previous dot to this one, so it reads as one journey. */
-  .dash-step:not(:first-child)::before { content: ""; position: absolute; top: 0.68rem; right: 50%; width: 100%; height: 3px; background: var(--ui-border-soft); }
+  /* The line spans the gap between the previous dot and this one, edge to edge.
+     Dimmed steps form their own stacking contexts, so it can't rely on z-index. */
+  .dash-step:not(:first-child)::before { content: ""; position: absolute; top: 0.68rem; left: calc(-50% + 0.75rem); right: calc(50% + 0.75rem); height: 3px; background: var(--ui-border-soft); }
   .dash-dot { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; margin: 0 auto 0.3rem; border-radius: 50%; border: 2px solid var(--ui-border-soft); background: #0a1427; font-size: 0.75rem; font-weight: 700; color: #fff; }
   .dash-step.is-done, .dash-step.is-skipped, .dash-step.is-warn, .dash-step.is-active, .dash-step.is-failed, .dash-step.is-blocked { opacity: 1; }
   .dash-step.is-done::before, .dash-step.is-skipped::before, .dash-step.is-warn::before, .dash-step.is-active::before, .dash-step.is-failed::before, .dash-step.is-blocked::before { background: #198754; }
