@@ -1,0 +1,143 @@
+{
+  "update_time_seestar": "2026.11.04",
+  "plan_name": "Tonight",
+  "plan_target_af": true,
+  "viewplan_gohome": true,
+  "list": [
+    {
+      "target_ra_dec": [
+        23.267666,
+        60.045555
+      ],
+      "target_name": "SH2-157",
+      "lp_filter": true,
+      "state": "complete",
+      "lapse_ms": 755257,
+      "target_id": 1793846741,
+      "camera_mode": "tele",
+      "output_file": {
+        "path": "MyWorks/SH2-157",
+        "files": [
+          {
+            "name": "Stacked_8_SH2-157_30.0s_LP_20261104-210001.fit",
+            "date": "2026-11-04 21:00:04",
+            "thn": "Stacked_8_SH2-157_30.0s_LP_20261104-210001_thn.jpg",
+            "type": 2
+          }
+        ]
+      },
+      "stack_total_sec": 240.0,
+      "start_min": 1140,
+      "duration_min": 120,
+      "skip": false,
+      "alias_name": "SH2-157"
+    },
+    {
+      "target_ra_dec": [
+        20.938334,
+        31.741667
+      ],
+      "target_name": "NGC 6992",
+      "lp_filter": true,
+      "state": "complete",
+      "lapse_ms": 3601095,
+      "target_id": 384671702,
+      "camera_mode": "tele",
+      "output_file": {
+        "path": "MyWorks/NGC 6992",
+        "files": [
+          {
+            "name": "Stacked_90_NGC 6992_30.0s_LP_20261104-220000.fit",
+            "date": "2026-11-04 22:00:05",
+            "thn": "Stacked_90_NGC 6992_30.0s_LP_20261104-220000_thn.jpg",
+            "type": 2
+          }
+        ]
+      },
+      "stack_total_sec": 2700.0,
+      "start_min": 1260,
+      "duration_min": 60,
+      "skip": false,
+      "alias_name": "NGC 6992"
+    },
+    {
+      "target_ra_dec": [
+        4.019444,
+        36.459999
+      ],
+      "target_name": "NGC 1499",
+      "lp_filter": true,
+      "state": "complete",
+      "lapse_ms": 7199239,
+      "target_id": 1793846834,
+      "camera_mode": "tele",
+      "output_file": {
+        "path": "MyWorks/NGC 1499_mosaic",
+        "files": [
+          {
+            "name": "Stacked_137_mosaic_NGC 1499_30.0s_LP_20261105-000001.fit",
+            "date": "2026-11-05 00:00:04",
+            "thn": "Stacked_137_mosaic_NGC 1499_30.0s_LP_20261105-000001_thn.jpg",
+            "type": 2
+          }
+        ]
+      },
+      "stack_total_sec": 4110.0,
+      "start_min": 1320,
+      "duration_min": 120,
+      "skip": false,
+      "alias_name": "NGC 1499",
+      "mosaic": {
+        "scale": 1.0,
+        "angle": 46.0,
+        "star_map_angle": 46.0
+      }
+    },
+    {
+      "target_ra_dec": [
+        5.588083,
+        -5.390278
+      ],
+      "target_name": "M 42",
+      "lp_filter": true,
+      "state": "working",
+      "lapse_ms": 0,
+      "target_id": 1793846842,
+      "camera_mode": "tele",
+      "start_min": 1440,
+      "duration_min": 120,
+      "skip": false,
+      "alias_name": "M 42"
+    },
+    {
+      "target_ra_dec": [
+        5.683333,
+        -2.453333
+      ],
+      "target_name": "IC 434",
+      "lp_filter": true,
+      "state": "idle",
+      "target_id": 384671707,
+      "camera_mode": "tele",
+      "start_min": 1560,
+      "duration_min": 60,
+      "skip": false,
+      "alias_name": "IC 434"
+    },
+    {
+      "target_ra_dec": [
+        5.081666,
+        -7.25
+      ],
+      "target_name": "IC 2118",
+      "lp_filter": false,
+      "state": "idle",
+      "target_id": 1793846811,
+      "camera_mode": "tele",
+      "start_min": 1620,
+      "duration_min": 170,
+      "skip": false,
+      "alias_name": "IC 2118"
+    }
+  ]
+}

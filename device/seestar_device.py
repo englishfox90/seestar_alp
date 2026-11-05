@@ -1517,6 +1517,10 @@ class Seestar:
                 "lp_filter": False,
             },
         }
+        # Firmware only stores a framed mosaic given with the view start. Sent by
+        # set_setting it replies code 0 but keeps scale 1 (firmware 9.75, S30 Pro).
+        if params.get("mosaic"):
+            data["params"]["mosaic"] = params["mosaic"]
         self.mark_op_state("goto_target", "stopped")
 
         result = self.send_message_param_sync(data)
@@ -2335,6 +2339,7 @@ class Seestar:
         save_target_name: str,
         is_use_autofocus: bool,
         is_use_LP_filter: bool,
+        mosaic: Optional[dict] = None,
     ) -> bool:
         result = self.goto_target(
             {
@@ -2342,6 +2347,7 @@ class Seestar:
                 "dec": cur_dec,
                 "is_j2000": False,
                 "target_name": save_target_name,
+                "mosaic": mosaic,
             }
         )
         if result:
@@ -2791,6 +2797,7 @@ class Seestar:
                 num_tries,
                 retry_wait_s,
                 stack_type,
+                params.get("mosaic_star_map_angle"),
             )
         )
         self.framed_mosaic_thread.name = f"FramedMosaicThread:{self.device_name}"
@@ -2810,7 +2817,13 @@ class Seestar:
         num_tries,
         retry_wait_s,
         stack_type="DeepSky",
+        star_map_angle=None,
     ):
+        mosaic = {
+            "scale": mosaic_scale,
+            "angle": mosaic_angle,
+            "star_map_angle": mosaic_angle if star_map_angle is None else star_map_angle,
+        }
         try:
             total_time_s = round(panel_time_sec)
             item_state: SchedulerItemState = {
@@ -2844,6 +2857,7 @@ class Seestar:
                     target_name,
                     is_use_autofocus,
                     is_use_LP_filter,
+                    mosaic=mosaic,
                 )
                 if result:
                     break
@@ -2869,18 +2883,6 @@ class Seestar:
                 self.event_state["scheduler"]["cur_scheduler_item"]["action"] = msg
                 return
 
-            self.send_message_param_sync(
-                {
-                    "method": "set_setting",
-                    "params": {
-                        "mosaic": {
-                            "scale": mosaic_scale,
-                            "angle": mosaic_angle,
-                            "star_map_angle": 0.0,
-                        }
-                    },
-                }
-            )
             try:
                 msg = f"stacking the framed mosaic for {panel_time_sec} seconds"
                 self.logger.info(msg)

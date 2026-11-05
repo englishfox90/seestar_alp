@@ -1,0 +1,45 @@
+{
+  "list": [
+    {
+      "action": "set_setting",
+      "params": {
+        "exp_ms": {
+          "stack_l": 20000,
+          "continuous": 500
+        }
+      }
+    },
+    {
+      "action": "start_framed_mosaic",
+      "params": {
+        "target_name": "NGC 6960",
+        "ra": 20.8728,
+        "dec": 30.4817,
+        "is_j2000": true,
+        "is_use_lp_filter": true,
+        "is_use_autofocus": true,
+        "panel_time_sec": 10800,
+        "gain": 200,
+        "mosaic_scale": 1.7,
+        "mosaic_angle": 10.0,
+        "mosaic_star_map_angle": 12.054001
+      }
+    },
+    {
+      "action": "start_framed_mosaic",
+      "params": {
+        "target_name": "IC 1805",
+        "ra": 2.711,
+        "dec": 61.246,
+        "is_j2000": true,
+        "is_use_lp_filter": true,
+        "is_use_autofocus": true,
+        "panel_time_sec": 10800,
+        "gain": 200,
+        "mosaic_scale": 1.7,
+        "mosaic_angle": 67.0,
+        "mosaic_star_map_angle": 69.054001
+      }
+    }
+  ]
+}

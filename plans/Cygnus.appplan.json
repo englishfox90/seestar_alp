@@ -1,0 +1,52 @@
+{
+  "update_time_seestar": "2026.11.05",
+  "plan_name": "Cygnus",
+  "plan_target_af": true,
+  "viewplan_gohome": true,
+  "list": [
+    {
+      "target_ra_dec": [
+        20.872814,
+        30.481741
+      ],
+      "target_name": "NGC 6960",
+      "lp_filter": true,
+      "state": "fail",
+      "error": "target time out",
+      "code": 513,
+      "lapse_ms": 0,
+      "target_id": 1793862477,
+      "camera_mode": "tele",
+      "start_min": 1090,
+      "duration_min": 350,
+      "skip": false,
+      "alias_name": "NGC 6960",
+      "mosaic": {
+        "scale": 1.7,
+        "angle": 10.0,
+        "star_map_angle": 12.054001
+      }
+    },
+    {
+      "target_ra_dec": [
+        2.710973,
+        61.246048
+      ],
+      "target_name": "IC 1805",
+      "lp_filter": true,
+      "state": "working",
+      "lapse_ms": 1,
+      "target_id": 1793862546,
+      "camera_mode": "tele",
+      "start_min": 1440,
+      "duration_min": 350,
+      "skip": false,
+      "alias_name": "IC 1805",
+      "mosaic": {
+        "scale": 1.7,
+        "angle": 67.0,
+        "star_map_angle": 69.054001
+      }
+    }
+  ]
+}

@@ -2861,7 +2861,12 @@ def test_mosaic_thread_fn_happy_path(monkeypatch, seestar):
 def test_framed_mosaic_thread_fn_happy_path(monkeypatch, seestar):
     monkeypatch.setattr("device.seestar_device.time.sleep", lambda _s: None)
     monkeypatch.setattr("device.seestar_device.sleep", lambda _s: None)
-    monkeypatch.setattr(seestar, "mosaic_goto_inner_worker", lambda *_a, **_k: True)
+    gotos = []
+    monkeypatch.setattr(
+        seestar,
+        "mosaic_goto_inner_worker",
+        lambda *_a, **k: gotos.append(k.get("mosaic")) or True,
+    )
     monkeypatch.setattr(seestar, "set_target_name", lambda _n: {"ok": True})
     monkeypatch.setattr(seestar, "start_stack", lambda _p: True)
     monkeypatch.setattr(seestar, "stop_stack", lambda: {"ok": True})
@@ -2889,8 +2894,25 @@ def test_framed_mosaic_thread_fn_happy_path(monkeypatch, seestar):
     mosaic_sets = [
         p["params"]["mosaic"] for p in sent if "mosaic" in p.get("params", {})
     ]
-    assert mosaic_sets[0] == {"scale": 1.5, "angle": 45.0, "star_map_angle": 0.0}
-    assert mosaic_sets[-1] == {"scale": 1.0, "angle": 0.0, "star_map_angle": 0.0}
+    # The mosaic goes with the view start: the firmware ignores it by set_setting.
+    assert gotos == [{"scale": 1.5, "angle": 45.0, "star_map_angle": 45.0}]
+    assert mosaic_sets == [{"scale": 1.0, "angle": 0.0, "star_map_angle": 0.0}]
+
+
+def test_goto_target_sends_mosaic_with_the_view_start(monkeypatch, seestar):
+    sent = []
+    monkeypatch.setattr(seestar, "is_goto", lambda: False)
+    monkeypatch.setattr(seestar, "mark_goto_status_as_start", lambda: None)
+    monkeypatch.setattr(
+        seestar, "send_message_param_sync", lambda p: sent.append(p) or {"result": 0}
+    )
+    mosaic = {"scale": 1.7, "angle": 67.0, "star_map_angle": 69.0}
+    seestar.goto_target(
+        {"ra": 1.0, "dec": 2.0, "is_j2000": False, "target_name": "T", "mosaic": mosaic}
+    )
+    seestar.goto_target({"ra": 1.0, "dec": 2.0, "is_j2000": False, "target_name": "T"})
+    assert sent[0]["params"]["mosaic"] == mosaic
+    assert "mosaic" not in sent[1]["params"]
 
 
 def test_framed_mosaic_thread_fn_skips_mosaic_setting_on_goto_failure(
@@ -2946,10 +2968,7 @@ def test_framed_mosaic_thread_fn_resets_mosaic_setting_on_stack_failure(
     mosaic_sets = [
         p["params"]["mosaic"] for p in sent if "mosaic" in p.get("params", {})
     ]
-    assert mosaic_sets == [
-        {"scale": 1.5, "angle": 45.0, "star_map_angle": 0.0},
-        {"scale": 1.0, "angle": 0.0, "star_map_angle": 0.0},
-    ]
+    assert mosaic_sets == [{"scale": 1.0, "angle": 0.0, "star_map_angle": 0.0}]
 
 
 def test_start_mosaic_item_paths(monkeypatch, seestar):
