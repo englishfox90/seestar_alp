@@ -54,11 +54,14 @@ roof/service.sh restart     # refuses while imaging; --force overrides
 roof/service.sh stop
 ```
 
+Build the venv from `/opt/homebrew/bin/python3.13`. Under launchd, macOS gave the
+Intel Python in `/usr/local` "No route to host" reaching the scope.
+
 ## Upstream merges
 
 ```
 git fetch upstream && git merge upstream/main
-.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python -m pytest tests/test_roof.py -q
 ```
 

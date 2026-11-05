@@ -147,8 +147,30 @@ class RoofCapture(_Action):
         return f"Captured {len(plan['list'])} targets as {name}.json."
 
 
+class DefaultDeviceMiddleware:
+    """Send page URLs with no device number to the configured scope.
+
+    Upstream pages default to device 0, the Federation, when the URL has no
+    number. Federation is still there, explicitly, at /0/.
+    """
+
+    def __init__(self, router):
+        self._router = router
+
+    def process_request(self, req, resp):
+        if req.method != "GET" or req.path.split("/")[1].isdigit():
+            return
+        device = roof_config.load().device_num
+        target = f"/{device}{req.path}"
+        if self._router.find(target) is None:
+            return
+        query = f"?{req.query_string}" if req.query_string else ""
+        raise falcon.HTTPFound(target + query)
+
+
 def install(app):
     """Add the routes and start the automation thread."""
+    app.add_middleware(DefaultDeviceMiddleware(app._router))
     pages = {
         "roof": RoofPage,
         "roof/status": RoofStatus,

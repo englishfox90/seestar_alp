@@ -7,4 +7,5 @@
 {% else %}
   <span class="badge text-bg-danger">Roof: UNSAFE</span>
 {% endif %}
+{% if not status.loop_stale and not status.connected %}<span class="badge text-bg-warning">scope offline</span>{% endif %}
 {% if status.dry_run %}<span class="badge text-bg-warning">dry run</span>{% endif %}

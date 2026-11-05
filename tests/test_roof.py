@@ -1052,3 +1052,43 @@ def test_target_altitude_matches_astropy_altaz():
     params = {"ra": 5.588, "dec": -5.39, "is_j2000": True}
     assert target_altitude_deg(params, 31.5, -99.37, when) == pytest.approx(expected, abs=0.2)
     assert target_altitude_deg({"ra": -1, "dec": -1}, 31.5, -99.37, when) is None
+
+
+def test_headline_says_what_it_is_doing(rig):
+    rig.sun = -5.0
+    rig.tick()
+    rig.tick(121)
+    assert rig.auto.status()["headline"] == "Waiting: not dark"
+    rig.sun = -40.0
+    rig.auto = rig.build()
+    rig.settle_and_start()
+    rig.set_scope(target="M 42", item_number=2, item_count=3)
+    rig.tick(10)
+    assert rig.auto.status()["headline"] == "Imaging M 42 item 2 of 3"
+
+
+def test_disconnected_scope_is_the_reason_shown_first(rig):
+    rig.safety = UNSAFE
+    rig.set_scope(connected=False, parked=None, sched_state="unknown")
+    rig.tick()
+    assert rig.auto.status()["note"] == "waiting: scope not connected"
+
+
+@pytest.mark.parametrize(
+    "path,query,location",
+    [
+        ("/roof", None, "/1/roof"),
+        ("/roof/status", "a=b", "/1/roof/status?a=b"),
+    ],
+)
+def test_pages_without_a_device_number_go_to_the_scope(web, path, query, location):
+    client, _ = web
+    result = client.simulate_get(path, query_string=query)
+    assert result.status_code == 302
+    assert result.headers["location"].endswith(location)
+
+
+def test_explicit_federation_and_unnumbered_only_routes_are_untouched(web):
+    client, _ = web
+    assert "location" not in client.simulate_get("/0/roof").headers
+    assert "location" not in client.simulate_get("/roof/badge").headers

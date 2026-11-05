@@ -8,6 +8,14 @@
 {% if status.foreign %}
 <div class="alert alert-info">A session started elsewhere is running. Automation will leave it alone, and will still park if the roof reads unsafe.</div>
 {% endif %}
+<div class="card mb-3"><div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+  <div class="h4 mb-0">{{ status.headline or "Starting up" }}</div>
+  <div class="small text-body-secondary">
+    Service {% if status.loop_stale %}<span class="badge text-bg-danger">NOT RESPONDING</span>{% else %}<span class="badge text-bg-success">RUNNING</span>{% endif %}
+    {% if status.uptime_s is defined %}&nbsp;up {{ (status.uptime_s // 3600)|int }}h {{ ((status.uptime_s % 3600) // 60)|int }}m{% endif %}
+    {% if status.loop_age_s is not none %}, checked {{ status.loop_age_s|int }}s ago{% endif %}
+  </div>
+</div></div>
 <div class="row g-3 mb-3">
   <div class="col-md-4"><div class="card h-100"><div class="card-header">Roof</div><div class="card-body">
     <p class="h4">{% if status.safe %}<span class="badge text-bg-success">SAFE</span>{% else %}<span class="badge text-bg-danger">UNSAFE</span>{% endif %}</p>
@@ -17,7 +25,7 @@
     <p class="h4">{% if status.dark %}<span class="badge text-bg-success">DARK</span>{% else %}<span class="badge text-bg-secondary">NOT DARK</span>{% endif %}</p>
     <div class="small text-body-secondary">Sun {% if status.sun_deg is none %}unknown (no site lat/long){% else %}{{ "%.1f"|format(status.sun_deg) }}&deg;{% endif %}, limit {{ status.sun_max_deg }}&deg;</div>
   </div></div></div>
-  <div class="col-md-4"><div class="card h-100"><div class="card-header">Scope</div><div class="card-body">
+  <div class="col-md-4"><div class="card h-100"><div class="card-header">Scope{% if status.scope_name %}: {{ status.scope_name }}{% endif %}</div><div class="card-body">
     {% if not status.connected %}
       <p class="h4"><span class="badge text-bg-danger">NOT CONNECTED</span></p>
     {% else %}

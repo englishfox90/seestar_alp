@@ -115,6 +115,7 @@ class RoofAutomation:
         self._note = ""
         self._last_heartbeat = 0.0
         self._last_tick = 0.0
+        self._started_at = clock()
 
         # Survives an ALP restart: a held or finished night must stay that way.
         self._hold_night = ""
@@ -416,14 +417,14 @@ class RoofAutomation:
         self._begin_start(scope, s, state, night, now)
 
     def _start_block(self, s, state, safety, dark, night, now):
+        if not state.connected:
+            return "waiting: scope not connected"
         if not safety.safe:
             return "waiting: roof not safe"
         if now - (self._safe_since or now) < s.start_settle_s:
             return f"waiting: roof must read safe for {s.start_settle_s:.0f}s"
         if not dark:
             return "waiting: not dark"
-        if not state.connected:
-            return "waiting: scope not connected"
         if self._hold_night == night:
             return "held after Stop + Park until Start or the next night"
         if self._completed_night == night:
@@ -705,6 +706,20 @@ class RoofAutomation:
             self._log_lines.append(line)
         self._logger.info("%s%s", dry, message)
 
+    def _headline(self, state, foreign) -> str:
+        """What it's doing right now, in a sentence."""
+        if self.phase == OPENING:
+            return "Opening the arm"
+        if self.phase == PARKING:
+            return "Parking"
+        if self.phase == IMAGING:
+            where = f"item {state.item_number} of {state.item_count}" if state.item_number else ""
+            what = " ".join(p for p in (state.target, where) if p)
+            return f"Imaging {what}".strip()
+        if foreign:
+            return "A session started elsewhere is running"
+        return (self._note or "Idle").capitalize()
+
     def _publish(self, s, safety, sun, dark, night, state, now):
         foreign = self._foreign(state)
         resume = self._resume if self._resume.get("night") == night else {}
@@ -721,6 +736,7 @@ class RoofAutomation:
             "targets": self._targets_now(s, now),
             "phase": self.phase,
             "connected": state.connected,
+            "scope_name": state.name,
             "parked": state.parked,
             "tracking": state.tracking,
             "sched_state": state.sched_state,
@@ -736,6 +752,10 @@ class RoofAutomation:
             "completed": self._completed_night == night,
             "resume_item": resume.get("item") if resume.get("schedule") == s.schedule else None,
             "alarm": self._loop_error or self._alarm,
+            "headline": self._headline(state, foreign),
+            "started_at": self._started_at,
+            "uptime_s": now - self._started_at,
+            "pid": os.getpid(),
             "note": self._note,
         }
         with self._lock:

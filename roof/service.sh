@@ -7,8 +7,9 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 PLIST="/Library/LaunchDaemons/$LABEL.plist"
 ALPACA="http://127.0.0.1:5555/api/v1/telescope/1/action"
 
-# A system daemon because macOS blocks launchd *agents* from the local network
-# ("No route to host" reaching the scope). It also starts at boot, with no login.
+# A system daemon so it starts at boot, with no login. The venv must use a native
+# arm64 Python (/opt/homebrew): macOS gives launchd jobs running the Intel build in
+# /usr/local "No route to host" when they try to reach the scope.
 need_root() {
   if [ "$(id -u)" -ne 0 ]; then
     exec sudo "$0" "$@"

@@ -14,6 +14,7 @@ from roof.schedule_tools import load as schedule_load
 @dataclass(frozen=True)
 class ScopeState:
     connected: bool = False
+    name: str = ""
     parked: bool | None = None  # firmware mount.close; None = unknown
     tracking: bool | None = None
     sched_state: str = "unknown"
@@ -50,7 +51,7 @@ class RealScope:
     def read(self) -> ScopeState:
         dev = self._get_device()
         if dev is None or not dev.is_connected:
-            return ScopeState(connected=False)
+            return ScopeState(connected=False, name=getattr(dev, "device_name", ""))
         sched = dev.schedule
         items = sched.get("list") or []
         number = int(sched.get("item_number") or 0)
@@ -59,6 +60,7 @@ class RealScope:
             target = items[number - 1].get("params", {}).get("target_name", "")
         state = ScopeState(
             connected=True,
+            name=dev.device_name,
             sched_state=str(sched.get("state", "unknown")),
             item_number=number if number <= len(items) else 0,
             item_count=len(items),
