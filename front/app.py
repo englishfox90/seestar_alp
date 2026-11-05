@@ -5867,6 +5867,14 @@ class FrontMain:
 
         app.add_error_handler(Exception, _log_unhandled_exception)
 
+        # Fork: roof automation. A failure here must not take down the web UI.
+        try:
+            from roof.web import install as install_roof
+
+            install_roof(app)
+        except Exception:
+            logger.exception("Roof automation failed to start")
+
         app.add_route("/", HomeResource())
         app.add_route("/command", CommandResource())
         app.add_route("/goto", GotoResource())

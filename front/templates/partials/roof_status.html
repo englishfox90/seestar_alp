@@ -1,0 +1,42 @@
+{% if status.loop_stale %}
+<div class="alert alert-danger">The automation loop has stopped reporting. Nothing will park the scope automatically until this clears.</div>
+{% endif %}
+{% if status.alarm %}<div class="alert alert-danger">{{ status.alarm }}</div>{% endif %}
+{% if status.override_roof %}
+<div class="alert alert-danger">Manual start is ignoring the roof. It will not park for the roof until the roof next reads safe.</div>
+{% endif %}
+{% if status.foreign %}
+<div class="alert alert-info">A session started elsewhere is running. Automation will leave it alone, and will still park if the roof reads unsafe.</div>
+{% endif %}
+<div class="row g-3 mb-3">
+  <div class="col-md-4"><div class="card h-100"><div class="card-header">Roof</div><div class="card-body">
+    <p class="h4">{% if status.safe %}<span class="badge text-bg-success">SAFE</span>{% else %}<span class="badge text-bg-danger">UNSAFE</span>{% endif %}</p>
+    <div class="small text-body-secondary">{{ status.safety_detail }}</div>
+  </div></div></div>
+  <div class="col-md-4"><div class="card h-100"><div class="card-header">Sky</div><div class="card-body">
+    <p class="h4">{% if status.dark %}<span class="badge text-bg-success">DARK</span>{% else %}<span class="badge text-bg-secondary">NOT DARK</span>{% endif %}</p>
+    <div class="small text-body-secondary">Sun {% if status.sun_deg is none %}unknown (no site lat/long){% else %}{{ "%.1f"|format(status.sun_deg) }}&deg;{% endif %}, limit {{ status.sun_max_deg }}&deg;</div>
+  </div></div></div>
+  <div class="col-md-4"><div class="card h-100"><div class="card-header">Scope</div><div class="card-body">
+    {% if not status.connected %}
+      <p class="h4"><span class="badge text-bg-danger">NOT CONNECTED</span></p>
+    {% else %}
+      <p class="h4">{% if status.parked is none %}<span class="badge text-bg-warning">UNKNOWN</span>{% elif status.parked %}<span class="badge text-bg-secondary">PARKED</span>{% else %}<span class="badge text-bg-primary">ARM OPEN</span>{% endif %}</p>
+      <div class="small text-body-secondary">
+        Scheduler: {{ status.sched_state }}{% if status.item_number %}, item {{ status.item_number }} of {{ status.item_count }}{% endif %}<br>
+        Target: {{ status.target or "none" }}<br>
+        Tracking: {{ status.tracking }}
+      </div>
+    {% endif %}
+  </div></div></div>
+</div>
+<p class="mb-1"><strong>Automation:</strong> {{ "enabled" if status.enabled else "disabled" }}, {{ status.phase }}{% if status.note %} ({{ status.note }}){% endif %}</p>
+<p class="small text-body-secondary mb-3">
+  {% if status.held %}Held until Start or the next night. {% endif %}
+  {% if status.completed %}Schedule finished tonight. {% endif %}
+  {% if status.resume_item %}Will resume at item {{ status.resume_item }} tonight. {% endif %}
+</p>
+<div class="card"><div class="card-header">Log</div><div class="card-body">
+  <pre class="small mb-0" style="max-height: 20rem; overflow-y: auto;">{% for line in status.log|reverse %}{{ line }}
+{% endfor %}</pre>
+</div></div>

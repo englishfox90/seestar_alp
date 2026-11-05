@@ -1,0 +1,109 @@
+{
+  "list": [
+    {
+      "action": "set_setting",
+      "params": {
+        "exp_ms": {
+          "stack_l": 30000,
+          "continuous": 500
+        }
+      }
+    },
+    {
+      "action": "start_mosaic",
+      "params": {
+        "target_name": "SH2-157",
+        "ra": 23.2677,
+        "dec": 60.0456,
+        "is_j2000": true,
+        "is_use_lp_filter": true,
+        "is_use_autofocus": true,
+        "panel_time_sec": 3600,
+        "ra_num": 1,
+        "dec_num": 1,
+        "panel_overlap_percent": 20,
+        "gain": 200
+      }
+    },
+    {
+      "action": "start_mosaic",
+      "params": {
+        "target_name": "NGC 6992",
+        "ra": 20.9383,
+        "dec": 31.7417,
+        "is_j2000": true,
+        "is_use_lp_filter": true,
+        "is_use_autofocus": true,
+        "panel_time_sec": 3600,
+        "ra_num": 1,
+        "dec_num": 1,
+        "panel_overlap_percent": 20,
+        "gain": 200
+      }
+    },
+    {
+      "action": "start_mosaic",
+      "params": {
+        "target_name": "NGC 1499",
+        "ra": 4.0194,
+        "dec": 36.46,
+        "is_j2000": true,
+        "is_use_lp_filter": true,
+        "is_use_autofocus": true,
+        "panel_time_sec": 3600,
+        "ra_num": 1,
+        "dec_num": 1,
+        "panel_overlap_percent": 20,
+        "gain": 200
+      }
+    },
+    {
+      "action": "start_mosaic",
+      "params": {
+        "target_name": "M 42",
+        "ra": 5.5881,
+        "dec": -5.3903,
+        "is_j2000": true,
+        "is_use_lp_filter": true,
+        "is_use_autofocus": true,
+        "panel_time_sec": 3600,
+        "ra_num": 1,
+        "dec_num": 1,
+        "panel_overlap_percent": 20,
+        "gain": 200
+      }
+    },
+    {
+      "action": "start_mosaic",
+      "params": {
+        "target_name": "IC 434",
+        "ra": 5.6833,
+        "dec": -2.4533,
+        "is_j2000": true,
+        "is_use_lp_filter": true,
+        "is_use_autofocus": true,
+        "panel_time_sec": 3600,
+        "ra_num": 1,
+        "dec_num": 1,
+        "panel_overlap_percent": 20,
+        "gain": 200
+      }
+    },
+    {
+      "action": "start_mosaic",
+      "params": {
+        "target_name": "IC 2118",
+        "ra": 5.0817,
+        "dec": -7.25,
+        "is_j2000": true,
+        "is_use_lp_filter": false,
+        "is_use_autofocus": true,
+        "panel_time_sec": 3600,
+        "ra_num": 1,
+        "dec_num": 1,
+        "panel_overlap_percent": 20,
+        "gain": 200
+      }
+    }
+  ]
+}
