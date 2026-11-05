@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block html_header %}
+<style>
+  #dash-live .alert-danger { background: #5c1620 !important; border: 1px solid #dc3545 !important; color: #fff !important; font-weight: 600; }
+  .dash-grid [hidden] { display: none !important; }
+  .dash-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; align-items: start; }
+  .dash-column { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+  .dash-column .panel-card { margin-bottom: 0; }
+  .dash-column .dashboard-stat-list { max-width: none; }
+  .dash-badges { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+  .dash-badges .badge { font-size: 0.85rem; }
+  .dash-headline { font-size: 1.25rem; font-weight: 650; margin: 0; overflow-wrap: anywhere; }
+  #dash-events .card { height: 100%; font-size: 0.85rem; }
+  #dash-events .card-header { padding: 0.35rem 0.5rem; }
+  #dash-events .card-body { padding: 0.5rem; }
+  #dash-events .card-text { margin: 0; overflow-wrap: anywhere; }
+  .dash-image { display: block; width: 100%; max-height: 72vh; object-fit: contain; background: #000; border-radius: 0.5rem; }
+  .dash-image-empty { padding: 3rem 1rem; text-align: center; background: #000; border-radius: 0.5rem; }
+  .dash-image-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; margin-top: 0.6rem; }
+  .dash-plan-row { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.45rem 0.55rem; border-radius: 0.45rem; }
+  .dash-plan-row.is-now { outline: 1px solid var(--ui-primary); font-weight: 620; }
+  .dash-plan-row.is-done { opacity: 0.6; }
+  .dash-plan-name { overflow-wrap: anywhere; }
+  .dash-plan-meta { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  @media (min-width: 992px) {
+    .dash-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  }
+</style>
+{% endblock %}
+
+{% block header %}
+  <div class="page-hero">
+    <div>
+      <p class="page-kicker">Observatory</p>
+      <h1 class="page-title">Dashboard</h1>
+    </div>
+    <div class="panel-muted" id="dash-updated" role="status">Loading&hellip;</div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div id="dash-live" class="no-htmx-fx"
+       hx-get="{{ root_path }}{{ page_root }}/live"
+       hx-trigger="load, every 15s [!document.hidden]"
+       hx-sync="this:drop"
+       hx-swap="innerHTML">
+    <div class="panel-card"><p class="mb-0">Loading&hellip;</p></div>
+  </div>
+
+  <div class="dash-grid mt-3">
+    <div class="dash-column">
+      <section class="panel-card">
+        <h2 class="panel-title mb-3">Latest image</h2>
+        <a id="dash-image-link" href="{{ root_path }}{{ page_root }}/image.jpg?full=true" target="_blank" rel="noopener" hidden>
+          <img id="dash-image" class="dash-image" alt="Latest stacked image">
+        </a>
+        <div id="dash-image-empty" class="dash-image-empty">
+          No image yet. One appears after the first stacked frame.
+        </div>
+        <div class="dash-image-bar" id="dash-image-bar" hidden>
+          <div class="small" id="dash-image-caption"></div>
+          <a class="btn btn-outline-primary btn-sm" id="dash-image-save" href="{{ root_path }}{{ page_root }}/image.jpg?full=true">Save full size</a>
+        </div>
+      </section>
+    </div>
+    <div class="dash-column">
+      <section class="panel-card">
+        <h2 class="panel-title mb-3">Current status of devices</h2>
+        <div id="dash-events" class="no-htmx-fx"
+             hx-get="{{ root_path }}{{ page_root }}/events"
+             hx-trigger="load, every 5s [!document.hidden]"
+             hx-sync="this:drop"
+             hx-swap="innerHTML">
+          <p class="mb-0">Loading&hellip;</p>
+        </div>
+      </section>
+      <div id="dash-session" class="dash-column no-htmx-fx"></div>
+      <section class="panel-card">
+        <h2 class="panel-title mb-3">Hardware</h2>
+        <div id="dash-device" class="no-htmx-fx"
+             hx-get="{{ root_path }}{{ page_root }}/device"
+             hx-trigger="load, every 30s [!document.hidden]"
+             hx-sync="this:drop"
+             hx-swap="innerHTML">
+          <p class="mb-0">Loading&hellip;</p>
+        </div>
+      </section>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const root = {{ (root_path ~ page_root)|tojson }};
+  const updated = document.getElementById('dash-updated');
+  const link = document.getElementById('dash-image-link');
+  const img = document.getElementById('dash-image');
+  const empty = document.getElementById('dash-image-empty');
+  const bar = document.getElementById('dash-image-bar');
+  const caption = document.getElementById('dash-image-caption');
+  const STALE_MS = 60000;
+  let shownFrame = null;
+  let lastGood = null;
+
+  function clock(ms) {
+    return new Date(ms).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+  }
+
+  function showFreshness() {
+    if (lastGood === null) return;
+    const stale = Date.now() - lastGood > STALE_MS;
+    updated.textContent = (stale ? 'Connection lost. Last update ' : 'Updated ') + clock(lastGood);
+    updated.classList.toggle('text-danger', stale);
+  }
+
+  document.body.addEventListener('htmx:afterSwap', function (evt) {
+    if (evt.detail.target.id === 'dash-live') {
+      lastGood = Date.now();
+      showFreshness();
+    }
+  });
+
+  function showImage(meta) {
+    // Load first, so the old image stays up until the new one is ready.
+    const next = new Image();
+    next.onload = function () {
+      img.src = next.src;
+      link.hidden = false;
+      bar.hidden = false;
+      empty.hidden = true;
+      shownFrame = meta.frame;
+      const parts = [meta.target || 'Unknown target'];
+      if (meta.stacked) parts.push(meta.stacked + ' frames');
+      if (meta.snr !== null) parts.push('SNR ' + meta.snr);
+      parts.push(clock(meta.captured_at * 1000));
+      caption.textContent = parts.join(' · ');
+    };
+    next.src = root + '/image.jpg?v=' + encodeURIComponent(meta.frame);
+  }
+
+  async function pollImage() {
+    if (document.hidden) return;
+    try {
+      const reply = await fetch(root + '/image.json', {cache: 'no-store'});
+      if (!reply.ok) return;
+      const meta = await reply.json();
+      if (meta.frame !== null && meta.frame !== shownFrame) showImage(meta);
+    } catch (err) {
+      // The freshness line already reports a lost connection.
+    }
+  }
+
+  pollImage();
+  setInterval(pollImage, 15000);
+  setInterval(showFreshness, 5000);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) pollImage();
+  });
+})();
+</script>
+{% endblock %}

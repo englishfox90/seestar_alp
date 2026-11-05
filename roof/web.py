@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 import falcon
 
 from roof import config as roof_config
-from roof import schedule_tools
+from roof import dashboard, schedule_tools
 from roof.automation import get_automation
 
 
@@ -179,6 +179,7 @@ def install(app):
         "roof/start": RoofStart,
         "roof/stop": RoofStop,
         "roof/capture": RoofCapture,
+        **dashboard.PAGES,
     }
     for path, resource in pages.items():
         app.add_route(f"/{path}", resource())
