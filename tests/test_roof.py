@@ -1142,3 +1142,121 @@ def test_plan_conversion_keeps_star_map_angle():
 )
 def test_describe_target(item, label):
     assert schedule_tools.describe_target(item) == label
+
+
+# ---- dew heater -----------------------------------------------------------------
+
+
+class _FixedDew:
+    def __init__(self, reading):
+        self.reading = reading
+
+    def read(self, s):
+        return self.reading
+
+
+class _DewScope(FakeScope):
+    def set_heater(self, power):
+        return self._record("set_heater", power)
+
+
+@pytest.fixture
+def dew_rig(tmp_path):
+    from roof.dew import DewReading
+
+    rig = Rig(tmp_path)
+    rig.scope = _DewScope()
+    rig.settings = replace(rig.settings, dew_enabled=True)
+    rig.dew = _FixedDew(DewReading(12.0, 2.0, "test"))
+    rig.auto = RoofAutomation(
+        load_settings=lambda: rig.settings,
+        read_safety=lambda s: rig.safety,
+        sun_altitude=lambda lat, lon, when: rig.sun,
+        scope_factory=lambda s: rig.scope,
+        clock=lambda: rig.now,
+        schedule_dir=str(rig.dir),
+        sleep_wait=lambda s: None,
+        target_altitude=lambda *a: 60.0,
+        dew_monitor=rig.dew,
+    )
+    return rig
+
+
+def _heater_calls(rig):
+    return [c[1] for c in rig.scope.calls if isinstance(c, tuple) and c[0] == "set_heater"]
+
+
+def test_dew_off_when_margin_is_wide_and_start_state_is_confirmed(dew_rig):
+    dew_rig.settle_and_start()
+    assert _heater_calls(dew_rig) == [0]
+
+
+def test_dew_turns_on_with_hysteresis(dew_rig):
+    from roof.dew import DewReading
+
+    dew_rig.settle_and_start()
+    dew_rig.dew.reading = DewReading(12.0, 8.0, "test")  # margin 4
+    dew_rig.tick(10)
+    assert _heater_calls(dew_rig) == [0, 30]
+    dew_rig.dew.reading = DewReading(12.0, 7.0, "test")  # margin 5: holds
+    dew_rig.tick(10)
+    assert _heater_calls(dew_rig) == [0, 30]
+    dew_rig.dew.reading = DewReading(12.0, 6.0, "test")  # margin 6: off
+    dew_rig.tick(10)
+    assert _heater_calls(dew_rig) == [0, 30, 0]
+
+
+def test_dew_stays_on_with_no_weather_data(dew_rig):
+    dew_rig.dew.reading = None
+    dew_rig.settle_and_start()
+    assert _heater_calls(dew_rig) == [30]
+
+
+def test_dew_off_when_session_parks(dew_rig):
+    from roof.dew import DewReading
+
+    dew_rig.dew.reading = DewReading(12.0, 11.0, "test")
+    dew_rig.settle_and_start()
+    assert _heater_calls(dew_rig) == [30]
+    dew_rig.safety = UNSAFE
+    dew_rig.tick()
+    dew_rig.tick(31)
+    dew_rig.set_scope(sched_state="stopped", parked=True, item_number=0)
+    dew_rig.tick(10)
+    dew_rig.tick(10)
+    assert _heater_calls(dew_rig) == [30, 0]
+
+
+def test_dew_leaves_a_foreign_session_alone(dew_rig):
+    dew_rig.set_scope(parked=False, plan_state="working")
+    dew_rig.tick()
+    dew_rig.tick(500)
+    assert _heater_calls(dew_rig) == []
+
+
+def test_dew_failure_retries_next_tick(dew_rig):
+    from roof.dew import DewReading
+
+    dew_rig.dew.reading = DewReading(12.0, 11.0, "test")
+    dew_rig.scope.fail = {"set_heater": "boom"}
+    dew_rig.settle_and_start()
+    assert len(_heater_calls(dew_rig)) >= 2
+
+
+def test_dew_point_and_smallest_margin_wins():
+    from roof.dew import DewMonitor, DewReading, dew_point_c
+
+    assert dew_point_c(12.6, 69) == pytest.approx(7.06, abs=0.1)
+    t = [0.0]
+    calls = []
+    monitor = DewMonitor(
+        clock=lambda: t[0] + 1000,
+        readers=[
+            lambda: calls.append(1) or DewReading(13.7, 8.2, "a"),
+            lambda: (_ for _ in ()).throw(ValueError()),
+            lambda: DewReading(11.7, 8.9, "b"),
+        ],
+    )
+    assert monitor.read(None).source == "b"
+    assert monitor.read(None).source == "b"
+    assert len(calls) == 1  # cached

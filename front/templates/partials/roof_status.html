@@ -45,6 +45,13 @@
   {% if status.completed %}Schedule finished tonight. {% endif %}
   {% if status.resume_item %}Will resume at item {{ status.resume_item }} tonight. {% endif %}
 </p>
+{% if status.dew_enabled %}
+<p class="small mb-3"><strong>Dew heater:</strong>
+  {% if status.heater_on %}on at {{ status.dew_power }}%{% elif status.heater_on is none %}not set yet{% else %}off{% endif %}.
+  {% if status.dew_margin_c is none %}No weather data, so it stays on while imaging.
+  {% else %}{{ "%.1f"|format(status.dew_temp_c) }}&deg;C, dew point {{ "%.1f"|format(status.dew_point_c) }}&deg;C, margin {{ "%.1f"|format(status.dew_margin_c) }}&deg;C; turns on at {{ status.dew_on_margin_c }}&deg;C ({{ status.dew_source }}).{% endif %}
+</p>
+{% endif %}
 {% if status.targets %}
 <div class="card mb-3"><div class="card-header">Targets{% if status.min_target_alt_deg %} (minimum {{ status.min_target_alt_deg }}&deg;){% endif %}</div><div class="card-body">
   <table class="table table-sm mb-0"><tbody>

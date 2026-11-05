@@ -173,6 +173,9 @@ class RealScope:
     def skip_item(self) -> str | None:
         return _failed(self._device().skip_scheduler_cur_item({}))
 
+    def set_heater(self, power: int) -> str | None:
+        return _failed(self._device().action_set_dew_heater({"heater": power}))
+
     def park(self) -> str | None:
         return _failed(self._device().send_message_param_sync({"method": "scope_park"}))
 
@@ -215,6 +218,9 @@ class DryRunScope:
     def import_schedule(self, path):
         self._sched = "stopped"
         self._count = len(schedule_load(path)[0])
+
+    def set_heater(self, power):
+        return None
 
     def skip_item(self):
         self._item += 1

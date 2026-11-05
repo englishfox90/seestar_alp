@@ -5,7 +5,9 @@ set -u
 LABEL="com.englishfox90.seestar-alp"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 PLIST="/Library/LaunchDaemons/$LABEL.plist"
-ALPACA="http://127.0.0.1:5555/api/v1/telescope/1/action"
+BIND="$(sed -n "s/^ip_address *= *['\"]\([^'\"]*\)['\"].*/\1/p" "$REPO/device/config.toml" | head -1)"
+[ "$BIND" = "0.0.0.0" ] && BIND=127.0.0.1
+ALPACA="http://${BIND:-127.0.0.1}:5555/api/v1/telescope/1/action"
 
 # A system daemon so it starts at boot, with no login. The venv must use a native
 # arm64 Python (/opt/homebrew): macOS gives launchd jobs running the Intel build in
@@ -29,8 +31,8 @@ write_plist() {
   <key>UserName</key><string>$user</string>
   <key>ProgramArguments</key>
   <array>
-    <string>$REPO/.venv/bin/python</string>
-    <string>$REPO/root_app.py</string>
+    <string>/bin/bash</string>
+    <string>$REPO/roof/run.sh</string>
   </array>
   <key>WorkingDirectory</key><string>$REPO</string>
   <key>EnvironmentVariables</key>
@@ -83,10 +85,11 @@ guard() {
 case "${1:-}" in
   install)
     need_root "$@"
+    guard "${2:-}"
     remove_old_agent
     write_plist
     is_loaded && launchctl bootout "system/$LABEL"
-    launchctl bootstrap system "$PLIST" && echo "Installed; running now and at every boot. UI: http://localhost:5432/roof"
+    launchctl bootstrap system "$PLIST" && echo "Installed; running now and at every boot. UI: http://${BIND:-localhost}:5432/roof"
     ;;
   uninstall)
     need_root "$@"
