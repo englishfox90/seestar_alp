@@ -61,6 +61,8 @@ remove_old_agent() {
 }
 
 # Restarting ALP re-grabs master and ends whatever the scope is doing.
+# Exit 0 = imaging, 1 = ALP isn't answering or the scope is idle, 2 = ALP answered
+# but the state can't be read, which often means the scope is busy mid-command.
 imaging_now() {
   curl -s -m 12 -X PUT "$ALPACA" --data-urlencode "Action=method_sync" \
     --data-urlencode 'Parameters={"method":"iscope_get_app_state"}' \
@@ -68,18 +70,36 @@ imaging_now() {
   | /usr/bin/python3 -c '
 import json,sys
 try:
-    r=json.load(sys.stdin)["Value"]["result"]
+    doc=json.load(sys.stdin)
 except Exception:
     sys.exit(1)
-sys.exit(0 if r.get("View",{}).get("state")=="working" or r.get("ViewPlan",{}).get("state")=="working" else 1)'
+try:
+    r=doc["Value"]["result"]
+    working=r.get("View",{}).get("state")=="working" or r.get("ViewPlan",{}).get("state")=="working"
+except Exception:
+    sys.exit(2)
+sys.exit(0 if working else 1)'
 }
 
 guard() {
-  if [ "${1:-}" != "--force" ] && imaging_now; then
-    echo "The scope is imaging. Restarting ALP would end the session."
-    echo "Stop it first, or pass --force."
-    exit 1
-  fi
+  [ "${1:-}" = "--force" ] && return
+  imaging_now
+  case $? in
+    0) echo "The scope is imaging. Restarting ALP would end the session." ;;
+    2) echo "ALP is running but the scope's state can't be read (it may be mid-command)." ;;
+    *) return ;;
+  esac
+  echo "Park it first and try again, or pass --force."
+  exit 1
+}
+
+# bootout returns before the service has gone, and bootstrap fails until it has.
+bootstrap_service() {
+  for _ in $(seq 1 15); do
+    is_loaded || break
+    /bin/sleep 1
+  done
+  launchctl bootstrap system "$PLIST"
 }
 
 case "${1:-}" in
@@ -89,7 +109,7 @@ case "${1:-}" in
     remove_old_agent
     write_plist
     is_loaded && launchctl bootout "system/$LABEL"
-    launchctl bootstrap system "$PLIST" && echo "Installed; running now and at every boot. UI: http://${BIND:-localhost}:5432/roof"
+    bootstrap_service && echo "Installed; running now and at every boot. UI: http://${BIND:-localhost}:5432/roof"
     ;;
   uninstall)
     need_root "$@"
@@ -100,7 +120,7 @@ case "${1:-}" in
     ;;
   start)
     need_root "$@"
-    is_loaded && launchctl kickstart "system/$LABEL" || launchctl bootstrap system "$PLIST"
+    if is_loaded; then launchctl kickstart "system/$LABEL"; else bootstrap_service; fi
     ;;
   stop)
     need_root "$@"
