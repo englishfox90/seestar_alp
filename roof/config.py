@@ -23,7 +23,8 @@ class Settings:
     device_num: int = 1
     sentinel_url: str = "http://127.0.0.1:11111"
     safety_device: int = 0
-    sun_max_deg: float = -15.0
+    sun_max_deg: float = -18.0
+    min_target_alt_deg: float = 0.0  # 0 turns the gate off
     poll_s: float = 10.0
     start_settle_s: float = 120.0
     stop_grace_s: float = 30.0
@@ -51,7 +52,8 @@ def load() -> Settings:
         device_num=_number("device_num", 1, int),
         sentinel_url=str(get("sentinel_url", Settings.sentinel_url)).rstrip("/"),
         safety_device=_number("safety_device", 0, int),
-        sun_max_deg=_number("sun_max_deg", -15.0),
+        sun_max_deg=_number("sun_max_deg", -18.0),
+        min_target_alt_deg=_number("min_target_alt_deg", 0.0),
         poll_s=max(1.0, _number("poll_s", 10.0)),
         start_settle_s=max(0.0, _number("start_settle_s", 120.0)),
         stop_grace_s=max(0.0, _number("stop_grace_s", 30.0)),

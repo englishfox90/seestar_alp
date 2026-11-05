@@ -8,6 +8,7 @@ import threading
 from dataclasses import dataclass, replace
 
 from roof.schedule_tools import SETTING_ACTIONS
+from roof.schedule_tools import load as schedule_load
 
 
 @dataclass(frozen=True)
@@ -163,6 +164,9 @@ class RealScope:
     def stop_view(self) -> str | None:
         return _failed(self._device().send_message_param_sync({"method": "iscope_stop_view"}))
 
+    def skip_item(self) -> str | None:
+        return _failed(self._device().skip_scheduler_cur_item({}))
+
     def park(self) -> str | None:
         return _failed(self._device().send_message_param_sync({"method": "scope_park"}))
 
@@ -177,6 +181,7 @@ class DryRunScope:
         self._parked: bool | None = None
         self._sched = "stopped"
         self._item = 0
+        self._count = 0
 
     def read(self) -> ScopeState:
         real = self._real.read()
@@ -186,7 +191,12 @@ class DryRunScope:
             return real  # a real session is running; show it as it is
         parked = self._parked if self._parked is not None else real.parked
         return replace(
-            real, parked=parked, sched_state=self._sched, item_number=self._item, busy=False
+            real,
+            parked=parked,
+            sched_state=self._sched,
+            item_number=self._item,
+            item_count=self._count or real.item_count,
+            busy=False,
         )
 
     def busy(self):
@@ -198,6 +208,13 @@ class DryRunScope:
 
     def import_schedule(self, path):
         self._sched = "stopped"
+        self._count = len(schedule_load(path)[0])
+
+    def skip_item(self):
+        self._item += 1
+        if self._item > self._count:
+            self._sched = "complete"
+            self._item = 0
 
     def apply_setting(self, item):
         return None

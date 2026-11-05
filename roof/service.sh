@@ -4,43 +4,65 @@
 set -u
 LABEL="com.englishfox90.seestar-alp"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-LOG="$HOME/Library/Logs/seestar_alp.log"
-DOMAIN="gui/$(id -u)"
+PLIST="/Library/LaunchDaemons/$LABEL.plist"
 ALPACA="http://127.0.0.1:5555/api/v1/telescope/1/action"
 
+# A system daemon because macOS blocks launchd *agents* from the local network
+# ("No route to host" reaching the scope). It also starts at boot, with no login.
+need_root() {
+  if [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$0" "$@"
+  fi
+}
+
 write_plist() {
+  local user home
+  user="$(stat -f %Su "$REPO")"
+  home="$(eval echo "~$user")"
   cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key><string>$LABEL</string>
+  <key>UserName</key><string>$user</string>
   <key>ProgramArguments</key>
   <array>
     <string>$REPO/.venv/bin/python</string>
     <string>$REPO/root_app.py</string>
   </array>
   <key>WorkingDirectory</key><string>$REPO</string>
+  <key>EnvironmentVariables</key>
+  <dict><key>HOME</key><string>$home</string></dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
   <key>ThrottleInterval</key><integer>60</integer>
-  <key>ProcessType</key><string>Interactive</string>
-  <key>StandardOutPath</key><string>$LOG</string>
-  <key>StandardErrorPath</key><string>$LOG</string>
+  <key>StandardOutPath</key><string>$home/Library/Logs/seestar_alp.log</string>
+  <key>StandardErrorPath</key><string>$home/Library/Logs/seestar_alp.log</string>
 </dict>
 </plist>
 PLIST
+  chown root:wheel "$PLIST"
+  chmod 644 "$PLIST"
 }
 
-is_loaded() { launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; }
+is_loaded() { launchctl print "system/$LABEL" >/dev/null 2>&1; }
+
+remove_old_agent() {
+  local user uid home
+  user="$(stat -f %Su "$REPO")"
+  uid="$(id -u "$user")"
+  home="$(eval echo "~$user")"
+  launchctl bootout "gui/$uid/$LABEL" 2>/dev/null
+  rm -f "$home/Library/LaunchAgents/$LABEL.plist"
+}
 
 # Restarting ALP re-grabs master and ends whatever the scope is doing.
 imaging_now() {
   curl -s -m 12 -X PUT "$ALPACA" --data-urlencode "Action=method_sync" \
     --data-urlencode 'Parameters={"method":"iscope_get_app_state"}' \
     --data-urlencode ClientID=77 --data-urlencode ClientTransactionID=1 \
-  | python3 -c '
+  | /usr/bin/python3 -c '
 import json,sys
 try:
     r=json.load(sys.stdin)["Value"]["result"]
@@ -59,30 +81,36 @@ guard() {
 
 case "${1:-}" in
   install)
-    mkdir -p "$(dirname "$PLIST")"
+    need_root "$@"
+    remove_old_agent
     write_plist
-    is_loaded && launchctl bootout "$DOMAIN/$LABEL"
-    launchctl bootstrap "$DOMAIN" "$PLIST" && echo "Installed; starts now and at every login. UI: http://localhost:5432/roof"
+    is_loaded && launchctl bootout "system/$LABEL"
+    launchctl bootstrap system "$PLIST" && echo "Installed; running now and at every boot. UI: http://localhost:5432/roof"
     ;;
   uninstall)
+    need_root "$@"
     guard "${2:-}"
-    is_loaded && launchctl bootout "$DOMAIN/$LABEL"
+    is_loaded && launchctl bootout "system/$LABEL"
     rm -f "$PLIST"
     echo "Removed."
     ;;
   start)
-    is_loaded && launchctl kickstart "$DOMAIN/$LABEL" || launchctl bootstrap "$DOMAIN" "$PLIST"
+    need_root "$@"
+    is_loaded && launchctl kickstart "system/$LABEL" || launchctl bootstrap system "$PLIST"
     ;;
   stop)
+    need_root "$@"
     guard "${2:-}"
-    launchctl bootout "$DOMAIN/$LABEL" && echo "Stopped (returns at next login, or: roof/service.sh start)."
+    launchctl bootout "system/$LABEL" && echo "Stopped (returns at next boot, or: roof/service.sh start)."
     ;;
   restart)
+    need_root "$@"
     guard "${2:-}"
-    launchctl kickstart -k "$DOMAIN/$LABEL" && echo "Restarted."
+    launchctl kickstart -k "system/$LABEL" && echo "Restarted."
     ;;
   status)
-    launchctl print "$DOMAIN/$LABEL" 2>/dev/null | grep -E "^\s+(state|pid|last exit code) =" || echo "Not loaded."
+    launchctl print "system/$LABEL" 2>/dev/null | grep -E "^\s+(state|pid|last exit code) =" | head -3 || true
+    is_loaded || echo "Not loaded."
     lsof -nP -iTCP:5432 -sTCP:LISTEN 2>/dev/null | tail -n +2 | awk '{print "port 5432: " $1 " pid " $2}'
     ;;
   logs)

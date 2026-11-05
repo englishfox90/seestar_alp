@@ -64,6 +64,9 @@ class FakeScope:
     def stop_view(self):
         return self._record("stop_view")
 
+    def skip_item(self):
+        return self._record("skip_item")
+
     def park(self):
         return self._record("park")
 
@@ -93,6 +96,7 @@ class Rig:
         self.now = NIGHT_START
         self.safety = SAFE
         self.sun = -40.0
+        self.alts = {}
         self.scope = FakeScope()
         self.state_path = str(tmp_path / "state.json")
         self.auto = self.build()
@@ -107,6 +111,9 @@ class Rig:
             state_path=self.state_path,
             schedule_dir=str(self.dir),
             sleep_wait=lambda s: None,
+            target_altitude=lambda params, lat, lon, when: self.alts.get(
+                params.get("target_name"), 60.0
+            ),
         )
 
     def write(self, name, items):
@@ -904,3 +911,144 @@ def test_form_save_keeps_the_roof_section(tmp_path, monkeypatch):
     Config.save_toml(str(path))
     text = path.read_text()
     assert "[roof]" in text and 'schedule = "X.json"' in text
+
+
+# ---- darkness and altitude gates ---------------------------------------------
+
+
+@pytest.fixture
+def alt_rig(tmp_path):
+    rig = Rig(tmp_path)
+    rig.settings = replace(rig.settings, min_target_alt_deg=30.0)
+    return rig
+
+
+def test_roof_open_at_5pm_waits_parked_until_astronomical_dark(rig):
+    rig.settings = replace(rig.settings, sun_max_deg=-18.0)
+    rig.sun = 10.0
+    rig.tick()
+    rig.tick(3600)
+    rig.sun = -17.9
+    rig.tick(3600)
+    assert rig.scope.calls == []
+    rig.sun = -18.1
+    rig.tick(10)
+    assert rig.scope.calls[0][0] == "open_arm"
+
+
+def test_parks_at_astronomical_dawn_with_roof_still_open(rig):
+    rig.settings = replace(rig.settings, sun_max_deg=-18.0)
+    rig.settle_and_start()
+    rig.scope.calls.clear()
+    rig.sun = -17.9
+    rig.tick(10)
+    assert rig.safety.safe is True
+    assert rig.stop_calls()[-1] == "park"
+    # and it doesn't start again in the morning
+    rig.set_scope(parked=True, sched_state="stopped", item_number=0)
+    rig.tick(10)
+    rig.scope.calls.clear()
+    rig.tick(600)
+    assert rig.scope.calls == []
+
+
+def test_waits_until_a_target_is_high_enough(alt_rig):
+    alt_rig.alts = {"A": 10.0, "B": 29.9}
+    alt_rig.tick()
+    alt_rig.tick(500)
+    assert alt_rig.scope.calls == []
+    assert "above 30" in alt_rig.auto.status()["note"]
+    alt_rig.alts = {"A": 10.0, "B": 30.5}
+    alt_rig.tick(10)
+    assert alt_rig.scope.calls[0][0] == "open_arm"
+
+
+def test_starts_at_first_high_enough_target_and_keeps_settings(alt_rig):
+    alt_rig.alts = {"A": 10.0, "B": 50.0}
+    alt_rig.tick()
+    alt_rig.tick(121)
+    alt_rig.set_scope(sched_state="complete")
+    alt_rig.tick(10)
+    assert alt_rig.scope.calls[1:] == [
+        "import_schedule",
+        ("apply_setting", "set_setting"),
+        ("start_scheduler", 3),
+    ]
+
+
+def test_current_target_falling_below_limit_is_skipped_once(alt_rig):
+    alt_rig.settle_and_start()
+    alt_rig.set_scope(item_number=2)
+    alt_rig.tick(10)
+    assert "skip_item" not in alt_rig.scope.calls
+    alt_rig.alts = {"A": 29.0}
+    alt_rig.tick(10)
+    alt_rig.tick(10)
+    assert alt_rig.scope.calls.count("skip_item") == 1
+    alt_rig.set_scope(item_number=3)
+    alt_rig.alts = {"A": 29.0, "B": 29.0}
+    alt_rig.tick(10)
+    assert alt_rig.scope.calls.count("skip_item") == 2
+
+
+def test_resume_moves_past_a_target_now_too_low(alt_rig):
+    alt_rig.settle_and_start()
+    alt_rig.set_scope(item_number=2)
+    alt_rig.tick(10)
+    alt_rig.safety = UNSAFE
+    alt_rig.tick()
+    alt_rig.tick(31)
+    alt_rig.set_scope(sched_state="stopped", parked=True, item_number=0)
+    alt_rig.tick(10)
+    alt_rig.scope.calls.clear()
+    alt_rig.alts = {"A": 10.0}
+    alt_rig.safety = SAFE
+    alt_rig.tick(10)
+    alt_rig.tick(121)
+    alt_rig.set_scope(sched_state="complete")
+    alt_rig.tick(10)
+    assert ("start_scheduler", 3) in alt_rig.scope.calls
+
+
+def test_manual_start_refused_when_nothing_is_high_enough_and_keeps_hold(alt_rig):
+    alt_rig.alts = {"A": 5.0, "B": 5.0}
+    alt_rig.auto.request("stop")
+    alt_rig.tick()
+    alt_rig.auto.request("start")
+    alt_rig.scope.calls.clear()
+    alt_rig.tick(10)
+    assert alt_rig.scope.calls == []
+    assert alt_rig.auto.status()["held"] is True
+
+
+def test_altitude_failure_counts_as_too_low(alt_rig):
+    def boom(*args):
+        raise ValueError("bad coordinates")
+
+    alt_rig.auto._target_altitude = boom
+    alt_rig.tick()
+    alt_rig.tick(500)
+    assert alt_rig.scope.calls == []
+
+
+def test_gate_off_when_zero(rig):
+    rig.alts = {"A": -50.0, "B": -50.0}
+    rig.tick()
+    rig.tick(121)
+    assert rig.scope.calls[0][0] == "open_arm"
+
+
+def test_target_altitude_matches_astropy_altaz():
+    coords = pytest.importorskip("astropy.coordinates")
+    time_mod = pytest.importorskip("astropy.time")
+    units = pytest.importorskip("astropy.units")
+    from roof.targets import target_altitude_deg
+
+    when = datetime(2026, 11, 5, 8, 0, tzinfo=timezone.utc)
+    site = coords.EarthLocation(lat=31.5 * units.deg, lon=-99.37 * units.deg)
+    t = time_mod.Time(when)
+    m42 = coords.SkyCoord(ra=5.588 * units.hourangle, dec=-5.39 * units.deg, frame="icrs")
+    expected = m42.transform_to(coords.AltAz(obstime=t, location=site)).alt.deg
+    params = {"ra": 5.588, "dec": -5.39, "is_j2000": True}
+    assert target_altitude_deg(params, 31.5, -99.37, when) == pytest.approx(expected, abs=0.2)
+    assert target_altitude_deg({"ra": -1, "dec": -1}, 31.5, -99.37, when) is None

@@ -56,12 +56,18 @@ class RoofAutomation:
         schedule_dir=None,
         sleep_wait=None,
         logger=None,
+        target_altitude=None,
     ):
         self._load_settings = load_settings
         self._read_safety = read_safety or (
             lambda s: sentinel.read(s.sentinel_url, s.safety_device)
         )
         self._sun_altitude = sun_altitude
+        self._target_altitude = target_altitude or _default_target_altitude
+        self._active_items = []
+        self._skip_asked = 0
+        self._target_rows = []
+        self._target_rows_at = 0.0
         self._scope_factory = scope_factory or _default_scopes
         self._scopes = {}
         self._clock = clock
@@ -175,7 +181,7 @@ class RoofAutomation:
         command = self._next_commands(scope, s, state, safety, dark, night, now)
         if not command:
             state = self._step(scope, s, state, safety, dark, night, now)
-        self._publish(s, safety, sun, dark, night, state)
+        self._publish(s, safety, sun, dark, night, state, now)
         self._last_tick = now
         if now - self._last_heartbeat >= HEARTBEAT_S:
             self._last_heartbeat = now
@@ -229,6 +235,7 @@ class RoofAutomation:
             if command == "schedule_changed":
                 self._completed_night = ""
                 self._resume = {}
+                self._target_rows_at = 0.0
                 self._save_state()
                 self._log(f"schedule set to '{s.schedule}'; applies at the next start")
             elif command == "stop":
@@ -367,10 +374,14 @@ class RoofAutomation:
         if self.phase in (OPENING, IMAGING, PARKING):
             self._log(f"Start refused: automation is {self.phase}")
             return
-        self._hold_night = ""
         if self._completed_night == night:
             self._completed_night = ""
             self._resume = {}
+        if self._first_item_to_run(s, night, now) is None:
+            self._save_state()
+            self._log(f"Start refused: no remaining target is above {s.min_target_alt_deg:g} deg")
+            return
+        self._hold_night = ""
         self._save_state()
         self._start_failures = 0
         self._alarm = ""
@@ -396,6 +407,9 @@ class RoofAutomation:
         blocked = self._start_block(s, state, safety, dark, night, now)
         if blocked:
             self._note = blocked
+            return
+        if self._first_item_to_run(s, night, now) is None:
+            self._note = f"waiting: no remaining target is above {s.min_target_alt_deg:g} deg"
             return
         self._last_start_attempt = now
         self._log(f"roof safe and dark; starting '{s.schedule}'")
@@ -445,10 +459,7 @@ class RoofAutomation:
         if errors:
             self._start_failed("schedule rejected: " + "; ".join(errors), night)
             return
-        resume = self._resume
-        self._start_item = 1
-        if resume.get("night") == night and resume.get("schedule") == s.schedule:
-            self._start_item = int(resume.get("item") or 1)
+        self._start_item = self._first_item_to_run(s, night, now) or 1
         if state.parked is None:
             self._start_failed("cannot read mount state", night)
         elif state.parked:
@@ -461,6 +472,43 @@ class RoofAutomation:
             self._deadline = now + OPEN_TIMEOUT_S
         else:
             self._launch(scope, s, night, now)
+
+    def _first_item_to_run(self, s, night, now):
+        """Item to start from: the resume point or item 1, moved past any target
+        below the altitude limit. None if no target from there on is above it."""
+        resume = self._resume
+        start = 1
+        if resume.get("night") == night and resume.get("schedule") == s.schedule:
+            start = int(resume.get("item") or 1)
+        path = schedule_tools.resolve(s.schedule, self._schedule_dir) if s.schedule else None
+        items, errors, _ = schedule_tools.load(path) if path else ([], ["missing"], [])
+        if errors:
+            return start  # _begin_start reports it
+        if start > len(items):
+            start = 1
+        if s.min_target_alt_deg <= 0:
+            return start
+        for number in range(start, len(items) + 1):
+            item = items[number - 1]
+            if item.get("action") in schedule_tools.IMAGING_ACTIONS and self._high_enough(
+                item, s, now
+            ):
+                return number
+        return None
+
+    def _altitude(self, item, s, now):
+        """Target altitude, or None when it has no fixed position."""
+        return self._target_altitude(
+            item.get("params", {}), s.lat, s.lon, datetime.fromtimestamp(now, timezone.utc)
+        )
+
+    def _high_enough(self, item, s, now) -> bool:
+        try:
+            altitude = self._altitude(item, s, now)
+        except Exception as e:
+            self._log(f"cannot compute altitude: {e}")
+            return False
+        return altitude is None or altitude >= s.min_target_alt_deg
 
     def _advance_opening(self, scope, s, state, night, now):
         # Start-up ends with state "complete", or "stopped" if it failed. mount.close
@@ -504,6 +552,8 @@ class RoofAutomation:
         self.phase = IMAGING
         self._adopted = False
         self._active_schedule = s.schedule
+        self._active_items = items
+        self._skip_asked = 0
         self._last_item = start_item
         self._deadline = now + START_GRACE_S
         self._arm_deadline = now + ARM_OPEN_ALARM_S
@@ -540,6 +590,7 @@ class RoofAutomation:
                 self._raise_alarm(f"arm still closed {ARM_OPEN_ALARM_S}s after the schedule started")
             elif state.parked is False:
                 self._arm_deadline = 0.0
+            self._skip_if_too_low(scope, s, state, now)
             return
         if state.sched_state in ("stopping", "unknown"):
             return
@@ -563,6 +614,52 @@ class RoofAutomation:
         self._hold_night = night
         self._save_state()
         self._raise_alarm("scheduler stopped outside automation; holding until Start or the next night")
+
+    def _skip_if_too_low(self, scope, s, state, now):
+        number = state.item_number
+        if (
+            s.min_target_alt_deg <= 0
+            or self._adopted
+            or not 1 <= number <= len(self._active_items)
+            or number == self._skip_asked
+        ):
+            return
+        item = self._active_items[number - 1]
+        if item.get("action") not in schedule_tools.IMAGING_ACTIONS:
+            return
+        if self._high_enough(item, s, now):
+            return
+        name = item.get("params", {}).get("target_name", "?")
+        self._log(f"skipping item {number} ({name}): below {s.min_target_alt_deg:g} deg")
+        self._skip_asked = number
+        failure = self._guard(scope.skip_item)
+        if failure:
+            self._log(f"  skip: {failure}")
+
+    def _targets_now(self, s, now):
+        """Altitudes for the page, refreshed once a minute."""
+        if now - self._target_rows_at < 60 and self._target_rows_at:
+            return self._target_rows
+        self._target_rows_at = now
+        rows = []
+        path = schedule_tools.resolve(s.schedule, self._schedule_dir) if s.schedule else None
+        items = schedule_tools.load(path)[0] if path else []
+        for item in items:
+            if item.get("action") not in schedule_tools.IMAGING_ACTIONS:
+                continue
+            try:
+                altitude = self._altitude(item, s, now)
+            except Exception:
+                altitude = None
+            rows.append(
+                {
+                    "name": item.get("params", {}).get("target_name", "?"),
+                    "altitude": altitude,
+                    "ok": altitude is None or altitude >= s.min_target_alt_deg,
+                }
+            )
+        self._target_rows = rows
+        return rows
 
     # ---- persistence, logging, status -------------------------------------------
 
@@ -608,7 +705,7 @@ class RoofAutomation:
             self._log_lines.append(line)
         self._logger.info("%s%s", dry, message)
 
-    def _publish(self, s, safety, sun, dark, night, state):
+    def _publish(self, s, safety, sun, dark, night, state, now):
         foreign = self._foreign(state)
         resume = self._resume if self._resume.get("night") == night else {}
         snapshot = {
@@ -620,6 +717,8 @@ class RoofAutomation:
             "sun_deg": sun,
             "dark": dark,
             "sun_max_deg": s.sun_max_deg,
+            "min_target_alt_deg": s.min_target_alt_deg,
+            "targets": self._targets_now(s, now),
             "phase": self.phase,
             "connected": state.connected,
             "parked": state.parked,
@@ -641,6 +740,12 @@ class RoofAutomation:
         }
         with self._lock:
             self._snapshot = snapshot
+
+
+def _default_target_altitude(params, lat, lon, when):
+    from roof.targets import target_altitude_deg
+
+    return target_altitude_deg(params, lat, lon, when)
 
 
 def _default_scopes(s):

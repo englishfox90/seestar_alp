@@ -36,6 +36,15 @@
   {% if status.completed %}Schedule finished tonight. {% endif %}
   {% if status.resume_item %}Will resume at item {{ status.resume_item }} tonight. {% endif %}
 </p>
+{% if status.targets %}
+<div class="card mb-3"><div class="card-header">Targets{% if status.min_target_alt_deg %} (minimum {{ status.min_target_alt_deg }}&deg;){% endif %}</div><div class="card-body">
+  <table class="table table-sm mb-0"><tbody>
+    {% for t in status.targets %}
+      <tr><td>{{ t.name }}</td><td>{% if t.altitude is none %}unknown{% else %}{{ "%.1f"|format(t.altitude) }}&deg;{% endif %}</td><td>{% if t.ok %}<span class="badge text-bg-success">OK</span>{% else %}<span class="badge text-bg-secondary">TOO LOW</span>{% endif %}</td></tr>
+    {% endfor %}
+  </tbody></table>
+</div></div>
+{% endif %}
 <div class="card"><div class="card-header">Log</div><div class="card-body">
   <pre class="small mb-0" style="max-height: 20rem; overflow-y: auto;">{% for line in status.log|reverse %}{{ line }}
 {% endfor %}</pre>
