@@ -125,6 +125,8 @@ def _target_item(target: dict) -> dict:
     if mosaic and float(mosaic.get("scale", 1.0)) > 1.0:
         params["mosaic_scale"] = round(float(mosaic.get("scale", 1.0)), 2)
         params["mosaic_angle"] = _norm_angle(mosaic.get("angle", 0.0))
+        if "star_map_angle" in mosaic:
+            params["mosaic_star_map_angle"] = float(mosaic["star_map_angle"])
         return {"action": "start_framed_mosaic", "params": params}
     params.update(ra_num=1, dec_num=1, panel_overlap_percent=PANEL_OVERLAP)
     return {"action": "start_mosaic", "params": params}

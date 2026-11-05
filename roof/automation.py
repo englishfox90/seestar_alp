@@ -66,6 +66,7 @@ class RoofAutomation:
         self._target_altitude = target_altitude or _default_target_altitude
         self._active_items = []
         self._skip_asked = 0
+        self._framing_checked = 0
         self._target_rows = []
         self._target_rows_at = 0.0
         self._scope_factory = scope_factory or _default_scopes
@@ -555,6 +556,7 @@ class RoofAutomation:
         self._active_schedule = s.schedule
         self._active_items = items
         self._skip_asked = 0
+        self._framing_checked = 0
         self._last_item = start_item
         self._deadline = now + START_GRACE_S
         self._arm_deadline = now + ARM_OPEN_ALARM_S
@@ -592,6 +594,7 @@ class RoofAutomation:
             elif state.parked is False:
                 self._arm_deadline = 0.0
             self._skip_if_too_low(scope, s, state, now)
+            self._check_framing(state)
             return
         if state.sched_state in ("stopping", "unknown"):
             return
@@ -636,6 +639,30 @@ class RoofAutomation:
         failure = self._guard(scope.skip_item)
         if failure:
             self._log(f"  skip: {failure}")
+
+    def _check_framing(self, state):
+        """Alarm if a framed mosaic is stacking without its mosaic scale."""
+        number = state.item_number
+        if (
+            self._adopted
+            or state.view_stage != "Stack"
+            or not 1 <= number <= len(self._active_items)
+            or state.mosaic_scale is None
+            or self._framing_checked == number
+        ):
+            return
+        self._framing_checked = number
+        item = self._active_items[number - 1]
+        wanted = item.get("params", {}).get("mosaic_scale")
+        if item.get("action") != "start_framed_mosaic" or not wanted:
+            return
+        if abs(state.mosaic_scale - float(wanted)) > 0.05:
+            name = item["params"].get("target_name", "?")
+            self._raise_alarm(
+                f"{name} is stacking at scale {state.mosaic_scale:g}, not the planned {wanted:g}"
+            )
+        else:
+            self._log(f"framing confirmed: mosaic scale {state.mosaic_scale:g}")
 
     def _targets_now(self, s, now):
         """Altitudes for the page, refreshed once a minute."""

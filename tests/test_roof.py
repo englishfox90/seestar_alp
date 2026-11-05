@@ -1092,3 +1092,31 @@ def test_explicit_federation_and_unnumbered_only_routes_are_untouched(web):
     client, _ = web
     assert "location" not in client.simulate_get("/0/roof").headers
     assert "location" not in client.simulate_get("/roof/badge").headers
+
+
+def _framed(name, scale=1.7):
+    return {
+        "action": "start_framed_mosaic",
+        "params": {"target_name": name, "panel_time_sec": 60, "mosaic_scale": scale},
+    }
+
+
+def test_framing_mismatch_alarms_and_match_is_logged(rig):
+    rig.write("Good.json", [_framed("A"), _framed("B")])
+    rig.settle_and_start()
+    rig.set_scope(view_stage="Stack", mosaic_scale=1.0, item_number=1)
+    rig.tick(10)
+    assert "not the planned 1.7" in rig.auto.status()["alarm"]
+    rig.auto._alarm = ""
+    rig.set_scope(item_number=2, mosaic_scale=1.7)
+    rig.tick(10)
+    assert rig.auto.status()["alarm"] == ""
+    assert any("framing confirmed" in line for line in rig.auto.status()["log"])
+
+
+def test_plan_conversion_keeps_star_map_angle():
+    schedule = schedule_tools.plan_to_schedule(
+        {"list": [{"target_name": "M", "target_ra_dec": [3, 4],
+                   "mosaic": {"scale": 1.7, "angle": 67.0, "star_map_angle": 69.05}}]}
+    )
+    assert schedule["list"][1]["params"]["mosaic_star_map_angle"] == 69.05

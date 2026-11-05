@@ -24,6 +24,7 @@ class ScopeState:
     view_state: str = ""
     view_stage: str = ""
     plan_state: str = ""
+    mosaic_scale: float | None = None
     busy: bool = False  # a start-up or scheduler thread is still alive
 
 
@@ -76,6 +77,9 @@ class RealScope:
                 parked=parked if isinstance(parked, bool) else None,
                 tracking=tracking if isinstance(tracking, bool) else None,
             )
+        mosaic = (device_state.get("setting") or {}).get("mosaic")
+        if isinstance(mosaic, dict) and isinstance(mosaic.get("scale"), (int, float)):
+            state = replace(state, mosaic_scale=float(mosaic["scale"]))
         app_state = self._rpc(dev, "iscope_get_app_state")
         view = app_state.get("View") or {}
         plan = app_state.get("ViewPlan") or {}
