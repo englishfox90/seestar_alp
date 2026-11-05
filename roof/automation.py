@@ -25,6 +25,7 @@ from logging.handlers import RotatingFileHandler
 from roof import config as roof_config
 from roof import schedule_tools
 from roof import sentinel
+from roof.dew import DewMonitor
 from roof.scope import DryRunScope, RealScope, ScopeState
 from roof.sun import night_key, sun_altitude_deg
 
@@ -57,6 +58,7 @@ class RoofAutomation:
         sleep_wait=None,
         logger=None,
         target_altitude=None,
+        dew_monitor=None,
     ):
         self._load_settings = load_settings
         self._read_safety = read_safety or (
@@ -64,6 +66,9 @@ class RoofAutomation:
         )
         self._sun_altitude = sun_altitude
         self._target_altitude = target_altitude or _default_target_altitude
+        self._dew_monitor = dew_monitor or DewMonitor(clock=clock)
+        self._dew = None
+        self._heater_on = None  # None = unknown; ALP's start-up turns it off
         self._active_items = []
         self._skip_asked = 0
         self._framing_checked = 0
@@ -183,6 +188,7 @@ class RoofAutomation:
         command = self._next_commands(scope, s, state, safety, dark, night, now)
         if not command:
             state = self._step(scope, s, state, safety, dark, night, now)
+        self._manage_dew(scope, s, state)
         self._publish(s, safety, sun, dark, night, state, now)
         self._last_tick = now
         if now - self._last_heartbeat >= HEARTBEAT_S:
@@ -471,6 +477,7 @@ class RoofAutomation:
                 self._start_failed(f"start_up_sequence: {failure}", night)
                 return
             self.phase = OPENING
+            self._heater_on = None  # start-up resends the heater from config.toml
             self._deadline = now + OPEN_TIMEOUT_S
         else:
             self._launch(scope, s, night, now)
@@ -664,6 +671,44 @@ class RoofAutomation:
         else:
             self._log(f"framing confirmed: mosaic scale {state.mosaic_scale:g}")
 
+    def _manage_dew(self, scope, s, state):
+        """Heater follows the dew margin during our sessions, and is off otherwise.
+
+        With no weather data it stays on: a wet lens costs more than a little heat.
+        """
+        if not s.dew_enabled:
+            return
+        self._dew = self._dew_monitor.read(s)
+        if not state.connected:
+            return
+        running = self.phase == IMAGING and not self._adopted
+        if not running:
+            if self.phase == IDLE and self._heater_on:
+                self._set_heater(scope, False, s, "session ended")
+            return
+        if self._dew is None:
+            if self._heater_on is not True:
+                self._set_heater(scope, True, s, "no weather data")
+        elif self._dew.margin_c <= s.dew_on_margin_c:
+            if self._heater_on is not True:
+                self._set_heater(scope, True, s, self._dew_text())
+        elif self._dew.margin_c >= s.dew_off_margin_c or self._heater_on is None:
+            if self._heater_on is not False:
+                self._set_heater(scope, False, s, self._dew_text())
+
+    def _dew_text(self):
+        d = self._dew
+        return f"{d.temp_c:.1f}C, dew point {d.dew_point_c:.1f}C, margin {d.margin_c:.1f}C ({d.source})"
+
+    def _set_heater(self, scope, on, s, why):
+        power = s.dew_power if on else 0
+        self._log(f"dew heater {'on at ' + str(power) + '%' if on else 'off'}: {why}")
+        failure = self._guard(scope.set_heater, power)
+        if failure:
+            self._log(f"  dew heater: {failure}")
+        else:
+            self._heater_on = on
+
     def _targets_now(self, s, now):
         """Altitudes for the page, refreshed once a minute."""
         if now - self._target_rows_at < 60 and self._target_rows_at:
@@ -796,6 +841,14 @@ class RoofAutomation:
             "resume_item": resume.get("item") if resume.get("schedule") == s.schedule else None,
             "alarm": self._loop_error or self._alarm,
             "headline": self._headline(state, foreign),
+            "dew_enabled": s.dew_enabled,
+            "dew_temp_c": self._dew.temp_c if self._dew else None,
+            "dew_point_c": self._dew.dew_point_c if self._dew else None,
+            "dew_margin_c": self._dew.margin_c if self._dew else None,
+            "dew_source": self._dew.source if self._dew else "",
+            "dew_on_margin_c": s.dew_on_margin_c,
+            "heater_on": self._heater_on,
+            "dew_power": s.dew_power,
             "started_at": self._started_at,
             "uptime_s": now - self._started_at,
             "pid": os.getpid(),

@@ -20,6 +20,10 @@ and stops + parks when it isn't. Page: `http://localhost:5432/roof`.
 | Different schedule selected | Applies at the next start; clears the resume point and the "finished tonight" state |
 | Session started elsewhere, roof safe | Left alone |
 
+The dew heater uses the smaller margin from Sentinel's weather and Open-Meteo, stays
+on if neither answers, and turns off when a session ends. Both are regional
+estimates, not a sensor at the scope.
+
 Nights change at local solar noon. Hold, finished and resume state are kept in
 `roof_state.json` beside config.toml, so an ALP restart doesn't forget them.
 
@@ -37,6 +41,11 @@ sentinel_url = "http://127.0.0.1:11111"
 safety_device = 0
 sun_max_deg = -18.0     # astronomical darkness; also parks when the sun rises past it
 min_target_alt_deg = 20.0  # 0 turns this off
+dew_enabled = false     # automatic dew heater during sessions
+dew_on_margin_c = 4.0   # on when temperature minus dew point falls to this
+dew_off_margin_c = 6.0  # off when it rises to this
+dew_power = 30          # percent
+dew_sentinel_url = "http://127.0.0.1:8085/status"
 poll_s = 10
 start_settle_s = 120
 stop_grace_s = 30
@@ -47,12 +56,16 @@ Changes to this section apply on the next tick, with no restart.
 ## Service
 
 ```
-roof/service.sh install     # start now and at every boot (asks for your password)
+roof/service.sh install     # start now and at every boot (asks for your password);
+                            # refuses while imaging; --force overrides
 roof/service.sh status
 roof/service.sh logs        # follow roof_automation.log
 roof/service.sh restart     # refuses while imaging; --force overrides
 roof/service.sh stop
 ```
+
+`run.sh` waits for the `[network] ip_address` to exist before starting, so binding to
+a ZeroTier address survives a reboot.
 
 Build the venv from `/opt/homebrew/bin/python3.13`. Under launchd, macOS gave the
 Intel Python in `/usr/local` "No route to host" reaching the scope.

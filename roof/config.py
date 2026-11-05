@@ -28,6 +28,11 @@ class Settings:
     poll_s: float = 10.0
     start_settle_s: float = 120.0
     stop_grace_s: float = 30.0
+    dew_enabled: bool = False
+    dew_on_margin_c: float = 4.0
+    dew_off_margin_c: float = 6.0
+    dew_power: int = 30
+    dew_sentinel_url: str = "http://127.0.0.1:8085/status"
     lat: float = 0.0
     lon: float = 0.0
 
@@ -57,6 +62,11 @@ def load() -> Settings:
         poll_s=max(1.0, _number("poll_s", 10.0)),
         start_settle_s=max(0.0, _number("start_settle_s", 120.0)),
         stop_grace_s=max(0.0, _number("stop_grace_s", 30.0)),
+        dew_enabled=get("dew_enabled", False) is True,
+        dew_on_margin_c=_number("dew_on_margin_c", 4.0),
+        dew_off_margin_c=_number("dew_off_margin_c", 6.0),
+        dew_power=min(100, max(0, _number("dew_power", 30, int))),
+        dew_sentinel_url=str(get("dew_sentinel_url", Settings.dew_sentinel_url)),
         lat=float(_unwrap(Config.get_toml("seestar_initialization", "lat", 0)) or 0),
         lon=float(_unwrap(Config.get_toml("seestar_initialization", "long", 0)) or 0),
     )
