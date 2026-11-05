@@ -1,0 +1,11 @@
+{% set marks = {"done": "&#10003;", "warn": "!", "skipped": "&ndash;", "failed": "&#10005;", "blocked": "&#10005;"} %}
+<ol class="dash-track">
+  {% for step in tracker.steps %}
+    <li class="dash-step is-{{ step.state }}"{% if step.state == "active" %} aria-current="step"{% endif %}>
+      <div class="dash-dot">{{ marks.get(step.state, "") }}</div>
+      {{ step.label }}{% if step.state == "skipped" %}<span class="visually-hidden"> (skipped)</span>{% elif step.state in ("failed", "blocked") %}<span class="visually-hidden"> (problem)</span>{% elif step.state in ("done", "warn") %}<span class="visually-hidden"> (done)</span>{% endif %}
+    </li>
+  {% endfor %}
+</ol>
+<p class="dash-track-detail">{{ tracker.detail|e }}</p>
+{% for note in tracker.notes %}<p class="dash-track-note">{{ note|e|capitalize }}</p>{% endfor %}

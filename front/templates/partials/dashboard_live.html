@@ -49,12 +49,11 @@
           {% if exposure or session.gain is not none %}
             {{ stat("Exposure", (("%g s"|format(exposure)) if exposure else "") ~ (", " if exposure and session.gain is not none else "") ~ (("gain " ~ session.gain) if session.gain is not none else "")) }}
           {% endif %}
+          {% if session.filter %}{{ stat("Filter", session.filter) }}{% endif %}
           {% if session.stack %}
             {% if session.stack.integration %}{{ stat("Integration", session.stack.integration) }}{% endif %}
             {{ stat("Frames", session.stack.stacked ~ " stacked, " ~ session.stack.dropped ~ " dropped" ~ ((" (" ~ session.stack.drop_percent ~ "%)") if session.stack.drop_percent is not none else "")) }}
             {{ stat("Time on target", session.stack.elapsed ~ ((" of " ~ session.planned) if session.planned else "")) }}
-          {% else %}
-            {{ stat("Stage", (session.stage or session.state) ~ (" (" ~ session.substage ~ ")" if session.substage else "")) }}
           {% endif %}
         </div>
       {% else %}

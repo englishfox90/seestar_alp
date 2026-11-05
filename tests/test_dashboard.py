@@ -326,6 +326,14 @@ def test_large_image_gets_a_smaller_preview(store):
     assert len(image["preview"]) < len(image["full"])
 
 
+@pytest.mark.parametrize("value, shown", [(6.24, 6.2), (0.0, None), (float("nan"), None), (None, None)])
+def test_snr_hides_values_that_mean_nothing(monkeypatch, value, shown):
+    from device.analysis.snr_analysis import SNRAnalysis
+
+    monkeypatch.setattr(SNRAnalysis, "analyze", lambda self, raw: value)
+    assert dashboard._snr(np.zeros((2, 2))) == shown
+
+
 def test_download_name_is_safe():
     image = {"target": 'IC "1805"/../x', "stacked": 6, "captured_at": 1_800_000_000}
     name = dashboard.download_name(image)
@@ -369,7 +377,8 @@ def test_page_polls_its_fragments_and_is_read_only(client, monkeypatch):
     html = client.simulate_get("/1/dashboard").text
     assert 'hx-get="/1/dashboard/live"' in html
     assert 'hx-get="/1/dashboard/device"' in html
-    assert 'hx-get="/1/dashboard/events"' in html
+    assert 'hx-get="/1/dashboard/tracker"' in html
+    assert html.index("dash-tracker") < html.index("Latest image")
     assert "every 15s [!document.hidden]" in html
     assert 'hx-sync="this:drop"' in html
     assert 'id="dash-session"' in html
@@ -408,13 +417,13 @@ def test_live_fragment_shows_framing(client, monkeypatch, scale, expected):
     assert expected in client.simulate_get("/1/dashboard/live").text
 
 
-def test_live_fragment_shows_the_stage_before_stacking(client, monkeypatch):
+def test_live_fragment_before_stacking_still_shows_the_setup(client, monkeypatch):
     view = {**VIEW, "stage": "AutoGoto", "AutoGoto": {"stage": "slew"}}
     monkeypatch.setattr(
         front_app, "method_sync", lambda method, telescope_id=1, **kw: {"View": view}
     )
     html = client.simulate_get("/1/dashboard/live").text
-    assert "AutoGoto (slew)" in html and "gain 200" in html
+    assert "IC 1805" in html and "gain 200" in html
 
 
 def test_session_and_plan_arrive_out_of_band(client):
@@ -462,42 +471,159 @@ def test_device_fragment_says_offline_when_it_is(client, monkeypatch):
     assert "currently offline" in client.simulate_get("/1/dashboard/device").text
 
 
-EVENTS = {
-    "scheduler": {"Event": "Scheduler", "state": "working"},
-    "PlateSolve": {"Event": "PlateSolve", "state": "fail", "error": "solve failed"},
-    "AutoFocus": {"Event": "AutoFocus", "state": "complete", "position": 1174},
-    "Stack": {"Event": "Stack", "state": "working", "stacked_frame": 6, "dropped_frame": 2},
-    "WheelMove": {"Event": "WheelMove", "state": "complete", "position": 2},
-    "Sleep": {"Event": "Sleep", "state": "working"},
-    "not-an-event": 3,
+BASE = {
+    "safe": True,
+    "dark": True,
+    "sun_deg": -40.0,
+    "sun_max_deg": -18.0,
+    "connected": True,
+    "parked": False,
+    "phase": "imaging",
+    "sched_state": "working",
+    "view_state": "working",
+    "view_stage": "Stack",
+    "target": "IC 1805",
 }
 
 
-def test_event_results_tolerates_missing_data():
-    assert dashboard.event_results(None) == []
-    assert dashboard.event_results({"Value": {}}) == []
-    assert dashboard.event_results({"Value": {"result": "Offline"}}) == []
-    assert len(dashboard.event_results({"Value": {"result": EVENTS}})) == 6
+def _states(status, events=None):
+    rows = dashboard.tracker_steps({**BASE, **status}, events)["steps"]
+    return [r["state"] for r in rows]
 
 
-def test_status_cards_use_the_startup_card(client, monkeypatch):
+def _detail(status, events=None):
+    return dashboard.tracker_steps({**BASE, **status}, events)["detail"]
+
+
+DONE_DARKS = {"DarkLibrary": {"state": "complete"}}
+
+
+@pytest.mark.parametrize(
+    "stage, expected",
+    [
+        ("AutoGoto", ["done", "done", "active", "pending", "pending", "pending", "pending"]),
+        ("AutoFocus", ["done", "done", "done", "active", "pending", "pending", "pending"]),
+        ("Stack", ["done", "done", "done", "done", "done", "active", "pending"]),
+    ],
+)
+def test_tracker_follows_the_stage(stage, expected):
+    assert _states({"view_stage": stage}, DONE_DARKS) == expected
+
+
+def test_tracker_shows_dark_frames_as_their_own_step():
+    events = {"DarkLibrary": {"state": "working", "percent": 42.4}}
+    assert _states({"view_stage": "AutoFocus"}, events)[3:6] == ["done", "active", "pending"]
+    assert _detail({}, events) == "Taking dark frames, 42%"
+
+
+def test_tracker_marks_darks_skipped_when_none_ran():
+    assert _states({})[4] == "skipped"
+    assert _states({}, DONE_DARKS)[4] == "done"
+
+
+def test_tracker_flags_a_failed_focus_the_scope_carried_on_from():
+    events = {**DONE_DARKS, "AutoFocus": {"state": "fail"}}
+    tracker = dashboard.tracker_steps(BASE, events)
+    assert tracker["steps"][3]["state"] == "warn"
+    assert tracker["notes"] == ["focus failed, carried on anyway"]
+
+
+def test_tracker_ignores_an_old_plate_solve_failure_once_past_the_slew():
+    events = {**DONE_DARKS, "PlateSolve": {"state": "fail", "error": "solve failed"}}
+    assert _states({}, events)[2] == "done"
+
+
+def test_tracker_shows_a_failed_goto():
+    events = {"AutoGoto": {"state": "fail", "error": "no stars"}}
+    status = {"view_state": "cancel", "view_stage": None}
+    assert _states(status, events)[2] == "failed"
+    assert _detail(status, events) == "no stars"
+
+
+def test_tracker_while_opening_and_parking():
+    assert _states({"phase": "opening", "view_state": None})[:3] == ["done", "active", "pending"]
+    parking = _states({"phase": "parking", "view_state": "cancel"}, DONE_DARKS)
+    assert parking == ["done"] * 6 + ["active"]
+
+
+def test_tracker_when_the_roof_is_unsafe():
+    status = {"safe": False, "parked": True, "view_state": "cancel", "sched_state": "stopped"}
+    assert _states(status)[:2] == ["blocked", "pending"]
+    assert "roof" in _detail(status)
+
+
+def test_tracker_waiting_for_dark():
+    status = {
+        "dark": False,
+        "sun_deg": 12.0,
+        "parked": True,
+        "view_state": "cancel",
+        "sched_state": "stopped",
+    }
+    assert _states(status)[0] == "active"
+    assert "sun 12" in _detail(status)
+
+
+def test_tracker_when_parked_and_ready():
+    status = {"parked": True, "view_state": "cancel", "sched_state": "stopped"}
+    assert _states(status) == ["done"] + ["pending"] * 6
+    assert _detail(status) == "Parked, ready to start"
+    assert "Held" in _detail({**status, "held": True})
+
+
+def test_tracker_when_the_night_is_finished():
+    status = {"parked": True, "completed": True, "view_state": "cancel", "sched_state": "stopped"}
+    assert _states(status, DONE_DARKS) == ["done"] * 7
+    assert _detail(status, DONE_DARKS) == "Schedule finished and parked"
+
+
+def test_tracker_when_offline():
+    status = {"connected": False, "view_state": None, "sched_state": None, "parked": None}
+    assert _detail(status) == "Scope offline"
+
+
+def test_tracker_marks_the_current_step_failed_on_an_alarm():
+    assert _states({"alarm": "Park failed"}, DONE_DARKS)[5] == "failed"
+
+
+def test_tracker_detail_shows_time_left():
+    events = {"scheduler": {"cur_scheduler_item": {"item_remaining_time_s": 3660}}}
+    assert _detail({}, events) == "Stacking IC 1805, 1h 1m left"
+
+
+def test_tracker_fragment_never_asks_the_scope(client, monkeypatch):
+    calls = []
+
+    def action(name, *a, **kw):
+        calls.append(name)
+        return {"Value": {"result": DONE_DARKS}}
+
+    monkeypatch.setattr(front_app, "do_action_device", action)
+    monkeypatch.setattr(dashboard, "get_automation", lambda: SimpleNamespace(status=lambda: BASE))
+    html = client.simulate_get("/1/dashboard/tracker").text
+    assert calls == ["get_event_state"]
+    assert html.count('class="dash-step') == 7
+    assert 'aria-current="step"' in html
+    assert "Stacking IC 1805" in html
+
+
+def test_event_map_tolerates_missing_data():
+    assert dashboard.event_map(None) == {}
+    assert dashboard.event_map({"Value": {"result": "Offline"}}) == {}
+
+
+@pytest.mark.parametrize("position, name", [(0, "Dark"), (1, "IR cut"), (2, "LP"), (None, None)])
+def test_filter_name(position, name):
+    assert dashboard.filter_name({"WheelMove": {"position": position}}) == name
+
+
+def test_session_panel_shows_the_filter(client, monkeypatch):
     monkeypatch.setattr(
-        front_app, "do_action_device", lambda *a, **kw: {"Value": {"result": EVENTS}}
+        front_app,
+        "do_action_device",
+        lambda *a, **kw: {"Value": {**SCHEDULE, "result": {"WheelMove": {"position": 2}}}},
     )
-    html = client.simulate_get("/1/dashboard/events").text
-    assert html.count('class="card text-center') == len(dashboard.EVENT_CARDS)
-    assert html.count('class="col-6 col-xl-4"') == len(dashboard.EVENT_CARDS)
-    for expected in ("FilterWheel", "Filter:</strong> LP", "solve failed", "text-bg-danger"):
-        assert expected in html
-    for trimmed in ("Sleep", "Scheduler", "Stacked:"):
-        assert trimmed not in html
-
-
-def test_status_cards_when_the_scope_is_offline(client, monkeypatch):
-    monkeypatch.setattr(front_app, "do_action_device", lambda *a, **kw: None)
-    result = client.simulate_get("/1/dashboard/events")
-    assert result.status_code == 200
-    assert "No results available" in result.text
+    assert "LP" in client.simulate_get("/1/dashboard/live").text
 
 
 def test_image_endpoints_without_an_image(client, monkeypatch):

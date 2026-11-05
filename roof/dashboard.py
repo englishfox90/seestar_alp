@@ -204,23 +204,140 @@ def device_rows(stats) -> list:
     return rows
 
 
-# The cards from the Startup page's "Current Status of Devices", for the steps
-# that set up a target. Stacking and the scheduler are on the page already.
-EVENT_CARDS = [
-    "AutoGoto",
-    "PlateSolve",
-    "AutoFocus",
-    "DarkLibrary",
-    "WheelMove",
+# The order every target has followed on this scope. Focus and Darks can be
+# skipped, but nothing runs out of order.
+STEPS = [
+    ("ready", "Ready"),
+    ("open", "Open"),
+    ("slew", "Slew"),
+    ("focus", "Focus"),
+    ("darks", "Darks"),
+    ("stack", "Stack"),
+    ("park", "Park"),
 ]
+_POSITION = {key: index for index, (key, _) in enumerate(STEPS)}
+_STAGE_STEP = {"AutoGoto": "slew", "AutoFocus": "focus", "DarkLibrary": "darks", "Stack": "stack"}
+FILTERS = {0: "Dark", 1: "IR cut", 2: "LP"}
 
 
-def event_results(reply) -> list:
-    """The event dicts from get_event_state, in the shape event_card.html reads."""
+def event_map(reply) -> dict:
+    """get_event_state's events by name. ALP answers this from its own cache."""
     events = pydash.get(reply, "Value.result")
-    if not isinstance(events, dict):
-        return []
-    return [event for event in events.values() if isinstance(event, dict)]
+    return events if isinstance(events, dict) else {}
+
+
+def _event_state(events, name):
+    return pydash.get(events, f"{name}.state")
+
+
+def _waiting_detail(status):
+    if not status.get("safe"):
+        return "Waiting for the roof to read safe"
+    sun = status.get("sun_deg")
+    if sun is None:
+        return "Waiting for dark"
+    return f"Waiting for dark: sun {sun:.0f}\N{DEGREE SIGN}, limit {status.get('sun_max_deg')}\N{DEGREE SIGN}"
+
+
+def _current_step(status, events):
+    """Which step the scope is on, or None if it is not working through them."""
+    if status.get("phase") == "parking":
+        return "park"
+    if status.get("phase") == "opening":
+        return "open"
+    if _event_state(events, "DarkLibrary") == "working":
+        return "darks"
+    if status.get("view_state") == "working" and status.get("view_stage") in _STAGE_STEP:
+        return _STAGE_STEP[status["view_stage"]]
+    if status.get("parked"):
+        return "ready" if not (status.get("safe") and status.get("dark")) else None
+    if status.get("sched_state") == "working":
+        # Between steps, such as moving to the next target.
+        return "slew"
+    return None
+
+
+def _active_detail(step, status, events):
+    target = status.get("target") or "target"
+    if step == "ready":
+        return _waiting_detail(status)
+    if step == "open":
+        return "Opening the arm"
+    if step == "slew":
+        solving = _event_state(events, "PlateSolve") in ("start", "working", "solving")
+        return f"Plate solving {target}" if solving else f"Moving to {target}"
+    if step == "focus":
+        return f"Focusing on {target}"
+    if step == "darks":
+        percent = pydash.get(events, "DarkLibrary.percent")
+        return "Taking dark frames" + (f", {percent:.0f}%" if percent else "")
+    if step == "stack":
+        left = pydash.get(events, "scheduler.cur_scheduler_item.item_remaining_time_s")
+        return f"Stacking {target}" + (f", {_duration(left)} left" if left else "")
+    return "Closing the arm"
+
+
+def _finished_row(key, events):
+    """How a step behind the current one went."""
+    if key == "focus" and _event_state(events, "AutoFocus") == "fail":
+        return "warn", "focus failed, carried on anyway"
+    if key == "darks" and not _event_state(events, "DarkLibrary"):
+        return "skipped", None
+    return "done", None
+
+
+def tracker_steps(status, events) -> dict:
+    """One target's journey through STEPS, for the tracker at the top of the page."""
+    events = events or {}
+    finished_night = status.get("completed") and status.get("parked")
+    current = None if finished_night else _current_step(status, events)
+    position = _POSITION.get(current)
+    notes = []
+    rows = []
+    for key, label in STEPS:
+        index = _POSITION[key]
+        if finished_night:
+            state, _ = _finished_row(key, events)
+        elif position is None:
+            state = "pending"
+            if key in ("ready", "open") and not status.get("parked"):
+                state = "done"
+            elif key == "ready" and status.get("safe") and status.get("dark"):
+                state = "done"
+        elif index < position:
+            state, note = _finished_row(key, events)
+            if note:
+                notes.append(note)
+        elif index == position:
+            state = "blocked" if key == "ready" and not status.get("safe") else "active"
+        else:
+            state = "pending"
+        rows.append({"key": key, "label": label, "state": state})
+
+    if status.get("connected") is False:
+        detail = "Scope offline"
+    elif finished_night:
+        detail = "Schedule finished and parked"
+    elif current:
+        detail = _active_detail(current, status, events)
+    elif status.get("held"):
+        detail = "Stopped by hand. Held until Start or the next night"
+    elif status.get("parked"):
+        detail = "Parked, ready to start"
+    else:
+        detail = "Arm open, not imaging"
+
+    if current and status.get("alarm"):
+        rows[position]["state"] = "failed"
+    elif current == "slew" and _event_state(events, "AutoGoto") == "fail":
+        rows[position]["state"] = "failed"
+        detail = pydash.get(events, "AutoGoto.error") or "Goto failed"
+
+    return {"steps": rows, "detail": detail, "notes": notes}
+
+
+def filter_name(events):
+    return FILTERS.get(pydash.get(events or {}, "WheelMove.position"))
 
 
 class ImageStore:
@@ -310,7 +427,9 @@ def _snr(raw):
     from device.analysis.snr_analysis import SNRAnalysis
 
     value = SNRAnalysis().analyze(raw)
-    if isinstance(value, (int, float, np.floating)) and np.isfinite(value) and value >= 0:
+    # Reads exactly 0 on real framed-mosaic stacks whose stars are plainly visible,
+    # so 0 is not a usable measurement. Show nothing rather than "SNR 0".
+    if isinstance(value, (int, float, np.floating)) and np.isfinite(value) and value > 0:
         return round(float(value), 1)
     return None
 
@@ -387,6 +506,8 @@ class DashboardLive:
             front.do_action_device("get_schedule", telescope_id, {}), "Value"
         )
         session = session_summary(view, schedule)
+        events = event_map(front.do_action_device("get_event_state", telescope_id, {}))
+        session["filter"] = filter_name(events)
         front.render_fragment(
             req,
             resp,
@@ -397,19 +518,19 @@ class DashboardLive:
         )
 
 
-class DashboardEvents:
-    """The status cards. get_event_state reads ALP's cache, not the scope."""
+class DashboardTracker:
+    """The workflow tracker. Polled often, so it never sends a message to the scope:
+    the automation loop caches the stage and ALP caches the events."""
 
     @staticmethod
     def on_get(req, resp, telescope_id=1):
         front = _front()
-        reply = front.do_action_device("get_event_state", telescope_id, {})
+        events = event_map(front.do_action_device("get_event_state", telescope_id, {}))
         front.render_fragment(
             req,
             resp,
-            "partials/dashboard_events.html",
-            results=event_results(reply),
-            events=EVENT_CARDS,
+            "partials/dashboard_tracker.html",
+            tracker=tracker_steps(get_automation().status(), events),
         )
 
 
@@ -460,7 +581,7 @@ class DashboardImage:
 PAGES = {
     "dashboard": DashboardPage,
     "dashboard/live": DashboardLive,
-    "dashboard/events": DashboardEvents,
+    "dashboard/tracker": DashboardTracker,
     "dashboard/device": DashboardDevice,
     "dashboard/image.json": DashboardImageMeta,
     "dashboard/image.jpg": DashboardImage,
