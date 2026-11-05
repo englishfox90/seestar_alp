@@ -1,0 +1,15 @@
+{% if rows %}
+  <div class="dashboard-stat-list">
+    {% for row in rows %}
+      <div class="stat-row">
+        <div class="stat-key">{{ row.key|e }}</div>
+        <div class="stat-value {{ row.tone }}">
+          {{ row.value|e }}
+          {% if row.bar is not none %}<div class="metric-bar" style="--metric-value: {{ row.bar }}%;"></div>{% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="mb-0 text-warning">Telescope is currently offline</p>
+{% endif %}

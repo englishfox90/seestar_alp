@@ -1,0 +1,82 @@
+{% macro stat(key, value) %}
+  <div class="stat-row">
+    <div class="stat-key">{{ key }}</div>
+    <div class="stat-value">{{ value|e }}</div>
+  </div>
+{% endmacro %}
+{% if status.loop_stale %}
+<div class="alert alert-danger">The automation loop has stopped reporting. Nothing will park the scope automatically until this clears.</div>
+{% endif %}
+{% if status.alarm %}<div class="alert alert-danger">{{ status.alarm|e }}</div>{% endif %}
+{% if status.override_roof %}
+<div class="alert alert-danger">Manual start is ignoring the roof. It will not park for the roof until the roof next reads safe.</div>
+{% endif %}
+{% if status.foreign %}
+<div class="alert alert-info">A session started elsewhere is running. Automation will leave it alone, and will still park if the roof reads unsafe.</div>
+{% endif %}
+
+<section class="panel-card mb-0">
+  <p class="dash-headline">{{ (status.headline or "Starting up")|e }}</p>
+  <div class="dash-badges">
+    {% if status.safe %}<span class="badge text-bg-success">Roof safe</span>{% else %}<span class="badge text-bg-danger">Roof unsafe</span>{% endif %}
+    {% if status.dark %}<span class="badge text-bg-success">Dark{% if status.sun_deg is not none and status.sun_deg is defined %}, sun {{ "%.0f"|format(status.sun_deg) }}&deg;{% endif %}</span>{% else %}<span class="badge text-bg-secondary">Not dark{% if status.sun_deg is not none and status.sun_deg is defined %}, sun {{ "%.0f"|format(status.sun_deg) }}&deg;{% endif %}</span>{% endif %}
+    {% if not status.connected %}<span class="badge text-bg-danger">Scope offline</span>
+    {% elif status.parked is none %}<span class="badge text-bg-warning">Arm unknown</span>
+    {% elif status.parked %}<span class="badge text-bg-secondary">Parked</span>
+    {% else %}<span class="badge text-bg-primary">Arm open</span>{% endif %}
+    {% if status.enabled %}<span class="badge text-bg-success">Automation on</span>{% else %}<span class="badge text-bg-secondary">Automation off</span>{% endif %}
+    {% if status.dry_run %}<span class="badge text-bg-warning">Dry run</span>{% endif %}
+  </div>
+  <p class="small text-body-secondary mt-2 mb-0">
+    {% if status.note %}{{ status.note|e|capitalize }}. {% endif %}
+    {% if status.held %}Held until Start or the next night. {% endif %}
+    {% if status.completed %}Schedule finished tonight. {% endif %}
+    {% if status.resume_item %}Will resume at item {{ status.resume_item }} tonight. {% endif %}
+    <a href="{{ root_path }}{{ roof_page or '/roof' }}">Roof controls and log</a>
+  </p>
+</section>
+
+<div id="dash-session" hx-swap-oob="innerHTML">
+    <section class="panel-card">
+      <h2 class="panel-title mb-3">Current session</h2>
+      {% if session.active %}
+        <div class="dashboard-stat-list">
+          {{ stat("Target", session.target or "Unknown") }}
+          {% if status.mosaic_scale is defined and status.mosaic_scale is not none %}
+            {{ stat("Framing", ("Mosaic " ~ status.mosaic_scale ~ "x") if status.mosaic_scale > 1.0 else "Single frame") }}
+          {% endif %}
+          {% set exposure = session.stack.exposure_s if session.stack else none %}
+          {% if exposure or session.gain is not none %}
+            {{ stat("Exposure", (("%g s"|format(exposure)) if exposure else "") ~ (", " if exposure and session.gain is not none else "") ~ (("gain " ~ session.gain) if session.gain is not none else "")) }}
+          {% endif %}
+          {% if session.stack %}
+            {% if session.stack.integration %}{{ stat("Integration", session.stack.integration) }}{% endif %}
+            {{ stat("Frames", session.stack.stacked ~ " stacked, " ~ session.stack.dropped ~ " dropped" ~ ((" (" ~ session.stack.drop_percent ~ "%)") if session.stack.drop_percent is not none else "")) }}
+            {{ stat("Time on target", session.stack.elapsed ~ ((" of " ~ session.planned) if session.planned else "")) }}
+          {% else %}
+            {{ stat("Stage", (session.stage or session.state) ~ (" (" ~ session.substage ~ ")" if session.substage else "")) }}
+          {% endif %}
+        </div>
+      {% else %}
+        <p class="mb-0">Not imaging right now.</p>
+      {% endif %}
+    </section>
+    <section class="panel-card">
+      <h2 class="panel-title mb-3">Tonight's plan{% if status.schedule %} <span class="small text-body-secondary">{{ status.schedule|replace(".json", "")|e }}</span>{% endif %}</h2>
+      {% if plan %}
+        <div class="dashboard-stat-list">
+          {% for row in plan %}
+            <div class="dash-plan-row {% if row.progress %}is-{{ row.progress }}{% endif %}">
+              <div class="dash-plan-name">{{ row.name|e }}{% if row.progress == "now" %} <span class="badge text-bg-primary">Now</span>{% elif row.progress == "done" %} <span class="badge text-bg-secondary">Passed</span>{% endif %}</div>
+              <div class="dash-plan-meta">
+                {% if row.altitude is none %}Alt unknown{% else %}{{ "%.0f"|format(row.altitude) }}&deg;{% endif %}
+                {% if not row.ok %}<span class="badge text-bg-secondary">Too low</span>{% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="mb-0">No schedule selected.</p>
+      {% endif %}
+    </section>
+</div>
