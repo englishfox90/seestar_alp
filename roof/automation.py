@@ -682,6 +682,7 @@ class RoofAutomation:
             rows.append(
                 {
                     "name": item.get("params", {}).get("target_name", "?"),
+                    "kind": schedule_tools.describe_target(item),
                     "altitude": altitude,
                     "ok": altitude is None or altitude >= s.min_target_alt_deg,
                 }
@@ -787,6 +788,7 @@ class RoofAutomation:
             "view_state": state.view_state,
             "view_stage": state.view_stage,
             "plan_state": state.plan_state,
+            "mosaic_scale": state.mosaic_scale,
             "foreign": foreign,
             "override_roof": self._override_roof,
             "held": self._hold_night == night,

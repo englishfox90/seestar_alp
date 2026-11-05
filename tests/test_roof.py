@@ -1121,3 +1121,24 @@ def test_plan_conversion_keeps_star_map_angle():
                    "mosaic": {"scale": 1.7, "angle": 67.0, "star_map_angle": 69.05}}]}
     )
     assert schedule["list"][1]["params"]["mosaic_star_map_angle"] == 69.05
+
+
+@pytest.mark.parametrize(
+    "item,label",
+    [
+        (_target("A"), "Single frame"),
+        (
+            {"action": "start_mosaic", "params": {"ra_num": 2, "dec_num": 3}},
+            "Mosaic 2x3 panels",
+        ),
+        (
+            {
+                "action": "start_framed_mosaic",
+                "params": {"mosaic_scale": 1.7, "mosaic_angle": 67.0},
+            },
+            "Framed mosaic 1.7x at 67°",
+        ),
+    ],
+)
+def test_describe_target(item, label):
+    assert schedule_tools.describe_target(item) == label

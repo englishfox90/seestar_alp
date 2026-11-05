@@ -99,6 +99,22 @@ def target_names(items) -> list[str]:
     ]
 
 
+def describe_target(item: dict) -> str:
+    """Short label for how a schedule item frames its target."""
+    params = item.get("params", {})
+    action = item.get("action")
+    if action == "start_framed_mosaic":
+        return f"Framed mosaic {params.get('mosaic_scale', 1.0):g}x at {params.get('mosaic_angle', 0.0):g}\u00b0"
+    if action == "start_mosaic":
+        ra_num, dec_num = params.get("ra_num", 1), params.get("dec_num", 1)
+        if ra_num == 1 and dec_num == 1:
+            return "Single frame"
+        return f"Mosaic {ra_num}x{dec_num} panels"
+    if action == "start_spectra":
+        return "Spectra"
+    return str(action)
+
+
 def _norm_angle(angle) -> float:
     # ALP wants mosaic_angle in [-90, 90]; framing is symmetric under +/-180.
     angle = float(angle)

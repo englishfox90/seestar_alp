@@ -33,7 +33,8 @@
       <div class="small text-body-secondary">
         Scheduler: {{ status.sched_state }}{% if status.target_index %}, target {{ status.target_index }} of {{ status.target_total }}{% elif status.target_total is not defined and status.item_number %}, item {{ status.item_number }} of {{ status.item_count }}{% endif %}<br>
         Target: {{ status.target or "none" }}<br>
-        Tracking: {{ status.tracking }}
+        Tracking: {{ status.tracking }}{% if status.mosaic_scale is defined and status.mosaic_scale is not none %}<br>
+        Framing now: {% if status.mosaic_scale > 1.0 %}mosaic {{ status.mosaic_scale }}x{% else %}single frame{% endif %}{% endif %}
       </div>
     {% endif %}
   </div></div></div>
@@ -48,7 +49,7 @@
 <div class="card mb-3"><div class="card-header">Targets{% if status.min_target_alt_deg %} (minimum {{ status.min_target_alt_deg }}&deg;){% endif %}</div><div class="card-body">
   <table class="table table-sm mb-0"><tbody>
     {% for t in status.targets %}
-      <tr><td>{{ t.name }}</td><td>{% if t.altitude is none %}unknown{% else %}{{ "%.1f"|format(t.altitude) }}&deg;{% endif %}</td><td>{% if t.ok %}<span class="badge text-bg-success">OK</span>{% else %}<span class="badge text-bg-secondary">TOO LOW</span>{% endif %}</td></tr>
+      <tr><td>{{ t.name }}</td><td>{{ t.kind }}</td><td>{% if t.altitude is none %}unknown{% else %}{{ "%.1f"|format(t.altitude) }}&deg;{% endif %}</td><td>{% if t.ok %}<span class="badge text-bg-success">OK</span>{% else %}<span class="badge text-bg-secondary">TOO LOW</span>{% endif %}</td></tr>
     {% endfor %}
   </tbody></table>
 </div></div>
