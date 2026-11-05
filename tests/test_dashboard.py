@@ -522,28 +522,78 @@ def test_tracker_marks_darks_skipped_when_none_ran():
 
 
 def test_tracker_flags_a_failed_focus_the_scope_carried_on_from():
-    events = {**DONE_DARKS, "AutoFocus": {"state": "fail"}}
+    events = {**DONE_DARKS, "AutoFocus": {"state": "fail", "error": "no star is detected"}}
     tracker = dashboard.tracker_steps(BASE, events)
     assert tracker["steps"][3]["state"] == "warn"
-    assert tracker["notes"] == ["focus failed, carried on anyway"]
+    assert tracker["notes"] == [
+        {"text": "Last focus failed: no star is detected", "problem": True}
+    ]
 
 
-def test_tracker_ignores_an_old_plate_solve_failure_once_past_the_slew():
+def test_tracker_keeps_going_but_reports_a_plate_solve_failure():
     events = {**DONE_DARKS, "PlateSolve": {"state": "fail", "error": "solve failed"}}
-    assert _states({}, events)[2] == "done"
+    tracker = dashboard.tracker_steps(BASE, events)
+    assert tracker["steps"][2]["state"] == "done"
+    assert tracker["notes"] == [{"text": "Last plate solve failed: solve failed", "problem": True}]
+
+
+def test_tracker_notes_list_problems_before_details():
+    events = {
+        "FocuserMove": {"state": "complete", "position": 1230},
+        "AutoGoto": {"state": "complete"},
+        "PlateSolve": {"state": "complete"},
+        "DarkLibrary": {"state": "fail"},
+    }
+    assert dashboard.tracker_notes(events) == [
+        {"text": "Last dark frames failed", "problem": True},
+        {"text": "Focus position 1230", "problem": False},
+    ]
+
+
+def test_tracker_notes_are_empty_with_nothing_to_say():
+    assert dashboard.tracker_notes({}) == []
+    assert dashboard.tracker_notes({"AutoFocus": {"state": "complete"}}) == []
+
+
+def test_tracker_note_text_is_escaped(client, monkeypatch):
+    events = {"PlateSolve": {"state": "fail", "error": "<script>x</script>"}}
+    monkeypatch.setattr(
+        front_app, "do_action_device", lambda *a, **kw: {"Value": {"result": events}}
+    )
+    monkeypatch.setattr(dashboard, "get_automation", lambda: SimpleNamespace(status=lambda: BASE))
+    html = client.simulate_get("/1/dashboard/tracker").text
+    assert "&lt;script&gt;" in html and "<script>x" not in html
+    assert "is-problem" in html
+
+
+def test_tracker_does_not_tick_steps_a_stop_never_reached():
+    status = {"phase": "parking", "view_state": "cancel"}
+    assert _states(status, DONE_DARKS) == ["done", "done"] + ["pending"] * 4 + ["active"]
+
+
+def test_tracker_ignores_a_stage_left_over_after_parking():
+    status = {"parked": True, "phase": "idle", "view_stage": "AutoFocus", "sched_state": "working"}
+    assert _states(status) == ["done"] + ["pending"] * 6
+    assert _detail(status) == "Parked, ready to start"
+
+
+def test_tracker_trusts_the_stage_during_the_first_goto_of_a_session():
+    # The firmware reports the mount closed until the first goto.
+    status = {"parked": True, "phase": "imaging", "view_stage": "AutoGoto"}
+    assert _states(status)[2] == "active"
 
 
 def test_tracker_shows_a_failed_goto():
     events = {"AutoGoto": {"state": "fail", "error": "no stars"}}
     status = {"view_state": "cancel", "view_stage": None}
     assert _states(status, events)[2] == "failed"
-    assert _detail(status, events) == "no stars"
+    assert _detail(status, events) == "Goto failed"
+    assert dashboard.tracker_notes(events)[0]["text"] == "Last goto failed: no stars"
 
 
 def test_tracker_while_opening_and_parking():
     assert _states({"phase": "opening", "view_state": None})[:3] == ["done", "active", "pending"]
-    parking = _states({"phase": "parking", "view_state": "cancel"}, DONE_DARKS)
-    assert parking == ["done"] * 6 + ["active"]
+    assert _states({"phase": "parking", "view_state": "cancel"})[-1] == "active"
 
 
 def test_tracker_when_the_roof_is_unsafe():

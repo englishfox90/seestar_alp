@@ -8,4 +8,6 @@
   {% endfor %}
 </ol>
 <p class="dash-track-detail">{{ tracker.detail|e }}</p>
-{% for note in tracker.notes %}<p class="dash-track-note">{{ note|e|capitalize }}</p>{% endfor %}
+{% for note in tracker.notes %}
+  <p class="dash-track-note{% if note.problem %} is-problem{% endif %}">{% if note.problem %}<span aria-hidden="true">&#9888; </span>{% endif %}{{ note.text|e }}</p>
+{% endfor %}

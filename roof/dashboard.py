@@ -241,10 +241,16 @@ def _waiting_detail(status):
 
 def _current_step(status, events):
     """Which step the scope is on, or None if it is not working through them."""
-    if status.get("phase") == "parking":
+    phase = status.get("phase")
+    if phase == "parking":
         return "park"
-    if status.get("phase") == "opening":
+    if phase == "opening":
         return "open"
+    # A stopped scheduler can still report a stage after the arm has closed, so
+    # outside a session a closed arm wins. During one it can't: the firmware reports
+    # closed from the startup sequence until the first goto.
+    if status.get("parked") and phase != "imaging":
+        return "ready" if not (status.get("safe") and status.get("dark")) else None
     if _event_state(events, "DarkLibrary") == "working":
         return "darks"
     if status.get("view_state") == "working" and status.get("view_stage") in _STAGE_STEP:
@@ -280,10 +286,34 @@ def _active_detail(step, status, events):
 def _finished_row(key, events):
     """How a step behind the current one went."""
     if key == "focus" and _event_state(events, "AutoFocus") == "fail":
-        return "warn", "focus failed, carried on anyway"
+        return "warn"
     if key == "darks" and not _event_state(events, "DarkLibrary"):
-        return "skipped", None
-    return "done", None
+        return "skipped"
+    return "done"
+
+
+# The scope keeps an event's last state until the next attempt replaces it, so a
+# failure may be older than the current step. The wording says "last" for that reason.
+_FAILURES = [
+    ("AutoGoto", "goto"),
+    ("PlateSolve", "plate solve"),
+    ("AutoFocus", "focus"),
+    ("DarkLibrary", "dark frames"),
+]
+
+
+def tracker_notes(events) -> list:
+    """Short lines under the tracker: anything that failed, then quiet details."""
+    notes = []
+    for event, label in _FAILURES:
+        if _event_state(events, event) == "fail":
+            error = pydash.get(events, f"{event}.error")
+            text = f"Last {label} failed" + (f": {error}" if error else "")
+            notes.append({"text": text, "problem": True})
+    position = pydash.get(events, "FocuserMove.position")
+    if position is not None:
+        notes.append({"text": f"Focus position {position}", "problem": False})
+    return notes
 
 
 def tracker_steps(status, events) -> dict:
@@ -292,22 +322,22 @@ def tracker_steps(status, events) -> dict:
     finished_night = status.get("completed") and status.get("parked")
     current = None if finished_night else _current_step(status, events)
     position = _POSITION.get(current)
-    notes = []
     rows = []
     for key, label in STEPS:
         index = _POSITION[key]
         if finished_night:
-            state, _ = _finished_row(key, events)
+            state = _finished_row(key, events)
         elif position is None:
             state = "pending"
             if key in ("ready", "open") and not status.get("parked"):
                 state = "done"
             elif key == "ready" and status.get("safe") and status.get("dark"):
                 state = "done"
+        elif current == "park" and index < position:
+            # A stop can come at any step, so don't claim the ones it never reached.
+            state = "done" if key in ("ready", "open") else "pending"
         elif index < position:
-            state, note = _finished_row(key, events)
-            if note:
-                notes.append(note)
+            state = _finished_row(key, events)
         elif index == position:
             state = "blocked" if key == "ready" and not status.get("safe") else "active"
         else:
@@ -331,9 +361,9 @@ def tracker_steps(status, events) -> dict:
         rows[position]["state"] = "failed"
     elif current == "slew" and _event_state(events, "AutoGoto") == "fail":
         rows[position]["state"] = "failed"
-        detail = pydash.get(events, "AutoGoto.error") or "Goto failed"
+        detail = "Goto failed"
 
-    return {"steps": rows, "detail": detail, "notes": notes}
+    return {"steps": rows, "detail": detail, "notes": tracker_notes(events)}
 
 
 def filter_name(events):
