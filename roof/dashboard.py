@@ -2,7 +2,7 @@
 
 Nothing here commands the scope. The only message it can send is
 get_stacked_img on the imaging port, which reads the current stack, and only
-while a browser is polling for the image.
+while a browser is polling for the image. The autofocus curve only listens.
 """
 
 import json
@@ -16,6 +16,7 @@ import falcon
 import numpy as np
 import pydash
 
+from roof import focus
 from roof.automation import get_automation
 
 PREVIEW_WIDTH = 720
@@ -580,6 +581,24 @@ class DashboardDevice:
         front.render_fragment(req, resp, "partials/dashboard_device.html", rows=rows)
 
 
+class DashboardFocus:
+    """The autofocus curve while a run is showing, and nothing otherwise.
+
+    An empty reply is what puts the image back, so this one is meant to swap in
+    empty. Polled often, so it only reads what roof.focus has already kept.
+    """
+
+    @staticmethod
+    def on_get(req, resp, telescope_id=1):
+        run = focus.focus_log(telescope_id).current()
+        _front().render_fragment(
+            req,
+            resp,
+            "partials/dashboard_focus.html",
+            chart=focus.chart(run) if run else None,
+        )
+
+
 class DashboardImageMeta:
     """What the browser polls. A poll is also what prompts a fresh fetch."""
 
@@ -613,6 +632,7 @@ PAGES = {
     "dashboard/live": DashboardLive,
     "dashboard/tracker": DashboardTracker,
     "dashboard/device": DashboardDevice,
+    "dashboard/focus": DashboardFocus,
     "dashboard/image.json": DashboardImageMeta,
     "dashboard/image.jpg": DashboardImage,
 }

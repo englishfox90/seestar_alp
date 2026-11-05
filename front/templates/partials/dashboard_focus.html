@@ -1,0 +1,47 @@
+{% if chart %}
+<div class="dash-focus">
+  <h2 class="panel-title mb-3">Autofocus</h2>
+  <svg class="dash-focus-plot" viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-label="{{ chart.summary|e }}">
+    <text x="{{ chart.left }}" y="18">Focus metric, lower is sharper</text>
+    {% for tick in chart.y_ticks %}
+      <line class="dash-focus-grid" x1="{{ chart.left }}" x2="{{ chart.right }}" y1="{{ tick.y }}" y2="{{ tick.y }}"></line>
+      <text x="{{ chart.left - 8 }}" y="{{ tick.y + 4 }}" text-anchor="end">{{ tick.label }}</text>
+    {% endfor %}
+    {% for tick in chart.x_ticks %}
+      <text x="{{ tick.x }}" y="{{ chart.bottom + 18 }}" text-anchor="middle">{{ tick.label }}</text>
+    {% endfor %}
+    {% if chart.x_ticks %}<text x="{{ (chart.left + chart.right) / 2 }}" y="{{ chart.height - 8 }}" text-anchor="middle">Focuser step</text>{% endif %}
+    {% for fit in chart.fit %}<polyline class="dash-focus-fit" points="{{ fit }}"></polyline>{% endfor %}
+    {% for line in chart.lines %}<polyline class="dash-focus-line" points="{{ line }}"></polyline>{% endfor %}
+    {% for mark in chart.missing %}
+      <line class="dash-focus-missing" x1="{{ mark.x }}" x2="{{ mark.x }}" y1="{{ chart.bottom - 7 }}" y2="{{ chart.bottom }}"></line>
+      <circle class="dash-focus-hit" cx="{{ mark.x }}" cy="{{ chart.bottom - 4 }}" r="10"><title>Step {{ mark.step }}: no reading</title></circle>
+    {% endfor %}
+    {% for point in chart.readings %}
+      <circle class="dash-focus-dot" cx="{{ point.x }}" cy="{{ point.y }}" r="4"></circle>
+      <circle class="dash-focus-hit" cx="{{ point.x }}" cy="{{ point.y }}" r="10"><title>Step {{ point.step }}: metric {{ point.metric }}</title></circle>
+    {% endfor %}
+    {% if chart.final %}
+      <circle class="dash-focus-final" cx="{{ chart.final.x }}" cy="{{ chart.final.y }}" r="6"></circle>
+      <circle class="dash-focus-hit" cx="{{ chart.final.x }}" cy="{{ chart.final.y }}" r="12"><title>Settled at step {{ chart.final.step }}: metric {{ chart.final.metric }}</title></circle>
+    {% endif %}
+  </svg>
+  {% if chart.table %}
+  <table class="visually-hidden">
+    <caption>Autofocus readings</caption>
+    <thead><tr><th scope="col">Focuser step</th><th scope="col">Metric</th></tr></thead>
+    <tbody>{% for row in chart.table %}<tr><td>{{ row.step }}</td><td>{{ row.metric if row.metric > 0 else "No reading" }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <div class="dash-focus-key" aria-hidden="true">
+    <span><span class="dash-focus-swatch" style="background: var(--ui-primary);"></span>Measured</span>
+    {% if chart.fit %}<span><span class="dash-focus-swatch" style="background: #c3c2b7; opacity: 0.55;"></span>Scope's fit</span>{% endif %}
+    {% if chart.final %}<span><span class="dash-focus-dot-key" style="background: #f0efec;"></span>Settled position</span>{% endif %}
+    {% if chart.missing %}<span><span class="dash-focus-swatch" style="background: #e0b040;"></span>No reading</span>{% endif %}
+  </div>
+  {% endif %}
+  <p class="dash-track-detail" role="status">{{ chart.summary|e }}</p>
+  {% for note in chart.notes %}
+    <p class="dash-track-note{% if note.problem %} is-problem{% endif %}">{% if note.problem %}<span aria-hidden="true">&#9888; </span>{% endif %}{{ note.text|e }}</p>
+  {% endfor %}
+</div>
+{% endif %}
