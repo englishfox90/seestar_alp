@@ -733,6 +733,17 @@ class RoofAutomation:
             self._log_lines.append(line)
         self._logger.info("%s%s", dry, message)
 
+    def _target_position(self, state):
+        """(n, total) among imaging targets; schedules also hold settings items."""
+        items = self._active_items
+        number = state.item_number
+        if self._adopted or not 1 <= number <= len(items):
+            return 0, 0
+        if items[number - 1].get("action") not in schedule_tools.IMAGING_ACTIONS:
+            return 0, 0
+        is_target = [i.get("action") in schedule_tools.IMAGING_ACTIONS for i in items]
+        return sum(is_target[:number]), sum(is_target)
+
     def _headline(self, state, foreign) -> str:
         """What it's doing right now, in a sentence."""
         if self.phase == OPENING:
@@ -740,7 +751,8 @@ class RoofAutomation:
         if self.phase == PARKING:
             return "Parking"
         if self.phase == IMAGING:
-            where = f"item {state.item_number} of {state.item_count}" if state.item_number else ""
+            index, total = self._target_position(state)
+            where = f"(target {index} of {total})" if index else ""
             what = " ".join(p for p in (state.target, where) if p)
             return f"Imaging {what}".strip()
         if foreign:
@@ -769,6 +781,8 @@ class RoofAutomation:
             "sched_state": state.sched_state,
             "item_number": state.item_number,
             "item_count": state.item_count,
+            "target_index": self._target_position(state)[0],
+            "target_total": self._target_position(state)[1],
             "target": state.target,
             "view_state": state.view_state,
             "view_stage": state.view_stage,

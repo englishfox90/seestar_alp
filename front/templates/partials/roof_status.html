@@ -31,7 +31,7 @@
     {% else %}
       <p class="h4">{% if status.parked is none %}<span class="badge text-bg-warning">UNKNOWN</span>{% elif status.parked %}<span class="badge text-bg-secondary">PARKED</span>{% else %}<span class="badge text-bg-primary">ARM OPEN</span>{% endif %}</p>
       <div class="small text-body-secondary">
-        Scheduler: {{ status.sched_state }}{% if status.item_number %}, item {{ status.item_number }} of {{ status.item_count }}{% endif %}<br>
+        Scheduler: {{ status.sched_state }}{% if status.target_index %}, target {{ status.target_index }} of {{ status.target_total }}{% elif status.target_total is not defined and status.item_number %}, item {{ status.item_number }} of {{ status.item_count }}{% endif %}<br>
         Target: {{ status.target or "none" }}<br>
         Tracking: {{ status.tracking }}
       </div>

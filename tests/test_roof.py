@@ -1062,9 +1062,10 @@ def test_headline_says_what_it_is_doing(rig):
     rig.sun = -40.0
     rig.auto = rig.build()
     rig.settle_and_start()
+    # Item 1 of the schedule is a setting, so item 2 of 3 is target 1 of 2.
     rig.set_scope(target="M 42", item_number=2, item_count=3)
     rig.tick(10)
-    assert rig.auto.status()["headline"] == "Imaging M 42 item 2 of 3"
+    assert rig.auto.status()["headline"] == "Imaging M 42 (target 1 of 2)"
 
 
 def test_disconnected_scope_is_the_reason_shown_first(rig):
