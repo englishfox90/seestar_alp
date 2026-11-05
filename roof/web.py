@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 import falcon
 
 from roof import config as roof_config
-from roof import dashboard, schedule_tools
+from roof import dashboard, focus, schedule_tools
 from roof.automation import get_automation
 
 
@@ -185,4 +185,5 @@ def install(app):
         app.add_route(f"/{path}", resource())
         app.add_route(f"/{{telescope_id:int}}/{path}", resource())
     app.add_route("/roof/badge", RoofBadge())
+    focus.listen()
     get_automation().start()

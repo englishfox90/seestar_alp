@@ -37,6 +37,21 @@
   .dash-image { display: block; width: 100%; max-height: 72vh; object-fit: contain; background: #000; border-radius: 0.5rem; }
   .dash-image-empty { padding: 3rem 1rem; text-align: center; background: #000; border-radius: 0.5rem; }
   .dash-image-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; margin-top: 0.6rem; }
+  /* The curve takes the image's place while there is one. The image keeps updating underneath. */
+  .dash-image-slot:has(.dash-focus) .dash-image-view { display: none; }
+  .dash-focus-plot { display: block; width: 100%; height: auto; background: #000; border-radius: 0.5rem; }
+  .dash-focus-plot text { fill: #c3c2b7; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .dash-focus-plot .dash-focus-final-label { fill: #f0efec; font-weight: 600; }
+  .dash-focus-grid { stroke: rgba(255, 255, 255, 0.14); stroke-width: 1; }
+  .dash-focus-line { fill: none; stroke: var(--ui-primary); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .dash-focus-fit { fill: none; stroke: #c3c2b7; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; opacity: 0.55; }
+  .dash-focus-dot { fill: var(--ui-primary); stroke: #000; stroke-width: 2; }
+  .dash-focus-final { fill: #f0efec; stroke: #000; stroke-width: 2; }
+  .dash-focus-missing { stroke: #e0b040; stroke-width: 2; stroke-linecap: round; }
+  .dash-focus-hit { fill: transparent; }
+  .dash-focus-key { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 0.5rem 0 0; font-size: 0.8rem; opacity: 0.85; }
+  .dash-focus-swatch { display: inline-block; width: 1.1rem; height: 2px; margin-right: 0.35rem; vertical-align: middle; }
+  .dash-focus-dot-key { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin-right: 0.35rem; }
   .dash-plan-row { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.45rem 0.55rem; border-radius: 0.45rem; }
   .dash-plan-row.is-now { outline: 1px solid var(--ui-primary); font-weight: 620; }
   .dash-plan-row.is-done { opacity: 0.6; }
@@ -79,7 +94,13 @@
 
   <div class="dash-grid mt-3">
     <div class="dash-column">
-      <section class="panel-card">
+      <section class="panel-card dash-image-slot">
+        <div id="dash-focus" class="no-htmx-fx"
+             hx-get="{{ root_path }}{{ page_root }}/focus"
+             hx-trigger="load, every 3s [!document.hidden]"
+             hx-sync="this:drop"
+             hx-swap="innerHTML"></div>
+        <div class="dash-image-view">
         <h2 class="panel-title mb-3">Latest image</h2>
         <a id="dash-image-link" href="{{ root_path }}{{ page_root }}/image.jpg?full=true" target="_blank" rel="noopener" hidden>
           <img id="dash-image" class="dash-image" alt="Latest stacked image">
@@ -90,6 +111,7 @@
         <div class="dash-image-bar" id="dash-image-bar" hidden>
           <div class="small" id="dash-image-caption"></div>
           <a class="btn btn-outline-primary btn-sm" id="dash-image-save" href="{{ root_path }}{{ page_root }}/image.jpg?full=true">Save full size</a>
+        </div>
         </div>
       </section>
     </div>
