@@ -135,3 +135,35 @@ def test_sky_data_gives_ra_in_degrees(client):
     assert (row["dec"], row["scale"], row["angle"]) == (30.48, 1.7, 10.0)
 
 
+
+
+UPDATE = "id=abc&goal_hours=10&min_session_hours=1&prior_hours=0&priority=normal&enabled=on"
+
+
+def test_saving_a_target_changes_its_exposure_and_filter(client):
+    _listed(exposure_s=20.0, lp_filter=True)
+    _post(client, "/targets/update", f"{UPDATE}&exposure_s=30&lp_filter=off")
+    assert _only().exposure_s == 30.0
+    assert _only().lp_filter is False
+    _post(client, "/targets/update", f"{UPDATE}&exposure_s=60&lp_filter=on")
+    assert _only().exposure_s == 60.0
+    assert _only().lp_filter is True
+
+
+def test_a_save_without_those_fields_leaves_them_alone(client):
+    _listed(exposure_s=20.0, lp_filter=False)
+    _post(client, "/targets/update", UPDATE)
+    assert _only().exposure_s == 20.0
+    assert _only().lp_filter is False
+
+
+@pytest.mark.parametrize(
+    "fields", ["exposure_s=0", "exposure_s=0.5", "exposure_s=91", "exposure_s=abc", "lp_filter=maybe"]
+)
+def test_a_bad_exposure_or_filter_is_refused_and_changes_nothing(client, fields):
+    _listed(exposure_s=20.0, lp_filter=True, goal_hours=5.0)
+    response = _post(client, "/targets/update", f"{UPDATE}&{fields}")
+    assert response.status == falcon.HTTP_400
+    assert _only().exposure_s == 20.0
+    assert _only().lp_filter is True
+    assert _only().goal_hours == 5.0

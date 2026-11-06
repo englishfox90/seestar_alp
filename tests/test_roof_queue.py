@@ -214,6 +214,21 @@ PLAN = {
 }
 
 
+def test_each_target_runs_at_its_own_exposure_and_filter():
+    first, second = framed(exposure_s=20.0, lp_filter=False), single(exposure_s=60.0, lp_filter=True)
+    plan = plan_night([first, second], remaining(first, second), NIGHT, CFG)
+    items = to_schedule(plan)["list"]
+    exposure = None
+    seen = {}
+    for item in items:
+        if item["action"] == "set_setting":
+            exposure = item["params"]["exp_ms"]["stack_l"]
+        elif item["action"] in ("start_mosaic", "start_framed_mosaic"):
+            seen[item["params"]["target_name"]] = (exposure, item["params"]["is_use_lp_filter"])
+    assert seen[first.name] == (20000, False)
+    assert seen[second.name] == (60000, True)
+
+
 def test_app_plan_keeps_its_framing_and_asks_for_a_long_run():
     found = targets_from_plan(PLAN)
     assert [t["name"] for t in found] == ["NGC 6960", "M 42"]
