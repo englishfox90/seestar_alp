@@ -388,7 +388,7 @@ def test_sky_objects_add_no_form_or_route(rig):
     script = (Path(__file__).parent.parent / "front/public/sky_objects.js").read_text()
     assert "POST" not in script and "/targets" not in script
     page = (Path(__file__).parent.parent / "front/public/target_sky.js").read_text()
-    assert "onFrame: (entry) => startNew(entry.r, entry.d, entry.n)" in page
+    assert "onFrame: (entry) => startNew(entry.r, entry.d, catalogName(entry))" in page
     assert "onShow: select" in page
 
 
