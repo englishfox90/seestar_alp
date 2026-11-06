@@ -124,7 +124,6 @@
 /* ---- System pages on the shell: Config, Commands, Stats, Guest mode, Support, System ------- */
 
 .s-auth:not(:has(*)) { display: none; }
-.s-empty { margin: 0; padding: var(--ssc-space-4) var(--ssc-inset) var(--ssc-space-4) 0; }
 .s-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--ssc-space-3); }
 .s-actions--start { justify-content: flex-start; }
 .s-textarea { padding-block: var(--ssc-space-3); resize: vertical; }
@@ -135,8 +134,6 @@
 .s-page .ssc-row > .ssc-button { padding: 0; }
 
 .s-device { display: flex; flex-direction: column; gap: var(--ssc-space-5); padding-bottom: var(--ssc-space-5); border-bottom: 1px solid var(--ssc-separator); }
-.s-device__title { margin: 0; font-size: var(--ssc-text-body); font-weight: var(--ssc-weight-strong); }
-.s-event-device { padding-top: var(--ssc-space-4); }
 
 .s-disclosure { display: flex; flex-direction: column; }
 .s-disclosure > summary { cursor: pointer; min-height: var(--ssc-touch); display: flex; align-items: center; gap: var(--ssc-space-2); }

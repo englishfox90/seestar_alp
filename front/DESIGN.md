@@ -58,7 +58,7 @@ The design language and framework for the whole web UI. The owner approved this 
 
 ## Decision log
 
-- **2026-11-06:** Every System sub-page moves to the shell, overturning "Leave" for Support, Platform and System, because the owner saw them as dated next to Settings. Commands gets event rows; pages still on `base.html` keep the event cards.
+- **2026-11-06:** Every System sub-page moves to the shell, overturning "Leave" for Support, Platform and System, because the owner saw them as dated next to Settings. Event status becomes one set of rows on every page, including those still on `base.html`, which load `ssc/rows.css` for them.
 - **2026-11-06:** The Targets sky view marks popular objects from `ssc/sky_catalog.json`, built by `scripts/build_sky_catalog.py`. Marker shape carries the type, because Red has no hues, and each marker has one soft colour so the owner's frames and white labels stay loudest. What a tapped object is shows below the view, not on the image, and its action uses the search result's path. Canvas colours in Red are full red, since the floor would erase the blue frame.
 - **2026-11-06:** Final design review: the language is done. Phone Tonight now puts the Night Line directly under the sentence, because a glance has to show the night. Image corners are 0 everywhere. Schedule and Live stay on Bootstrap unless they earn the move.
 - **2026-11-05:** Keep htmx and server templates. New screens get their own shell without Bootstrap, and legacy pages stay on it.
@@ -239,7 +239,8 @@ html[data-theme="red"] img,html[data-theme="red"] canvas,html[data-theme="red"] 
 | Guest Mode | T2 | System | On the shell |
 | Platform | T3 | System | On the shell |
 | Support | T2 | System | On the shell |
-| Event status, telescope list, no telescopes | T2 | System, or empty state | Leave |
+| Event status | T2 | Shared rows | On every page that shows it |
+| Telescope list, no telescopes | T2 | System, or empty state | Leave |
 
 I did not render Console, System, Search, Position, Config, Image, Planning, Platform or Support in this pass.
 
@@ -414,7 +415,7 @@ A ratchet test also records current inline-style counts for legacy pages, and th
 
 - **Rewrite:** Dashboard, Roof, Targets, Home, nav. Settings rows later.
 - **Restyle:** Schedule, Live, mosaics, Goto, Image, Startup, Stats.
-- **Leave alone:** Console, and Event status on the pages still on `base.html`.
+- **Leave alone:** Console.
 
 **From `design.css`:** keep as the frozen legacy skin. Update its tokens to the new values and allow only bug fixes. Its Bootstrap overrides are not carried into `ssc/`. Delete `base.html` rules only as each page leaves.
 

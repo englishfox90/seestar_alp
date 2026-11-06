@@ -1,6 +1,6 @@
-{# Event status for the Commands page, polled every second. Legacy pages keep eventstatus.html. #}
+{# Event status, polled every second on Commands and on the pages still on base.html. #}
 {% import 'ssc/ui.html' as ui %}
-{% set names = {"WheelMove": "Filter wheel", "AutoFocus": "Autofocus", "DarkLibrary": "Dark library", "3PPA": "Polar align", "PlateSolve": "Plate solve", "Scheduler": "Scheduler"} %}
+{% set names = {"WheelMove": "Filter wheel", "AutoFocus": "Autofocus", "DarkLibrary": "Dark library", "3PPA": "Polar align", "PlateSolve": "Plate solve", "Scheduler": "Scheduler", "AutoGoto": "Goto", "Stack": "Stack"} %}
 {% set filters = {0: "Dark", 1: "IR cut", 2: "LP"} %}
 
 {% macro event_row(event_name, event_status) -%}
@@ -21,11 +21,18 @@
     {%- set _ = details.append(event_status.percent|round(2) ~ "% complete") -%}
   {%- elif event_name == "WheelMove" and event_status.position is defined and event_status.position in filters -%}
     {%- set _ = details.append("Filter " ~ filters[event_status.position]) -%}
+  {%- elif event_name == "Stack" -%}
+    {%- set stacked = event_status.stacked_frame|default(0) -%}
+    {%- set dropped = event_status.dropped_frame|default(0) -%}
+    {%- set total = stacked + dropped -%}
+    {%- set _ = details.append("Stacked: " ~ stacked) -%}
+    {%- set _ = details.append("Dropped: " ~ dropped) -%}
+    {%- set _ = details.append("Fail rate: " ~ ((dropped / total * 100) if total > 0 else 0.0)|round(2) ~ "%") -%}
   {%- elif event_name == "Scheduler" and event_status.cur_scheduler_item -%}
     {%- set _ = details.append("Action " ~ event_status.cur_scheduler_item.type) -%}
   {%- endif -%}
 {%- endif -%}
-<div class="ssc-row">
+<div class="ssc-row" data-event="{{ event_name|e }}">
   <span class="ssc-row__label">{{ names.get(event_name, event_name)|e }}{% if details %}<span class="ssc-row__sub">{{ details|join(", ")|e }}</span>{% endif %}</span>
   <span class="ssc-row__value">{{ ui.status(tone, state|capitalize) }}</span>
 </div>
@@ -34,12 +41,12 @@
 {% if results and results|length > 0 %}
   {% if results[0].DeviceID is defined %}
     {% for device_id, device_events in results|groupby("DeviceID") %}
-      <h3 class="s-device__title s-event-device">Device {{ device_id|e }}</h3>
+      <h3 class="s-device__title s-event-device">Device ID: {{ device_id|e }}</h3>
       {% for event_name in events %}{{ event_row(event_name, device_events|selectattr("Event", "equalto", event_name)|first) }}{% endfor %}
     {% endfor %}
   {% else %}
     {% for event_name in events %}{{ event_row(event_name, results|selectattr("Event", "equalto", event_name)|first) }}{% endfor %}
   {% endif %}
 {% else %}
-  <p class="ssc-footnote s-empty">No events yet</p>
+  <p class="ssc-footnote s-empty">No results available.</p>
 {% endif %}

@@ -2035,8 +2035,8 @@ def do_command(req, resp, telescope_id):
                 {"method": "scope_park", "params": {"equ_mode": False}},
             )
             return output
-        case "get_remote_state":
-            output = method_sync("get_device_state, telescope_id")
+        case "get_device_state" | "get_remote_state":
+            output = method_sync("get_device_state", telescope_id)
             return output
         case _:
             logger.warning("No command found: %s", value)
@@ -3665,8 +3665,7 @@ class EventStatus:
         render_template(
             req,
             resp,
-            # Commands is on the shell, which has no Bootstrap for the cards.
-            "ssc/event_rows.html" if action == "command" else "eventstatus.html",
+            "eventstatus.html",
             results=results,
             events=eventlist,
             now=now,

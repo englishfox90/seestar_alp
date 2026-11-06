@@ -1178,7 +1178,6 @@ def test_eventstatus_endpoint_handles_empty_event_result(monkeypatch):
 
     front_app.EventStatus.on_get(req, resp, telescope_id=1)
 
-    assert "Current Status of Devices" in resp.text
     assert "No results available." in resp.text
 
 
@@ -3214,11 +3213,46 @@ def test_event_rows_for_commands_say_state_in_words(monkeypatch):
     assert "text-bg-" not in html
 
 
-def test_other_pages_keep_the_event_cards(monkeypatch):
+@pytest.mark.parametrize("action", ["goto", "image", "mosaic", "framed_mosaic"])
+def test_older_pages_get_the_same_event_rows(monkeypatch, action):
     front_app.EventStatus._last_render_by_key.clear()
     results = {"WheelMove": {"Event": "WheelMove", "state": "complete"}}
-    html = _event_status(monkeypatch, results, {"action": "goto"}).text
-    assert "text-bg-success" in html
+    html = _event_status(monkeypatch, results, {"action": action}).text
+    assert "Filter wheel" in html
+    assert "text-bg-" not in html and 'class="card' not in html
+
+
+def test_stack_row_keeps_the_counts_the_system_suite_reads(monkeypatch):
+    front_app.EventStatus._last_render_by_key.clear()
+    results = {"Stack": {"Event": "Stack", "state": "working", "stacked_frame": 3, "dropped_frame": 1}}
+    html = _event_status(monkeypatch, results, {"action": "image"}).text
+    assert "Stacked: 3" in html and "Dropped: 1" in html and "Fail rate: 25.0%" in html
+
+
+@pytest.mark.parametrize("name", ["goto", "image", "mosaic", "framed_mosaic", "startup"])
+def test_older_pages_fill_event_status_after_a_reload(name):
+    source = (Path(front_app.__file__).parent / "templates" / f"{name}.html").read_text()
+    assert "&amp;fresh=1" in source
+    assert 'hx-target="#eventStatusContent"' in source
+    assert "load, every 1s" not in source
+
+
+def test_base_html_loads_the_event_row_styles():
+    source = (Path(front_app.__file__).parent / "templates/base.html").read_text()
+    assert "/public/ssc/rows.css" in source
+
+
+def test_every_command_option_has_a_handler():
+    root = Path(front_app.__file__).parent
+    source = (root / "app.py").read_text()
+    start = source.index("def do_command(")
+    body = source[start : source.index("\ndef ", start + 10)]
+    handled = set()
+    for case in re.findall(r"^\s*case\s+(.+):\s*$", body, flags=re.M):
+        handled |= set(re.findall(r'"([^"]+)"', case))
+    options = re.findall(r'<option value="([^"]+)"', (root / "templates/do_command.html").read_text())
+    assert options
+    assert [o for o in options if o not in handled] == []
 
 
 def test_event_status_fresh_returns_content_when_unchanged(monkeypatch):

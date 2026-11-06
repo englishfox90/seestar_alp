@@ -530,11 +530,25 @@ def test_05c_commands_event_status_fills_after_a_reload(front_sim_bridge):
         assert "Filter wheel" in resp.text
 
 
+def test_05e_older_pages_get_event_rows_after_a_reload(front_sim_bridge):
+    client = front_sim_bridge["client"]
+    for action in ["goto", "image", "mosaic", "framed_mosaic"]:
+        for _ in range(2):
+            resp = client.simulate_get(
+                "/1/eventstatus",
+                query_string=f"action={action}&fresh=1",
+                headers={"HX-Current-URL": f"http://localhost/1/{action}"},
+            )
+            assert resp.status_code == 200, action
+            assert "Filter wheel" in resp.text, action
+            assert "text-bg-" not in resp.text, action
+
+
 def test_05d_command_post_shows_output_on_the_shell(front_sim_bridge):
     client = front_sim_bridge["client"]
     resp = client.simulate_post(
         "/1/command",
-        body="command=get_wheel_state",
+        body="command=get_device_state",
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     assert resp.status_code == 200

@@ -28,10 +28,12 @@
 				 data-bs-parent="#eventStatusAccordion">
 				<div class="accordion-body no-htmx-fx" id="eventStatusContent"
 					 hx-get="{{ root }}/eventstatus?action=goto"
-					 hx-trigger="load, every 1s"
+					 hx-trigger="every 1s"
 					 hx-swap="innerHTML">
 					Loading event status...
 				</div>
+				{# The polls answer 204 when nothing changed, so the first fill has to ask for the content. #}
+				<div class="no-htmx-fx" hx-get="{{ root }}/eventstatus?action=goto&amp;fresh=1" hx-trigger="load" hx-target="#eventStatusContent" hx-swap="innerHTML"></div>
 			</div>
 		</div>
 		<div class="container mt-3">
