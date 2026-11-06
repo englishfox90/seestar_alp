@@ -21,7 +21,6 @@ INLINE_STYLE_BASELINE = {
     "partials/stats_content.html": 4,
     "ssc/shell.html": 1,
     "ssc/ui.html": 5,
-    "target_list.html": 1,
 }
 
 

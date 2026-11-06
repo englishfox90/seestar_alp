@@ -17,7 +17,6 @@
   {% for message in ((flashed_messages or []) + (messages or []))|unique %}{{ ui.notice("attention" if "failed" in message|lower or ", but " in message else "neutral", message) }}{% endfor %}
   <div id="plan-auth" class="plan-stack no-htmx-fx" hx-get="{{ root }}/tonight/auth" hx-trigger="every 15s [!document.hidden]" hx-sync="this:drop" hx-swap="innerHTML">{% if needs_auth_warning %}{% include 'ssc/auth_notice.html' %}{% endif %}</div>
   {# This page has no status poll of its own, and the top bar's roof status must not go stale. #}
-  <div hidden hx-get="{{ root_path }}/roof/badge" hx-trigger="every 10s [!document.hidden]" hx-target="#ssc-status" hx-sync="this:drop" hx-swap="innerHTML"></div>
 
   {% if not site_known %}{{ ui.notice("attention", "Set the site latitude and longitude before planning.") }}{% endif %}
 

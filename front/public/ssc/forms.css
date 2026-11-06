@@ -1,12 +1,12 @@
 /* Form components. Macros: templates/ssc/form.html. Spec: front/DESIGN.md section 6. */
 
-.ssc-group { display: flex; flex-direction: column; gap: var(--ssc-space-3); }
-.ssc-group__title {
+.ssc-form-group { display: flex; flex-direction: column; gap: var(--ssc-space-3); }
+.ssc-form-group__title {
     margin: 0;
     font-size: var(--ssc-text-section);
     font-weight: var(--ssc-weight-strong);
 }
-.ssc-group__body {
+.ssc-form-group__body {
     display: flex;
     flex-direction: column;
     gap: var(--ssc-space-5);

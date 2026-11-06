@@ -62,7 +62,7 @@ def test_validation_attributes_survive(monkeypatch):
 def test_form_posts_to_the_same_action_and_groups_stay_in_order(monkeypatch):
     html = _render(monkeypatch)
     assert '<form id="settingsForm" class="s-form" method="post" action="/1/settings">' in html
-    titles = re.findall(r'class="ssc-group__title">([^<]+)<', html)
+    titles = re.findall(r'class="ssc-form-group__title">([^<]+)<', html)
     assert titles == ["Appearance", "Imaging", "Environment", "General"]
     for element in ("saveSettingsBtn", "resetSettingsBtn", "unsavedPill"):
         assert f'id="{element}"' in html

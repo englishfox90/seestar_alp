@@ -7,7 +7,7 @@
 .s-form { display: flex; flex-direction: column; gap: var(--ssc-space-5); }
 .s-saved { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--ssc-space-3); }
 .s-version { margin: 0; text-align: center; }
-.s-page .ssc-group__body p { margin: 0; }
+.s-page .ssc-form-group__body p { margin: 0; }
 .s-page .ssc-segmented .ssc-field__help { margin-top: var(--ssc-space-2); }
 .s-page .ssc-action-bar { margin: 0 calc(-1 * var(--ssc-gutter)); padding-inline: var(--ssc-gutter); }
 

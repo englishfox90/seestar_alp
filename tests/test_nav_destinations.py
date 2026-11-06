@@ -97,8 +97,8 @@ def test_conditional_pages_leave_the_sub_navigation():
 
 
 def test_polar_align_points_at_the_panel_on_prepare():
-    assert 'href="/1/startup#paRefineAccordion"' in _render("ssc/nav.html", "startup")
-    assert 'id="paRefineAccordion"' in (TEMPLATES / "startup.html").read_text()
+    assert 'href="/1/startup#paRefineContent"' in _render("ssc/nav.html", "startup")
+    assert 'id="paRefineContent"' in (TEMPLATES / "startup.html").read_text()
 
 
 def _registered_routes():

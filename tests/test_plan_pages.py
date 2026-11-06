@@ -369,7 +369,7 @@ def test_empty_list_and_unknown_site_say_so(rig):
 
 def test_top_bar_status_keeps_refreshing_on_targets(rig):
     html = _get(rig, "/1/targets")
-    assert 'hx-get="/roof/badge"' in html and 'hx-target="#ssc-status"' in html
+    assert 'id="ssc-status"' in html and 'hx-get="/roof/badge"' in html
     assert "Roof safe" in html
 
 

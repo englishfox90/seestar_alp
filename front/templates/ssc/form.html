@@ -2,9 +2,9 @@
    names and hx-* through unchanged, so moving a page here changes no behaviour. #}
 
 {% macro group(title="") -%}
-<section class="ssc-group">
-  {% if title %}<h2 class="ssc-group__title">{{ title|e }}</h2>{% endif %}
-  <div class="ssc-group__body">{{ caller() }}</div>
+<section class="ssc-form-group">
+  {% if title %}<h2 class="ssc-form-group__title">{{ title|e }}</h2>{% endif %}
+  <div class="ssc-form-group__body">{{ caller() }}</div>
 </section>
 {%- endmacro %}
 
