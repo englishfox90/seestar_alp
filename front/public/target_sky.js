@@ -29,6 +29,12 @@
   // The frame being adjusted. target is null while it's a new one from a search.
   const current = { target: null, ra: null, dec: null };
 
+  // Designation and common name, in the characters a target name may use.
+  function catalogName(entry) {
+    const common = (entry.c || "").replace(/[^A-Za-z0-9 _.-]/g, "");
+    return common ? `${entry.n} ${common}` : entry.n;
+  }
+
   function setStatus(text) {
     field("target-sky-status").textContent = text;
   }
@@ -318,7 +324,7 @@
       skyObjects = window.SkyObjects.start(aladin, {
         url: card.dataset.skyCatalog,
         targets: targets,
-        onFrame: (entry) => startNew(entry.r, entry.d, entry.n),
+        onFrame: (entry) => startNew(entry.r, entry.d, catalogName(entry)),
         onShow: select,
       });
     }

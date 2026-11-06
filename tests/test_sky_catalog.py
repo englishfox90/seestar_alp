@@ -198,3 +198,9 @@ def test_attribution_sits_with_the_file():
     assert "CC BY-SA 4.0" in _shipped()["attribution"]
     licence = (CATALOG.parent / "sky_catalog-LICENSE.txt").read_text()
     assert "OpenNGC" in licence and "CC BY-SA 4.0" in licence and "VII/20" in licence
+
+
+def test_framing_an_object_names_it_by_designation_and_common_name():
+    script = (Path(__file__).parent.parent / "front/public/target_sky.js").read_text()
+    assert "startNew(entry.r, entry.d, catalogName(entry))" in script
+    assert "`${entry.n} ${common}`" in script
