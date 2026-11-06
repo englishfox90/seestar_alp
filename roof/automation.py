@@ -1118,6 +1118,7 @@ def get_automation() -> RoofAutomation:
             state_path=os.path.join(base, "roof_alerts.json"),
             logger=logger,
             muted=lambda: roof_config.load().discord_muted,
+            image_dir=lambda: roof_config.load().discord_image_dir,
         )
         focus.focus_log(roof_config.load().device_num).on_finish = alerts.autofocus
         _instance = RoofAutomation(

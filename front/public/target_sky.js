@@ -35,6 +35,195 @@
     return common ? `${entry.n} ${common}` : entry.n;
   }
 
+  // ---- what's out of reach on the chosen night ----------------------------------------
+  const REACH_KEY = "ssc-sky-reach";
+  const SHADE_SIZE_DEG = 5;
+  // A pale wash, because the sky is already black: darkening it wouldn't show. The same in
+  // Red, where the floor turns it red. The dashed edge says where the limit is.
+  const SHADE_FILL = "rgba(150, 150, 160, 0.28)";
+  const SHADE_EDGE = "rgba(255, 255, 255, 0.75)";
+  let shadeLayer = null;
+  let shadePending = false;
+  let shadeBands = [];
+  let shadeCells = new Set();
+  let win = null;
+  let reachCache = new Map();
+
+  function reachOf(entry) {
+    let found = reachCache.get(entry);
+    if (!found) {
+      found = window.SkyReach.reach(win, entry.r, entry.d);
+      reachCache.set(entry, found);
+    }
+    return found;
+  }
+
+  function reachOn() {
+    return field("target-sky-reach-on").checked;
+  }
+
+  function isOut(entry) {
+    return Boolean(win && win.steps.length && reachOn() && reachOf(entry).first === null);
+  }
+
+  function reachText(entry) {
+    if (!win || !win.steps.length) return "";
+    const found = reachOf(entry);
+    const floor = `${win.floor}°`;
+    if (found.never) return `Never gets above ${floor} from here`;
+    if (found.first === null) {
+      return `Not above ${floor} in the dark that night. It peaks at ${Math.round(found.peak)}°`;
+    }
+    const from = win.steps[found.first].at;
+    const to = win.steps[found.last].at;
+    return `Above ${floor} from ${from} to ${to}, peak ${Math.round(found.peak)}°`;
+  }
+
+  // Its own canvas, between the sky and the markers. Aladin's filled polygons dim the wrong
+  // parts of a whole-sky view, where a band wraps around, and leave seams between bands.
+  function shadeCanvas() {
+    if (!shadeLayer) {
+      const sky = document.querySelector("#target-sky-view canvas.aladin-imageCanvas");
+      if (!sky) return null;
+      shadeLayer = document.createElement("canvas");
+      shadeLayer.className = "plan-sky__shade";
+      shadeLayer.setAttribute("aria-hidden", "true");
+      sky.after(shadeLayer);
+    }
+    return shadeLayer;
+  }
+
+  function paintShade() {
+    shadePending = false;
+    const canvas = shadeCanvas();
+    if (!canvas) return;
+    const box = canvas.parentElement.getBoundingClientRect();
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.round(box.width * ratio);
+    canvas.height = Math.round(box.height * ratio);
+    if (!win || !win.steps.length || !reachOn()) return;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(ratio, ratio);
+    ctx.fillStyle = SHADE_FILL;
+    const isCellOut = (ra, dec) => shadeCells.has(`${ra},${dec}`);
+    const edges = new Path2D();
+    // In a whole-sky view, a cell this wide has wrapped around the edge of the projection.
+    // Zoomed in, a cell can simply be wider than the view.
+    const wrapping = aladin.getFov()[0] > 100;
+    const tooWide = Math.max(box.width, box.height) / 3;
+    ctx.beginPath();
+    shadeBands.forEach(function (band) {
+      for (let ra = band.raStart; ra < band.raEnd; ra += SHADE_SIZE_DEG) {
+        const corners = [
+          aladin.world2pix(ra, band.dec),
+          aladin.world2pix(ra + SHADE_SIZE_DEG, band.dec),
+          aladin.world2pix(ra + SHADE_SIZE_DEG, band.dec + SHADE_SIZE_DEG),
+          aladin.world2pix(ra, band.dec + SHADE_SIZE_DEG),
+        ];
+        if (corners.some((c) => !c)) continue;
+        const xs = corners.map((c) => c[0]);
+        const ys = corners.map((c) => c[1]);
+        if (wrapping && (Math.max(...xs) - Math.min(...xs) > tooWide || Math.max(...ys) - Math.min(...ys) > tooWide)) continue;
+        ctx.moveTo(corners[0][0], corners[0][1]);
+        for (let i = 1; i < 4; i++) ctx.lineTo(corners[i][0], corners[i][1]);
+        ctx.closePath();
+        // An edge is drawn only where the next cell over is in reach.
+        const next = (360 + ra + SHADE_SIZE_DEG) % 360;
+        const last = (360 + ra - SHADE_SIZE_DEG) % 360;
+        const neighbours = [
+          [corners[0], corners[1], band.dec - SHADE_SIZE_DEG >= -90 && !isCellOut(ra, band.dec - SHADE_SIZE_DEG)],
+          [corners[1], corners[2], !isCellOut(next, band.dec)],
+          [corners[2], corners[3], band.dec + SHADE_SIZE_DEG < 90 && !isCellOut(ra, band.dec + SHADE_SIZE_DEG)],
+          [corners[3], corners[0], !isCellOut(last, band.dec)],
+        ];
+        neighbours.forEach(function ([a, b, inReach]) {
+          if (!inReach) return;
+          edges.moveTo(a[0], a[1]);
+          edges.lineTo(b[0], b[1]);
+        });
+      }
+    });
+    ctx.fill("nonzero");
+    ctx.strokeStyle = SHADE_EDGE;
+    ctx.lineWidth = 1.25;
+    ctx.setLineDash([5, 4]);
+    ctx.stroke(edges);
+  }
+
+  function drawShade() {
+    if (shadePending) return;
+    shadePending = true;
+    window.requestAnimationFrame(paintShade);
+  }
+
+  function showReachNote() {
+    const note = field("target-sky-reach-note");
+    if (!win.steps.length) {
+      note.textContent = `No full darkness on the night of ${win.night}.`;
+      return;
+    }
+    const first = win.steps[0].at;
+    const last = win.steps[win.steps.length - 1].at;
+    // Where the sky is out of reach whatever the date.
+    const limit = -(90 - win.floor - win.lat);
+    note.textContent =
+      `Dark ${first} to ${last} on the night of ${win.night}. Shaded sky stays below ${win.floor}° ` +
+      `all that time. South of Dec ${limit.toFixed(1)}° never rises that high from here.`;
+  }
+
+  function loadReach(days) {
+    return fetch(`${card.dataset.skyWindow}?days=${days}`)
+      .then(function (reply) {
+        if (!reply.ok) throw new Error(String(reply.status));
+        return reply.json();
+      })
+      .then(function (data) {
+        if (!data.known) return;
+        win = data;
+        reachCache = new Map();
+        shadeBands = win.steps.length ? window.SkyReach.outOfReach(win, SHADE_SIZE_DEG) : [];
+        shadeCells = new Set();
+        shadeBands.forEach(function (band) {
+          for (let ra = band.raStart; ra < band.raEnd; ra += SHADE_SIZE_DEG) shadeCells.add(`${ra},${band.dec}`);
+        });
+        field("target-sky-reach").hidden = false;
+        showReachNote();
+        drawShade();
+        if (skyObjects) skyObjects.reachChanged();
+      })
+      .catch(function (e) {
+        console.log("The sky's dark hours could not load", e);
+      });
+  }
+
+  function setUpReach() {
+    if (!window.SkyReach || !card.dataset.skyWindow) return;
+    ["positionChanged", "zoomChanged", "projectionChanged", "resizeChanged"].forEach((name) =>
+      aladin.on(name, drawShade)
+    );
+    const toggle = field("target-sky-reach-on");
+    let saved = null;
+    try {
+      saved = localStorage.getItem(REACH_KEY);
+    } catch (e) {
+      // Storage can be refused. It stays on.
+    }
+    toggle.checked = saved !== "0";
+    toggle.addEventListener("change", function () {
+      try {
+        localStorage.setItem(REACH_KEY, toggle.checked ? "1" : "0");
+      } catch (e) {
+        // Only the choice is lost.
+      }
+      drawShade();
+      if (skyObjects) skyObjects.reachChanged();
+    });
+    document.querySelectorAll('input[name="target-sky-reach-days"]').forEach(function (input) {
+      input.addEventListener("change", () => loadReach(input.value));
+    });
+    loadReach(0);
+  }
+
   function setStatus(text) {
     field("target-sky-status").textContent = text;
   }
@@ -110,6 +299,8 @@
     fit();
     draw();
     showControls();
+    // The whole point of looking at a frame: can it be imaged from here at all?
+    field("target-sky-frame-reach").textContent = reachText({ r: ra, d: dec });
     if (skyObjects) skyObjects.changed();
   }
 
@@ -316,6 +507,7 @@
       showGotoControl: false,
       showReticle: true,
     });
+    setUpReach();
     frames = window.A.graphicOverlay({ color: colors().other, lineWidth: 1 });
     aladin.addOverlay(frames);
     // Aladin draws catalogs in the order added, then every overlay on top. So the owner's
@@ -326,12 +518,17 @@
         targets: targets,
         onFrame: (entry) => startNew(entry.r, entry.d, catalogName(entry)),
         onShow: select,
+        isOut: isOut,
+        reachText: reachText,
       });
     }
     labels();
     trackPress();
     aladin.on("click", onSkyClick);
-    new MutationObserver(applyTheme).observe(document.documentElement, {
+    new MutationObserver(() => {
+      applyTheme();
+      drawShade();
+    }).observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-theme"],
     });

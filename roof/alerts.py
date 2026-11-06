@@ -15,6 +15,7 @@ sent back to a browser: the page only shows that one is saved.
 
 import argparse
 import collections
+import glob
 import json
 import logging
 import os
@@ -35,6 +36,16 @@ QUEUE_MAX = 200
 BACKOFF_S = (1, 4, 16)
 MAX_RETRY_AFTER_S = 60
 POST_TIMEOUT_S = 10
+UPLOAD_TIMEOUT_S = 60
+# The scope writes the stack's JPG as the stack stops, and the share can lag behind that.
+PHOTO_WAIT_S = 240
+PHOTO_POLL_S = 15
+# How much earlier than the target's start a file's clock may read and still count.
+PHOTO_CLOCK_SLACK_S = 120
+# Discord's smallest upload limit is 10 MB. A larger stack is shrunk to fit.
+PHOTO_MAX_BYTES = 8 * 1024 * 1024
+PHOTO_MAX_SIDE = 2160
+PHOTO_NAME = "stack.jpg"
 TITLE_MAX, TEXT_MAX = 256, 4096
 
 WAIT_ALERT_S = 1800  # how long into the dark before saying imaging hasn't started
@@ -49,6 +60,7 @@ KINDS = {
     "autofocus_failed": ("Autofocus failed", "Includes a run with no usable focus curve"),
     "stacking": ("Stacking started", "When each target's first frame is stacked"),
     "switching": ("Switching target", "With the last target's frames"),
+    "stack_image": ("Stacked image", "A copy of the final stack when a target finishes"),
     "parked": ("Arm parked", ""),
     "night": ("Night status", "Not imaging yet, no imaging tonight, and the night summary"),
 }
@@ -146,15 +158,64 @@ def payload(title: str, text: str, level: str, when: float) -> dict:
     }
 
 
+def find_stack(directory: str, name: str, since: float) -> str | None:
+    """The newest saved stack of a target, if it's from this run. None until it appears.
+
+    The scope saves single frames under the target's name, and mosaics with _mosaic added.
+    """
+    if not directory or not name or os.path.basename(name) != name:
+        return None
+    found = []
+    for folder in (name, f"{name}_mosaic"):
+        for path in glob.glob(os.path.join(glob.escape(directory), glob.escape(folder), "Stacked_*.jpg")):
+            if path.endswith("_thn.jpg"):
+                continue
+            try:
+                found.append((os.path.getmtime(path), path))
+            except OSError:
+                continue
+    found = [item for item in found if item[0] >= since - PHOTO_CLOCK_SLACK_S]
+    return max(found)[1] if found else None
+
+
+def photo_bytes(path: str) -> bytes:
+    with open(path, "rb") as f:
+        data = f.read()
+    if len(data) <= PHOTO_MAX_BYTES:
+        return data
+    import cv2
+    import numpy as np
+
+    image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        raise ValueError("the stack could not be read")
+    height, width = image.shape[:2]
+    shrink = PHOTO_MAX_SIDE / max(height, width)
+    if shrink < 1:
+        image = cv2.resize(image, (round(width * shrink), round(height * shrink)), interpolation=cv2.INTER_AREA)
+    ok, encoded = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    if not ok:
+        raise ValueError("the stack could not be shrunk")
+    return encoded.tobytes()
+
+
 def deliver(
-    url, body, post=requests.post, sleep=time.sleep, logger=None, tries=len(BACKOFF_S)
+    url, body, post=requests.post, sleep=time.sleep, logger=None, tries=len(BACKOFF_S), photo=None
 ) -> tuple[bool, str]:
     """Post one message, waiting out rate limits. Returns (sent, what happened)."""
     logger = logger or logging.getLogger("roof")
     status = "not attempted"
     for attempt, backoff in enumerate(BACKOFF_S[:tries]):
         try:
-            reply = post(url, json=body, timeout=POST_TIMEOUT_S)
+            if photo is None:
+                reply = post(url, json=body, timeout=POST_TIMEOUT_S)
+            else:
+                reply = post(
+                    url,
+                    data={"payload_json": json.dumps(body)},
+                    files={"files[0]": (PHOTO_NAME, photo, "image/jpeg")},
+                    timeout=UPLOAD_TIMEOUT_S,
+                )
         except requests.RequestException as e:
             status = f"{type(e).__name__}: {redact(e)}"
         else:
@@ -190,7 +251,42 @@ class DiscordSender:
         url = self._get_url()
         if not url:
             return
-        self._queue.append((url, payload(title, text, level, self._clock())))
+        self._enqueue(url, payload(title, text, level, self._clock()))
+
+    def send_photo(self, title: str, text: str, find) -> None:
+        """Post a saved image once ``find()`` returns its path. Returns straight away.
+
+        It waits on a thread of its own, so an alarm queued meanwhile isn't held up, and
+        the wait can't touch the automation loop. No image means no message: the target's
+        frames have already been reported.
+        """
+        if not self._get_url():
+            return
+        threading.Thread(
+            target=self._post_when_saved, args=(title, text, find), daemon=True, name="RoofAlertPhoto"
+        ).start()
+
+    def _post_when_saved(self, title, text, find):
+        try:
+            deadline = self._clock() + PHOTO_WAIT_S
+            path = find()
+            while path is None and self._clock() < deadline:
+                self._sleep(PHOTO_POLL_S)
+                path = find()
+            if path is None:
+                self._logger.info("Discord: no saved stack appeared for %s", title)
+                return
+            url = self._get_url()
+            if not url:
+                return
+            body = payload(title, text, "success", self._clock())
+            body["embeds"][0]["image"] = {"url": f"attachment://{PHOTO_NAME}"}
+            self._enqueue(url, body, photo_bytes(path))
+        except Exception as e:
+            self._logger.warning("Discord: could not prepare the stack image: %s", redact(e))
+
+    def _enqueue(self, url, body, photo=None):
+        self._queue.append((url, body, photo))
         self._wake.set()
         with self._thread_lock:
             if self._thread is None:
@@ -206,11 +302,11 @@ class DiscordSender:
     def drain(self) -> None:
         while True:
             try:
-                url, body = self._queue.popleft()
+                url, body, photo = self._queue.popleft()
             except IndexError:
                 return
             try:
-                sent, status = deliver(url, body, self._post, self._sleep, self._logger)
+                sent, status = deliver(url, body, self._post, self._sleep, self._logger, photo=photo)
             except Exception as e:
                 sent, status = False, redact(e)
             title = body["embeds"][0]["title"]
@@ -244,6 +340,7 @@ def _totals(frames, dropped, seconds) -> str:
 @dataclass
 class _Target:
     name: str
+    started: float = 0.0
     frames: int = 0
     dropped: int = 0
     seconds: float = 0.0
@@ -291,9 +388,10 @@ _ENDINGS = {
 class NightAlerts:
     """Turns the automation's ticks and decisions into messages."""
 
-    def __init__(self, sender, state_path=None, clock=time.time, logger=None, muted=None):
+    def __init__(self, sender, state_path=None, clock=time.time, logger=None, muted=None, image_dir=None):
         self._sender = sender
         self._muted = muted or (lambda: ())
+        self._image_dir = image_dir or (lambda: "")
         self._state_path = state_path
         self._clock = clock
         self._logger = logger or logging.getLogger("roof")
@@ -469,7 +567,7 @@ class NightAlerts:
         # automation session only trusts the name while on an imaging item.
         if state.target and (index or self._session["adopted"]):
             if self._current is None:
-                self._current = _Target(state.target)
+                self._current = _Target(state.target, started=self._clock())
             elif self._current.name != state.target:
                 self._switch_to(state.target, index, total)
         current = self._current
@@ -483,7 +581,7 @@ class NightAlerts:
     def _switch_to(self, name, index, total):
         previous = self._current
         self._close_target()
-        self._current = _Target(name)
+        self._current = _Target(name, started=self._clock())
         where = f" (target {index} of {total})" if index else ""
         lines = [f"Moving to {name}{where}."]
         level = "info"
@@ -523,6 +621,17 @@ class NightAlerts:
         totals["dropped"] += target.dropped
         totals["seconds"] += target.seconds
         self._save()
+        self._send_stack_image(target)
+
+    def _send_stack_image(self, target):
+        directory = self._image_dir()
+        if not target.frames or self._dry_run or not directory or "stack_image" in self._muted():
+            return
+        self._sender.send_photo(
+            f"Stacked: {target.name}",
+            f"{target.summary()}.",
+            lambda: find_stack(directory, target.name, target.started),
+        )
 
     def _watch_the_dark(self, dark, phase, note, now):
         if dark and self._was_dark is not True:

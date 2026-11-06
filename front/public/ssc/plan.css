@@ -211,3 +211,13 @@
 @media (min-width: 1024px) {
     .plan-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* What's out of reach on the chosen night. Above the sky, under the markers and frames. */
+.plan-sky__shade {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}

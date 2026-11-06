@@ -175,6 +175,10 @@ window.SkyObjects = (function () {
       const lit = entry === picked || entry === hovered;
       if (entry.covered && !lit) return;
       const color = isRed() ? MARKER.red : MARKER.night;
+      // Fainter and dashed, so it also reads in Red, which has no hues to spare.
+      const out = !lit && options.isOut && options.isOut(entry);
+      ctx.globalAlpha = out ? 0.45 : 1;
+      if (out) ctx.setLineDash([2, 3]);
       ctx.beginPath();
       ctx.strokeStyle = color;
       ctx.lineWidth = lit ? 2.5 : 1.25;
@@ -182,7 +186,10 @@ window.SkyObjects = (function () {
       ctx.stroke();
       ctx.setLineDash([]);
       const text = lit ? entry.c || entry.n : entry.label;
-      if (!text) return;
+      if (!text) {
+        ctx.globalAlpha = 1;
+        return;
+      }
       ctx.font = isRed() ? "600 13px -apple-system, system-ui, sans-serif" : "12px -apple-system, system-ui, sans-serif";
       ctx.textBaseline = "middle";
       const x = source.x + MARKER_RADIUS + LABEL_GAP;
@@ -191,6 +198,7 @@ window.SkyObjects = (function () {
       ctx.strokeText(text, x, source.y);
       ctx.fillStyle = color;
       ctx.fillText(text, x, source.y);
+      ctx.globalAlpha = 1;
     }
 
     // readOnly leaves these out of Aladin's own hover and selection, which would hold on to
@@ -349,6 +357,7 @@ window.SkyObjects = (function () {
       }
       field("target-sky-pick-name").textContent = entry.c || entry.n;
       field("target-sky-pick-facts").textContent = factsText(entry);
+      field("target-sky-pick-reach").textContent = options.reachText ? options.reachText(entry) : "";
       const target = listed(entry);
       field("target-sky-pick-listed").hidden = !target;
       field("target-sky-pick-listed").textContent = target ? `In your targets as ${target.name}` : "";
@@ -438,6 +447,11 @@ window.SkyObjects = (function () {
       },
       // For the page's own redraws, such as after a jump.
       changed: onViewChanged,
+      // The night or the shading changed: repaint, and reword whatever is showing.
+      reachChanged() {
+        if (picked) field("target-sky-pick-reach").textContent = options.reachText(picked);
+        layer.reportChange();
+      },
     };
   }
 

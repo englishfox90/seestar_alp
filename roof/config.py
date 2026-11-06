@@ -5,6 +5,7 @@ page only ever writes the keys in WRITABLE_KEYS; ``dry_run`` is file-only, and
 only a literal ``dry_run = false`` arms the automation.
 """
 
+import os
 from dataclasses import dataclass
 
 import tomlkit
@@ -37,6 +38,8 @@ class Settings:
     pier_status_url: str = "http://127.0.0.1:8085/status"
     discord_enabled: bool = False
     discord_muted: tuple = ()  # alert kinds switched off; see roof.alerts.KINDS
+    # Where the scope's share keeps its stacks, for the Stacked image alert.
+    discord_image_dir: str = "~/Library/Application Support/NINA Data Sync/seestar-share/MyWorks"
     lat: float = 0.0
     lon: float = 0.0
 
@@ -79,6 +82,7 @@ def load() -> Settings:
         pier_status_url=str(get("pier_status_url", Settings.pier_status_url)),
         discord_enabled=get("discord_enabled", False) is True,
         discord_muted=_string_list(get("discord_muted", [])),
+        discord_image_dir=os.path.expanduser(str(get("discord_image_dir", Settings.discord_image_dir))),
         lat=float(_unwrap(Config.get_toml("seestar_initialization", "lat", 0)) or 0),
         lon=float(_unwrap(Config.get_toml("seestar_initialization", "long", 0)) or 0),
     )

@@ -95,7 +95,7 @@ def test_a_failed_post_never_logs_the_webhook(caplog):
         raise requests.ConnectionError(f"Max retries with url: {URL[len('https://discord.com'):]}")
 
     sender = DiscordSender(lambda: URL, post=post, sleep=lambda s: None)
-    sender._queue.append((URL, roof_alerts.payload("T", "x", "info", 0)))
+    sender._queue.append((URL, roof_alerts.payload("T", "x", "info", 0), None))
     with caplog.at_level("INFO", logger="roof"):
         sender.drain()
     assert "dropped" in caplog.text
@@ -572,7 +572,7 @@ def test_one_try_when_a_person_is_waiting():
 def test_delivery_result_is_kept_for_the_page(monkeypatch):
     monkeypatch.setattr(roof_alerts, "_last_delivery", None)
     sender = DiscordSender(lambda: URL, post=lambda *a, **k: _reply(404), sleep=lambda s: None)
-    sender._queue.append((URL, roof_alerts.payload("Arm parked", "x", "info", 0)))
+    sender._queue.append((URL, roof_alerts.payload("Arm parked", "x", "info", 0), None))
     sender.drain()
     assert roof_alerts._last_delivery["title"] == "Arm parked"
     assert roof_alerts._last_delivery["sent"] is False

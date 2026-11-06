@@ -1,7 +1,7 @@
 {# The sky view. Every id here is used by target_sky.js. The forms post to the page's normal routes. #}
 {% import 'ssc/form.html' as form %}
 {% import 'ssc/ui.html' as ui %}
-<section id="target-sky" class="plan-section plan-sky" data-model="{{ sky_model|e }}" data-simbad="{{ root_path }}/simbad" data-sky-catalog="{{ root_path }}/public/ssc/sky_catalog.json">
+<section id="target-sky" class="plan-section plan-sky" data-model="{{ sky_model|e }}" data-simbad="{{ root_path }}/simbad" data-sky-catalog="{{ root_path }}/public/ssc/sky_catalog.json" data-sky-window="{{ root_path }}{{ page_root }}/sky.json">
   <div class="plan-section__head">
     <h2 id="target-sky-heading" class="ssc-section">All targets</h2>
     <button id="target-sky-all" class="ssc-button" data-kind="plain" type="button">Show all</button>
@@ -19,6 +19,7 @@
       <div class="plan-sky__pick-text">
         <p id="target-sky-pick-name" class="plan-sky__pick-name"></p>
         <p id="target-sky-pick-facts" class="ssc-footnote"></p>
+        <p id="target-sky-pick-reach" class="ssc-footnote"></p>
         <p id="target-sky-pick-listed" class="ssc-footnote" hidden></p>
       </div>
       <button id="target-sky-pick-action" class="ssc-button" data-kind="secondary" type="button"></button>
@@ -59,7 +60,15 @@
         <div class="plan-actions">{{ ui.button("Save framing", "primary", "submit") }}</div>
       </form>
     </div>
+    <p id="target-sky-frame-reach" class="plan-sky__status" role="status"></p>
     <p class="ssc-footnote">Click a target's marker to adjust it. A framing change applies from the next start, and its progress so far is kept.</p>
+
+    {# Stays hidden until the site's dark hours have loaded. #}
+    <div id="target-sky-reach" class="plan-stack" hidden>
+      {{ form.toggle("Shade what's out of reach", "target-sky-reach-on", "", checked=true) }}
+      {{ form.segmented("Night", "target-sky-reach-days", [{"value": 0, "label": "Tonight"}, {"value": 30, "label": "In 1 month"}, {"value": 90, "label": "In 3 months"}], selected=0) }}
+      <p id="target-sky-reach-note" class="ssc-footnote" role="status"></p>
+    </div>
 
     {# Stays hidden until Aladin and the catalog have both loaded. #}
     <div id="target-sky-objects" class="plan-stack" hidden>
@@ -81,5 +90,6 @@
 <script src="{{ root_path }}/public/seestar_models.js"></script>
 <script src="{{ root_path }}/public/aladin_loader.js"></script>
 <script src="{{ root_path }}/public/frame_geometry.js"></script>
+<script src="{{ root_path }}/public/sky_reach.js"></script>
 <script src="{{ root_path }}/public/sky_objects.js"></script>
 <script src="{{ root_path }}/public/target_sky.js"></script>

@@ -568,3 +568,12 @@ def test_alert_routes_refuse_other_sites(alerts_rig, route):
     )
     assert result.status_code == 403
     assert alerts_rig.hook_path.exists() and not alerts_rig.saved and not alerts_rig.tests
+
+
+def test_targets_page_has_the_reach_controls(rig):
+    html = _get(rig, "/1/targets")
+    assert 'data-sky-window="/1/targets/sky.json"' in html
+    assert 'name="target-sky-reach-days"' in html and 'id="target-sky-reach-on"' in html
+    assert html.index("public/sky_reach.js") < html.index("public/target_sky.js")
+    for element in ("target-sky-reach-note", "target-sky-pick-reach", "target-sky-frame-reach"):
+        assert f'id="{element}"' in html

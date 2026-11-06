@@ -4,6 +4,7 @@ Nothing here commands the scope, and it reads it only to import a plan. Running 
 this list is chosen on the /roof page.
 """
 
+import json
 import os
 import time
 from datetime import datetime
@@ -14,6 +15,7 @@ from astropy.coordinates import Angle
 from roof import config as roof_config
 from roof import planner, schedule_tools
 from roof import queue as target_queue
+from roof import sky_window
 from roof.automation import session_log
 from roof.web import _Action, _form, _front, shell_context
 
@@ -168,6 +170,21 @@ class QueuePage:
             **_context(),
             **context,
         )
+
+
+class QueueSky:
+    """The site's dark hours on a night, for the sky view's shading. Read-only."""
+
+    @staticmethod
+    def on_get(req, resp, telescope_id=1):
+        days = req.get_param_as_int("days", default=0, min_value=0, max_value=sky_window.MAX_DAYS)
+        tz = _front().site_timezone()
+        reply = sky_window.sky_window(
+            days, lambda when: datetime.fromtimestamp(when, tz).strftime("%H:%M")
+        )
+        resp.content_type = "application/json"
+        resp.set_header("Cache-Control", "no-store")
+        resp.text = json.dumps(reply)
 
 
 # Seconds. The top matches the 90000 ms limit on ALP's Settings page.
@@ -365,6 +382,7 @@ class QueueRemove(_QueueAction):
 PAGES = {
     "targets": QueuePage,
     "targets/add": QueueAdd,
+    "targets/sky.json": QueueSky,
     "targets/import": QueueImport,
     "targets/update": QueueUpdate,
     "targets/framing": QueueFraming,
