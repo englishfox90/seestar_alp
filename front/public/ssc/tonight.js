@@ -33,11 +33,7 @@
       images.dataset.layout = "thumbs";
       return;
     }
-    const ratio = parseFloat(getComputedStyle(page).getPropertyValue(front === "stack" ? "--t-stack-ratio" : "--t-pier-ratio"));
-    const other = front === "stack" ? hasPier : hasStack;
-    // Beside it only if there is another image, and this one is tall enough to leave room.
-    images.dataset.layout = other && ratio < 0.8 ? "side" : "below";
-    images.style.setProperty("--t-front-ratio", String(ratio));
+    images.dataset.layout = "below";
   }
 
   function setRatio(name, img) {
@@ -75,13 +71,19 @@
     next.src = src;
   }
 
-  function stackText(meta) {
-    const parts = [meta.target || "Unknown target"];
-    if (meta.stacked) parts.push(meta.stacked + " frames");
+  // While stacking, the sentence and the Kept metric already give the target and frames,
+  // unless this image is from another target. The viewer has neither, so it says all.
+  function stackText(meta, whole) {
+    const said = !whole && meta.target && meta.target === page.dataset.target;
+    const parts = [];
+    if (!said) {
+      parts.push(meta.target || "Unknown target");
+      if (meta.stacked) parts.push(meta.stacked + " frames");
+    }
     if (meta.snr !== null && meta.snr !== undefined) parts.push("SNR " + meta.snr);
     parts.push(meta.captured_clock);
     const text = parts.join(" · ");
-    return page.dataset.dim === "1" ? "Last image: " + text : text;
+    return page.dataset.last === "1" ? "Last image: " + text : text;
   }
 
   function pierText(meta) {
@@ -91,6 +93,7 @@
   }
 
   let stackMeta = null;
+  let pierMeta = null;
 
   function applyStack(meta) {
     stackMeta = meta;
@@ -98,6 +101,7 @@
   }
 
   function applyPier(meta) {
+    pierMeta = meta;
     pierCaption.textContent = pierText(meta);
     const stale = !meta.online || meta.stale;
     if (stale) pier.dataset.stale = "1";
@@ -162,6 +166,8 @@
     page.dataset.state = data.dataset.state;
     page.dataset.hero = data.dataset.hero;
     page.dataset.dim = data.dataset.dim;
+    page.dataset.last = data.dataset.last;
+    page.dataset.target = data.dataset.target;
     if (data.dataset.hero !== lastHero) {
       lastHero = data.dataset.hero;
       chosen = null;
@@ -173,6 +179,23 @@
     lastGood = Date.now();
     showFreshness();
   }
+
+  // The parts of /tonight/state that arrive out of band morph as well, so a focused link
+  // survives. htmx can't name "morph:innerHTML" in hx-swap-oob, because it reads what's
+  // after the colon as a selector. Without idiomorph this leaves htmx's plain swap.
+  document.body.addEventListener("htmx:oobBeforeSwap", function (event) {
+    if (typeof Idiomorph === "undefined") return;
+    event.detail.shouldSwap = false;
+    Idiomorph.morph(event.detail.target, Array.from(event.detail.fragment.childNodes), { morphStyle: "innerHTML" });
+  });
+
+  // An empty answer must not blank the state or the hardware rows. Focus and auth are
+  // different: for them, empty is how the server says there's nothing to show.
+  document.body.addEventListener("htmx:beforeSwap", function (event) {
+    const target = event.detail.target;
+    if (!target || (target.id !== "t-now" && target.id !== "t-hardware")) return;
+    if (event.detail.xhr.responseText.trim() === "") event.detail.shouldSwap = false;
+  });
 
   document.body.addEventListener("htmx:afterSettle", function (event) {
     if (event.detail.target && event.detail.target.id === "t-now") afterState();
@@ -190,7 +213,168 @@
       event.preventDefault();
       chosen = thumb.closest(".t-image").dataset.name;
       arrange();
+    } else {
+      const frame = event.target.closest(".t-frame");
+      if (frame && openViewer(frame.closest(".t-image").dataset.name)) event.preventDefault();
     }
+  });
+
+  // ---- the viewer: pinch and drag on phones, wheel and drag with a mouse ----------------
+  const viewer = document.getElementById("t-viewer");
+  const stage = document.getElementById("t-viewer-stage");
+  const viewerText = document.getElementById("t-viewer-text");
+  const viewerSave = document.getElementById("t-viewer-save");
+  const MAX_ZOOM = 6;
+  const DOUBLE_TAP_ZOOM = 2.5;
+  const DOUBLE_TAP_MS = 300;
+  const view = { scale: 1, x: 0, y: 0 };
+  const pointers = new Map();
+  let gesture = null;
+  let lastTap = 0;
+  let shown = null; // the img on the stage
+  let loading = null; // the full-size image on its way
+
+  function clamp(value, low, high) {
+    return Math.min(high, Math.max(low, value));
+  }
+
+  // Keeps the image over the stage: it can't be dragged out of sight.
+  function applyView() {
+    if (!shown) return;
+    const box = stage.getBoundingClientRect();
+    const fit = shown.naturalWidth ? Math.min(box.width / shown.naturalWidth, box.height / shown.naturalHeight) : 1;
+    const roomX = Math.max(0, ((shown.naturalWidth || box.width) * fit * view.scale - box.width) / 2);
+    const roomY = Math.max(0, ((shown.naturalHeight || box.height) * fit * view.scale - box.height) / 2);
+    view.x = clamp(view.x, -roomX, roomX);
+    view.y = clamp(view.y, -roomY, roomY);
+    shown.style.transform = "translate(" + view.x + "px, " + view.y + "px) scale(" + view.scale + ")";
+  }
+
+  // Zoom keeping one point of the stage still, given as client coordinates.
+  function zoomAt(scale, clientX, clientY) {
+    const box = stage.getBoundingClientRect();
+    const px = clientX - box.left - box.width / 2;
+    const py = clientY - box.top - box.height / 2;
+    const next = clamp(scale, 1, MAX_ZOOM);
+    view.x = px - ((px - view.x) * next) / view.scale;
+    view.y = py - ((py - view.y) * next) / view.scale;
+    view.scale = next;
+    applyView();
+  }
+
+  function startGesture() {
+    const points = Array.from(pointers.values());
+    if (points.length === 2) {
+      gesture = {
+        distance: Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y),
+        midX: (points[0].x + points[1].x) / 2,
+        midY: (points[0].y + points[1].y) / 2,
+      };
+    } else if (points.length === 1) {
+      gesture = { midX: points[0].x, midY: points[0].y };
+    } else {
+      gesture = null;
+    }
+  }
+
+  stage.addEventListener("pointerdown", function (event) {
+    stage.setPointerCapture(event.pointerId);
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    startGesture();
+    if (pointers.size === 1) {
+      const now = event.timeStamp;
+      if (now - lastTap < DOUBLE_TAP_MS) {
+        zoomAt(view.scale > 1 ? 1 : DOUBLE_TAP_ZOOM, event.clientX, event.clientY);
+        lastTap = 0;
+      } else {
+        lastTap = now;
+      }
+    }
+  });
+
+  stage.addEventListener("pointermove", function (event) {
+    if (!pointers.has(event.pointerId) || !gesture) return;
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const points = Array.from(pointers.values());
+    if (points.length === 2 && gesture.distance) {
+      const distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+      const midX = (points[0].x + points[1].x) / 2;
+      const midY = (points[0].y + points[1].y) / 2;
+      view.x += midX - gesture.midX;
+      view.y += midY - gesture.midY;
+      zoomAt((view.scale * distance) / gesture.distance, midX, midY);
+      gesture = { distance: distance, midX: midX, midY: midY };
+    } else if (points.length === 1) {
+      view.x += points[0].x - gesture.midX;
+      view.y += points[0].y - gesture.midY;
+      gesture = { midX: points[0].x, midY: points[0].y };
+      applyView();
+    }
+  });
+
+  function endPointer(event) {
+    pointers.delete(event.pointerId);
+    startGesture();
+  }
+  stage.addEventListener("pointerup", endPointer);
+  stage.addEventListener("pointercancel", endPointer);
+  stage.addEventListener("wheel", function (event) {
+    event.preventDefault();
+    zoomAt(view.scale * Math.exp(-event.deltaY * 0.002), event.clientX, event.clientY);
+  }, { passive: false });
+
+  function showOnStage(img) {
+    stage.replaceChildren(img);
+    shown = img;
+    img.draggable = false;
+    applyView();
+  }
+
+  function openViewer(name) {
+    const figure = name === "stack" ? stack : pier;
+    const held = figure.querySelector(".t-frame img:last-child");
+    if (!held || viewer.open) return false;
+    const isStack = name === "stack";
+    const meta = isStack ? stackMeta : pierMeta;
+    const stamp = meta ? encodeURIComponent(meta.frame) : "";
+    const text = meta ? (isStack ? stackText(meta, true) : "Pier camera · " + pierText(meta)) : "";
+
+    view.scale = 1;
+    view.x = 0;
+    view.y = 0;
+    viewerText.textContent = text;
+    viewerSave.href = root + (isStack ? "/image.jpg?full=true" : "/pier.jpg?full=true");
+    viewer.dataset.theme = document.documentElement.dataset.theme === "red" ? "red" : "night";
+
+    // The preview at once, then the full image over it, fetched only now because it's large.
+    const preview = new Image();
+    preview.alt = held.alt;
+    preview.src = held.currentSrc || held.src;
+    viewer.showModal();
+    showOnStage(preview);
+
+    const full = new Image();
+    full.alt = held.alt;
+    loading = full;
+    full.onload = function () {
+      if (loading === full) showOnStage(full);
+    };
+    full.onerror = function () {
+      if (loading === full) viewerText.textContent = text + " · Full size did not load, this is the preview";
+    };
+    full.src = root + (isStack ? "/image-view.jpg?v=" + stamp : "/pier.jpg?full=true&v=" + stamp);
+    return true;
+  }
+
+  viewer.addEventListener("close", function () {
+    // The event comes a moment after the dialog closes, so it may already be open again.
+    if (viewer.open) return;
+    // A full frame is large. Let it go.
+    loading = null;
+    shown = null;
+    pointers.clear();
+    gesture = null;
+    stage.replaceChildren();
   });
 
   // Pressing Stop twice repeats the whole park sequence, so the button is disabled at

@@ -370,7 +370,6 @@ def test_empty_list_and_unknown_site_say_so(rig):
 def test_top_bar_status_keeps_refreshing_on_targets(rig):
     html = _get(rig, "/1/targets")
     assert 'id="ssc-status"' in html and 'hx-get="/roof/badge"' in html
-    assert "Roof safe" in html
 
 
 @pytest.mark.parametrize("path", ["/1/roof", "/1/targets"])

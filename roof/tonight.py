@@ -16,7 +16,7 @@ import falcon
 import pydash
 
 from roof import config as roof_config
-from roof import dashboard, focus, planner, schedule_tools
+from roof import dashboard, focus, night_web, planner, schedule_tools
 from roof.sessions import base_name
 from roof.sun import night_key
 
@@ -29,6 +29,7 @@ PLAN_CACHE_S = 60
 # Share of the Night Line a label needs to reach 64px on a phone, tablet and desktop.
 LABEL_TIERS = ((18.0, 1), (9.0, 2), (5.3, 3))
 MAX_PHONE_LABELS = 3
+ROOF_NOTE_PERIODS = 2
 
 # Hero: what fills the slot. "plan" is the Night Line and rows, with no large image.
 HEROES = {
@@ -48,6 +49,9 @@ HEROES = {
     "elsewhere": "stack",
 }
 DIMMED = {"darks", "held", "offline"}
+# Where the night's summary may show once dark is over. While something is moving or
+# the roof needs attention, that comes first.
+MORNING = {"idle", "held", "offline"}
 STOPPABLE = {"moving", "autofocus", "darks", "stacking", "roof_unsafe", "arm_open", "elsewhere"}
 
 
@@ -354,6 +358,50 @@ def _action(key, status, here, stop_requested_at, clock, now):
     return None
 
 
+def _summary_hours(entry) -> str:
+    """A target's hours. A short run shows in minutes, so it doesn't read as nothing."""
+    if entry["hours"] >= 0.05 or not entry.get("stacked"):
+        return _hours(round(entry["hours"], 1))
+    return _earned_text(entry["hours"] * 3600) or _hours(0)
+
+
+def _summary_line(entry) -> str:
+    """Kept, the goal, and how much of the hours shown the goal doesn't count yet."""
+    parts = []
+    if entry.get("kept_percent") is not None:
+        parts.append(f"Kept {entry['kept_percent']}%")
+    goal = entry.get("goal")
+    if goal:
+        parts.append(f"{goal['have_hours']:.1f} of {goal['goal_hours']:g} h toward goal")
+    if entry.get("hours_not_counted", 0) >= 0.05:
+        parts.append(f"{entry['hours_not_counted']:.1f} h of this not counted yet")
+    return ". ".join(parts)
+
+
+def _morning(key, plan, now):
+    """The summary of the night just worked. Every figure is from the session log."""
+    if key != "finished":
+        over = plan.get("summary_dark_end")
+        if key not in MORNING or over is None or now is None or now < over:
+            return None
+    error = plan.get("summary_error")
+    entries = (plan.get("summary") or {}).get("targets") or []
+    if not entries and not error:
+        return None
+    sunrise = plan.get("summary_sunrise")
+    rows = [{"name": e["name"], "hours": _summary_hours(e), "line": _summary_line(e)} for e in entries]
+    total = None
+    # The Finished sentence already gives the total.
+    if len(rows) > 1 and key != "finished":
+        total = _summary_hours({"hours": plan["summary"]["total_hours"], "stacked": 1})
+    return {
+        "title": "Last night" if sunrise is not None and now is not None and now >= sunrise else "This night",
+        "rows": rows,
+        "total": total,
+        "error": error,
+    }
+
+
 def tonight_state(
     status,
     events=None,
@@ -374,6 +422,7 @@ def tonight_state(
     tone = "neutral"
     if key == "offline":
         tone = "danger" if status.get("loop_stale") else "attention"
+    morning = _morning(key, plan, now)
     return {
         "key": key,
         "hero": HEROES[key],
@@ -390,6 +439,11 @@ def tonight_state(
         "bar": _darks_percent(events) if key == "darks" else None,
         "bar_shown": key == "darks",
         "steps": key == "moving",
+        "morning": morning,
+        # The image on show is what's left of a session, so its caption must say so.
+        "last_image": key in DIMMED or key == "finished" or bool(morning),
+        # The caption needn't repeat the sentence's target, if it's the image's too.
+        "stack_target": (status.get("target") or status.get("view_target") or "") if key == "stacking" else "",
     }
 
 
@@ -410,8 +464,51 @@ def roof_status(status) -> list:
     return lines
 
 
-def night_line(window, blocks=(), now=None, clock=_plain_clock) -> dict:
-    """The Night Line in percentages of sunset to sunrise."""
+def _roof_words(closed, unknown, clock) -> list:
+    """The roof's record in words, one string per fact."""
+    words = []
+    for period in closed:
+        what = "Roof closed" if period["reason"] == "unsafe" else "Roof sensor not answering, counted as closed,"
+        if period["open"]:
+            words.append(f"{what} since {clock(period['start'])}")
+        else:
+            words.append(f"{what} {clock(period['start'])} to {clock(period['end'])}")
+    for span in unknown:
+        words.append(f"Roof unknown {clock(span['start'])} to {clock(span['end'])}")
+    return words
+
+
+def _roof_layers(roof, sunset, sunrise, now, percent, clock) -> dict:
+    """What to draw of the roof's record: only what falls between sunset and sunrise,
+    with its times clipped to match, and with an open period running to now."""
+
+    def clip(start, end):
+        start, end = max(start, sunset), min(end, sunrise)
+        return (start, end) if end > start else None
+
+    closed, unknown = [], []
+    for period in roof.get("closed") or ():
+        end = period["end"] if period["end"] is not None else (now if now is not None else period["start"])
+        span = clip(period["start"], end)
+        if span:
+            closed.append({**period, "start": span[0], "end": span[1]})
+    for period in roof.get("unknown") or ():
+        span = clip(period["start"], period["end"])
+        if span:
+            unknown.append({"start": span[0], "end": span[1]})
+    words = _roof_words(closed, unknown, clock)
+    note = words
+    # Few enough to read on a phone. The label keeps every one.
+    if len(closed) > ROOF_NOTE_PERIODS:
+        hours = sum(p["end"] - p["start"] for p in closed) / 3600
+        note = [f"Roof closed {len(closed)} times, {_hours(round(hours, 1))} in all"] + words[len(closed) :]
+    drawn = lambda spans: [{"start": percent(p["start"]), "end": percent(p["end"])} for p in spans]  # noqa: E731
+    return {"closed": drawn(closed), "unknown": drawn(unknown), "words": words, "note": ". ".join(note)}
+
+
+def night_line(window, blocks=(), now=None, clock=_plain_clock, roof=None) -> dict:
+    """The Night Line in percentages of sunset to sunrise. ``roof`` is what
+    NightHistory.roof_record gives. Left out, the roof isn't mentioned at all."""
     window = window or {}
     sunset, sunrise = window.get("sunset"), window.get("sunrise")
     if sunset is None or sunrise is None or sunrise <= sunset:
@@ -430,12 +527,20 @@ def night_line(window, blocks=(), now=None, clock=_plain_clock) -> dict:
 
     drawn = []
     phone_labels = 0
+    labelled_to = None
     for block in blocks:
         if block.get("start") is None or block.get("end") is None:
             continue
         start, end = percent(block["start"]), percent(block["end"])
+        if end <= start:
+            continue  # wholly outside this night, so there's nothing to draw
         state = block.get("progress") or "next"
         tier = next((t for share, t in LABEL_TIERS if end - start >= share), None)
+        # Blocks can overlap, and two labels in the same place can't both be read.
+        if tier and labelled_to is not None and start < labelled_to:
+            tier = None
+        if tier:
+            labelled_to = end
         if tier == 1:
             phone_labels += 1
             if phone_labels > MAX_PHONE_LABELS:
@@ -443,6 +548,9 @@ def night_line(window, blocks=(), now=None, clock=_plain_clock) -> dict:
         drawn.append({"name": block["name"], "start": start, "end": end, "state": state, "tier": tier})
         word = {"done": "passed", "now": "now", "next": "next"}[state]
         words.append(f"{block['name']} {clock(block['start'])} to {clock(block['end'])}, {word}.")
+
+    layers = _roof_layers(roof or {}, sunset, sunrise, now, percent, clock)
+    words += [f"{text}." for text in layers["words"]]
 
     marker = None
     if now is not None and sunset <= now <= sunrise:
@@ -454,6 +562,9 @@ def night_line(window, blocks=(), now=None, clock=_plain_clock) -> dict:
         "sunrise": clock(sunrise),
         "dark": dark,
         "blocks": drawn,
+        "closed": layers["closed"],
+        "unknown": layers["unknown"],
+        "roof_note": layers["note"],
         "now": marker,
         "label": " ".join(words),
     }
@@ -487,28 +598,6 @@ def stack_summary(status, rows=(), goal=None) -> dict:
         "frames": f"{stacked} of {total} frames" if total else "",
         "goal": goal,
     }
-
-
-def night_summary(rows, night) -> dict:
-    """Hours stacked on one night, per target, from the session log."""
-    per_target = {}
-    for row in rows:
-        if row.get("night") != night:
-            continue
-        hours = (row.get("stacked") or 0) * (row.get("exposure_s") or 0) / 3600
-        name = _target_label(row)
-        per_target[name] = per_target.get(name, 0.0) + hours
-    return {
-        "hours": sum(per_target.values()),
-        "targets": [{"name": name, "hours": _hours(round(h, 1))} for name, h in per_target.items()],
-    }
-
-
-def _target_label(row) -> str:
-    """A target's name, without the panel suffix mosaics add."""
-    name = str(row.get("name") or row.get("target") or "Unknown")
-    head, _, tail = name.rpartition("_")
-    return head if head and tail.isdigit() else name
 
 
 def details_rows(status, stack, events, clock) -> list:
@@ -573,7 +662,8 @@ def _window(night, settings):
         return None
     key = (night, settings.lat, settings.lon, settings.sun_max_deg)
     if key not in _window_cache:
-        _window_cache.clear()  # only tonight's and tomorrow's are ever asked for
+        if len(_window_cache) >= 4:
+            _window_cache.clear()  # only tonight's and tomorrow's are ever asked for
         _window_cache[key] = planner.night_times(night, settings.lat, settings.lon, settings.sun_max_deg)
     return _window_cache[key]
 
@@ -609,17 +699,42 @@ def _cached_list_plan(status, settings, night, plan_from, now):
         return plan
 
 
+def _add_summary(plan, settings, now, log):
+    """The night now ending, even once the page has moved on to the coming one. It
+    stops being that night at the same noon the automation's completed flag does."""
+    night = night_key(now, settings.lon)
+    window = _window(night, settings) or {}
+    plan["summary_dark_end"] = window.get("dark_end")
+    plan["summary_sunrise"] = window.get("sunrise")
+    # Optional, as in night_web: a bad row mustn't lose the rest of the page.
+    try:
+        plan["summary"] = night_web.night_summary(night, log, dashboard.target_queue().all()) if log else {}
+    except Exception as e:
+        plan["summary"] = {}
+        plan["summary_error"] = f"Could not read the session log: {e}"
+    plan["earned_hours"] = plan["summary"].get("total_hours", 0)
+
+
+def _roof_record(plan, settings, now) -> dict:
+    """What's known of the roof on the night shown. With no record, none of it is."""
+    history = getattr(dashboard.get_automation(), "_night_history", None)
+    if history is not None:
+        try:
+            return history.roof_record(plan["night"], settings.lon, now)
+        except Exception:
+            pass
+    sunset = (plan.get("window") or {}).get("sunset")
+    return {"closed": [], "unknown": [{"start": sunset, "end": now}] if sunset is not None else []}
+
+
 def gather_plan(status, settings, now, clock) -> dict:
     """The night's times and what's planned in them. The target list's plan is
     costly to work out and changes slowly, so it's kept for a minute."""
     night, window, plan_from = _showing_night(status, settings, now)
     plan = {"window": window, "night": night, "rows": [], "skipped": [], "blocks": []}
     log = dashboard.session_log()
-    rows = log.rows() if log else []
-    summary = night_summary(rows, night)
-    plan["earned_hours"] = summary["hours"]
-    plan["earned_targets"] = summary["targets"] if status.get("completed") else []
-    plan["log_rows"] = rows
+    plan["log_rows"] = log.rows() if log else []
+    _add_summary(plan, settings, now, log)
     if status.get("uses_target_list"):
         try:
             details = _cached_list_plan(status, settings, night, plan_from, now)
@@ -692,7 +807,7 @@ def build(telescope_id) -> dict:
         "state": state,
         "status": status,
         "roof_lines": roof_status(status),
-        "line": night_line(plan["window"], plan["blocks"], now, clock),
+        "line": night_line(plan["window"], plan["blocks"], now, clock, _roof_record(plan, settings, now)),
         "plan": plan,
         "steps": dashboard.tracker_steps(status, events)["steps"] if state["steps"] else [],
         "details": details_rows(status, stack, events, clock),
@@ -737,11 +852,7 @@ def first_layout(hero, images) -> dict:
         front = "stack" if has_stack else "none"
     if front in ("focus", "plan"):
         front = "none"
-    if front == "none":
-        layout = "thumbs"
-    else:
-        layout = "side" if front == "stack" and has_pier else "below"
-    return {"front": front, "layout": layout}
+    return {"front": front, "layout": "thumbs" if front == "none" else "below"}
 
 
 class TonightPage:

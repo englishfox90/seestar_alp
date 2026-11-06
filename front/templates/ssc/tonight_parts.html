@@ -6,7 +6,7 @@
 {% endmacro %}
 
 {% macro now(state, root) %}
-<div id="t-state-data" data-state="{{ state.key }}" data-hero="{{ state.hero }}" data-dim="{{ "1" if state.dim else "0" }}" data-stop="{{ "1" if state.stop else "0" }}"></div>
+<div id="t-state-data" data-state="{{ state.key }}" data-hero="{{ state.hero }}" data-dim="{{ "1" if state.dim else "0" }}" data-stop="{{ "1" if state.stop else "0" }}" data-last="{{ "1" if state.last_image else "0" }}" data-target="{{ state.stack_target|e }}"></div>
 {% if not state.sentence_in_band %}
 <p class="t-sentence" data-tone="{{ state.tone }}">{% if state.tone != "neutral" %}{{ ui.icon("warning", 20) }} {% endif %}{{ state.sentence|e }}</p>
 {% endif %}
@@ -33,13 +33,24 @@
   {% endif %}
 {% endmacro %}
 
-{% macro plan_list(plan, status) %}
-  {% if plan.earned_targets %}
-    <h2 class="ssc-section">Tonight's stacks</h2>
-    <div class="ssc-group">
-      {% for item in plan.earned_targets %}{{ ui.row(item.name, item.hours) }}{% endfor %}
+{% macro morning_card(card) %}
+  <h2 class="ssc-section">{{ card.title|e }}</h2>
+  {% if card.rows %}
+  <div class="ssc-group t-morning">
+    {% for item in card.rows %}
+    <div class="ssc-row">
+      <span class="ssc-row__label">{{ item.name|e }}{% if item.line %}<span class="ssc-row__sub">{{ item.line|e }}</span>{% endif %}</span>
+      <span class="ssc-row__value">{{ item.hours|e }}</span>
     </div>
+    {% endfor %}
+    {% if card.total %}{{ ui.row("Total", card.total) }}{% endif %}
+  </div>
   {% endif %}
+  {% if card.error %}<p class="ssc-footnote">{{ card.error|e }}</p>{% endif %}
+{% endmacro %}
+
+{% macro plan_list(plan, status, state) %}
+  {% if state.morning %}{{ morning_card(state.morning) }}{% endif %}
   {% if plan.rows %}
     <h2 class="ssc-section">Plan</h2>
     <div class="ssc-group">
