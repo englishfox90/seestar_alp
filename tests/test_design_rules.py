@@ -11,19 +11,16 @@ EXEMPT = {"tokens.css", "red-floor.css"}
 
 # Inline styles per legacy template. Lower these as pages move. They may never rise.
 INLINE_STYLE_BASELINE = {
-    "live_star.html": 1,
-    "pa_refine.html": 6,
     "partials/astro_mosaic.html": 8,
-    "partials/bubble_level.html": 2,
     "partials/dashboard_device.html": 1,
     "partials/dashboard_focus.html": 4,
-    "partials/dec_offset.html": 3,
     "partials/events.html": 1,
-    "partials/framed_mosaic_planning.html": 2,
+    "partials/framed_mosaic_planning.html": 1,
     "partials/home_content.html": 4,
-    "partials/live_movement_control.html": 1,
     "partials/mosaic_order_diagram.html": 1,
     "partials/stats_content.html": 4,
+    "ssc/shell.html": 1,
+    "ssc/ui.html": 5,
     "target_list.html": 1,
 }
 
