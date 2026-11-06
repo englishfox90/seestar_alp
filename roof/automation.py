@@ -23,7 +23,8 @@ from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 
 from roof import config as roof_config
-from roof import planner, schedule_tools
+from roof import alerts as roof_alerts
+from roof import focus, planner, schedule_tools
 from roof import sentinel
 from roof.queue import FramingEstimates, TargetQueue
 from roof.dew import DewMonitor
@@ -70,6 +71,7 @@ class RoofAutomation:
         plan_targets=None,
         framing_estimates=None,
         night_history=None,
+        alerts=None,
     ):
         self._load_settings = load_settings
         self._read_safety = read_safety or (
@@ -136,6 +138,7 @@ class RoofAutomation:
         self._started_at = clock()
         self._session_log = session_log
         self._night_history = night_history
+        self._alerts = alerts
         self._plan_targets = plan_targets or (lambda s, now: (False, "no target list"))
         self._framing_estimates = framing_estimates
         self._list_note = ""
@@ -186,6 +189,7 @@ class RoofAutomation:
             except Exception as e:
                 self._logger.exception("roof tick failed")
                 self._loop_error = f"loop error: {e}"
+                self._alert("alarm", f"automation {self._loop_error}")
             else:
                 self._loop_error = ""
             try:
@@ -212,6 +216,16 @@ class RoofAutomation:
             state = self._step(scope, s, state, safety, dark, night, now)
         self._manage_dew(scope, s, state)
         self._record_stack(state, night, now)
+        self._alert(
+            "observe",
+            state,
+            dark,
+            night,
+            self.phase,
+            self._note,
+            self._target_position(state),
+            s.dry_run,
+        )
         self._publish(s, safety, sun, dark, night, state, now)
         self._last_tick = now
         if now - self._last_heartbeat >= HEARTBEAT_S:
@@ -227,6 +241,7 @@ class RoofAutomation:
             self._log(f"dry_run changed to {s.dry_run}; forgetting the current session")
             self.phase = IDLE
             self._adopted = False
+            self._alert("session_forgotten")
             self._scopes.pop(True, None)  # a later dry run starts from the real state
         self._dry_run = s.dry_run
         if s.dry_run not in self._scopes:
@@ -332,6 +347,7 @@ class RoofAutomation:
             self._log(f"will resume at item {self._last_item} if this night continues")
             self._save_state()
         self._log(f"STOP + PARK ({reason})")
+        self._alert("session_ended", reason)
         self._last_stop_attempt = now
         self._adopted = False
         self._override_roof = False
@@ -373,6 +389,7 @@ class RoofAutomation:
             # Parking clears alarms about parking, but not one that caused the park.
             self._alarm, self._alarm_after_park = self._alarm_after_park, ""
             self._log("parked: firmware reports mount closed")
+            self._alert("parked")
             return
         if now < self._deadline:
             return
@@ -439,6 +456,7 @@ class RoofAutomation:
             self._last_item = 0
             self._deadline = now
             self._log("a scheduler started elsewhere is running; watching it")
+            self._alert("session_adopted", night)
             return
         if not s.enabled:
             self._note = "automation disabled"
@@ -624,9 +642,27 @@ class RoofAutomation:
         self._arm_deadline = now + ARM_OPEN_ALARM_S
         self._start_failures = 0
         self._alarm = ""
+        self._alert(
+            "session_started",
+            schedule_tools.label(s.schedule),
+            *self._targets_from(items, start_item),
+            self._resume.get("night") == night,
+            night,
+        )
         if self._resume:
             self._resume = {}
             self._save_state()
+
+    @staticmethod
+    def _targets_from(items, start_item):
+        """(names of the targets still to come, position of the first among all)."""
+        targets = [
+            (number, item.get("params", {}).get("target_name", "?"))
+            for number, item in enumerate(items, 1)
+            if item.get("action") in schedule_tools.IMAGING_ACTIONS
+        ]
+        ahead = [name for number, name in targets if number >= start_item]
+        return ahead, len(targets) - len(ahead) + 1
 
     @staticmethod
     def _guard(fn, *args):
@@ -666,12 +702,14 @@ class RoofAutomation:
             self.phase = IDLE
             self._adopted = False
             if adopted:
+                self._alert("session_ended", "schedule finished")
                 return
             if not self._list_run_may_replan(night, now):
                 self._completed_night = night
             self._report_framing_guard(state)
             self._resume = {}
             self._save_state()
+            self._alert("session_ended", "schedule finished", self._completed_night != night)
             if s.enabled and state.connected:
                 self._begin_stop(scope, "schedule finished", state, night, now, keep_resume=False)
             return
@@ -681,6 +719,7 @@ class RoofAutomation:
         self._adopted = False
         self._hold_night = night
         self._save_state()
+        self._alert("session_ended", "stopped elsewhere")
         self._raise_alarm("scheduler stopped outside automation; holding until Start or the next night")
 
     def _list_run_may_replan(self, night, now) -> bool:
@@ -724,6 +763,7 @@ class RoofAutomation:
         name = item.get("params", {}).get("target_name", "?")
         self._log(f"skipping item {number} ({name}): below {s.min_target_alt_deg:g} deg")
         self._skip_asked = number
+        self._alert("target_skipped", name, f"below {s.min_target_alt_deg:g} deg")
         failure = self._guard(scope.skip_item)
         if failure:
             self._log(f"  skip: {failure}")
@@ -811,6 +851,15 @@ class RoofAutomation:
             self._log(f"  dew heater: {failure}")
         else:
             self._heater_on = on
+
+    def _alert(self, method, *args):
+        """Bookkeeping only: a failure here must never stop the safety loop."""
+        if self._alerts is None:
+            return
+        try:
+            getattr(self._alerts, method)(*args)
+        except Exception as e:
+            self._logger.warning("could not raise the %s alert: %s", method, e)
 
     def _record_roof(self, safety, now, s):
         """Bookkeeping only: a failure here must never stop the safety loop."""
@@ -908,6 +957,7 @@ class RoofAutomation:
     def _raise_alarm(self, message):
         self._alarm = message
         self._log(f"ALARM: {message}")
+        self._alert("alarm", message)
 
     def _log(self, message):
         dry = "[DRY RUN] " if self._dry_run is True else ""
@@ -1059,11 +1109,23 @@ def get_automation() -> RoofAutomation:
         targets = TargetQueue(os.path.join(base, "roof_targets.json"))
         global _target_queue
         _target_queue = targets
+        webhook = os.path.join(base, roof_alerts.WEBHOOK_FILE)
+        alerts = roof_alerts.NightAlerts(
+            roof_alerts.DiscordSender(
+                lambda: roof_alerts.read_webhook(webhook)
+                if roof_config.load().discord_enabled
+                else ""
+            ),
+            state_path=os.path.join(base, "roof_alerts.json"),
+            logger=logger,
+        )
+        focus.focus_log(roof_config.load().device_num).on_finish = alerts.autofocus
         _instance = RoofAutomation(
             state_path=os.path.join(base, "roof_state.json"),
             logger=logger,
             session_log=log,
             night_history=NightHistory(os.path.join(base, "roof_night_history.json")),
+            alerts=alerts,
             framing_estimates=FramingEstimates(os.path.join(base, "roof_framing.json")),
             plan_targets=lambda s, now: planner.write_night_plan(
                 s, targets.all(), log, now, schedule_tools.schedule_dir()

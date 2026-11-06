@@ -52,9 +52,34 @@ dew_sentinel_url = "http://127.0.0.1:8085/status"
 poll_s = 10
 start_settle_s = 120
 stop_grace_s = 30
+discord_enabled = false # post the night's imaging events to Discord
 ```
 
 Changes to this section apply on the next tick, with no restart.
+
+## Discord alerts
+
+Posts what the scope is doing as the `Seestar` webhook user. It doesn't repeat what
+PFR Sentinel already posts: the roof opening and closing, weather and all-sky images.
+
+| Event | When |
+|---|---|
+| Imaging session started / resumed | The schedule launches, with the targets ahead |
+| Autofocus passed / failed / no usable fit | Each run during a session |
+| Stacking *target* | The first frame is stacked; warns if focus isn't confirmed |
+| Switching target | With the last target's frames; warns if it stacked nothing or was skipped |
+| Imaging finished / stopped | With the reason (dawn, roof unsafe, Stop + Park, ...) and frames per target |
+| Arm parked | The firmware confirms it |
+| Not imaging yet | 30 min into the dark with no session, and why |
+| No imaging tonight / Night summary | At dawn |
+| Lost / back in contact | No reply from the scope for 2 min during a session |
+| Seestar alarm | Anything the automation raises as an alarm, such as a park it can't confirm |
+
+To turn it on, put the webhook URL in `device/discord_webhook.txt`, set
+`discord_enabled = true`, then check it with `.venv/bin/python -m roof.alerts --test`.
+Support bundles include config.toml, so the URL has its own git-ignored file. Both apply
+without a restart. Posting never holds up the automation loop, and a message that
+still can't be sent after three tries is logged and dropped.
 
 ## Service
 
@@ -95,5 +120,6 @@ Upstream files touched: one hook in `FrontMain.start` (`front/app.py`), and in
 - `planner.py`: picks targets for a night (`python -m roof.planner --nights 7`)
 - `dashboard.py`: `/dashboard`, including tonight's plan and goal progress from the list
 - `sessions.py`: what was actually stacked, kept in `roof_sessions.json`
+- `alerts.py`: Discord alerts, tracking kept in `roof_alerts.json`
 - `night_history.py`: when the roof read safe or unsafe, kept in `roof_night_history.json`
 - `night_web.py`: read-only roof history, morning summary and inline image routes
