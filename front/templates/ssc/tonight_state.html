@@ -5,7 +5,7 @@
 <div id="t-bands" hx-swap-oob="innerHTML">{{ parts.bands(state, root)|trim }}</div>
 <div id="t-progress" hx-swap-oob="innerHTML">{{ parts.progress(state, steps)|trim }}</div>
 <div id="t-night" hx-swap-oob="innerHTML">{{ ui.night_line(line) }}</div>
-<div id="t-plan" hx-swap-oob="innerHTML">{{ parts.plan_list(plan, status) }}</div>
+<div id="t-plan" hx-swap-oob="innerHTML">{{ parts.plan_list(plan, status, state) }}</div>
 <div id="t-session-details" hx-swap-oob="innerHTML">{{ parts.detail_rows(details) }}</div>
 <a id="ssc-status" hx-swap-oob="innerHTML">{{ parts.roof_lines_html(roof_lines) }}</a>
 <span id="t-updated-time" hx-swap-oob="innerHTML">{{ updated|e }}</span>

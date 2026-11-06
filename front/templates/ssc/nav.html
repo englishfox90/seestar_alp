@@ -37,7 +37,7 @@
 </header>
 <nav class="ssc-tabbar" aria-label="Main">
   {% for link in links.primary %}
-  <a class="ssc-tab" href="{{ link.href }}"{% if link.href == current_href %} aria-current="page"{% endif %}>{{ ui.icon(link.icon) }}{{ link.label }}</a>
+  <a class="ssc-tab" href="{{ link.href }}"{% if link.href == current_href %} aria-current="page"{% endif %}>{{ ui.icon(link.icon ~ "-fill" if link.href == current_href else link.icon) }}{{ link.label }}</a>
   {% endfor %}
   <button class="ssc-tab" type="button" data-open-sheet="ssc-more">{{ ui.icon("more") }}More</button>
 </nav>

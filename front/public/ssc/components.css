@@ -176,7 +176,7 @@
     background: var(--ssc-fill-1);
     border-radius: var(--ssc-radius-bar);
 }
-.ssc-night__dark, .ssc-night__block {
+.ssc-night__dark, .ssc-night__block, .ssc-night__closed, .ssc-night__unknown {
     position: absolute;
     top: 0;
     bottom: 0;
@@ -193,6 +193,17 @@
 .ssc-night__block[data-state="next"] { border: 1px solid var(--ssc-text-2); }
 [data-theme="red"] .ssc-night__block[data-state="now"] { background: var(--ssc-text-2); }
 [data-theme="red"] .ssc-night__block[data-state="done"] { background: var(--ssc-separator); }
+/* Roof closed: a hatch on its own backing, so it reads over any block and without hue.
+   Unknown: hollow, because a plain track would read as open and a hatch as closed. */
+.ssc-night__closed {
+    min-width: 2px;
+    background-color: var(--ssc-canvas);
+    background-image: repeating-linear-gradient(45deg, var(--ssc-red) 0 1.5px, transparent 1.5px 4px);
+}
+.ssc-night__unknown {
+    background: var(--ssc-canvas);
+    border-block: 1px dashed var(--ssc-text-3);
+}
 .ssc-night__now {
     position: absolute;
     top: 50%;
@@ -222,6 +233,12 @@
 .ssc-night__ends {
     display: flex;
     justify-content: space-between;
+    margin-top: var(--ssc-space-2);
+    color: var(--ssc-text-2);
+    font-size: var(--ssc-text-footnote);
+    font-variant-numeric: tabular-nums;
+}
+.ssc-night__note {
     margin-top: var(--ssc-space-2);
     color: var(--ssc-text-2);
     font-size: var(--ssc-text-footnote);
