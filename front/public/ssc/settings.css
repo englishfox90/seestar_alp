@@ -1,0 +1,156 @@
+/* Settings. One grouped column; spec: front/DESIGN.md section 6. */
+
+.s-page { padding-top: var(--ssc-space-5); }
+.s-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--ssc-space-4); max-width: 640px; margin: 0 auto var(--ssc-space-5); }
+.s-firmware { margin: 0; }
+.s-column { display: flex; flex-direction: column; gap: var(--ssc-space-5); max-width: 640px; margin: 0 auto; }
+.s-form { display: flex; flex-direction: column; gap: var(--ssc-space-5); }
+.s-saved { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--ssc-space-3); }
+.s-version { margin: 0; text-align: center; }
+.s-page .ssc-group__body p { margin: 0; }
+.s-page .ssc-segmented .ssc-field__help { margin-top: var(--ssc-space-2); }
+.s-page .ssc-action-bar { margin: 0 calc(-1 * var(--ssc-gutter)); padding-inline: var(--ssc-gutter); }
+
+/* ---- Schedule (legacy base.html page, loaded by its templates) ------------------------------ */
+
+.sch-page .sch-status { margin-bottom: var(--ssc-space-5); }
+.sch-state {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--ssc-space-4) var(--ssc-space-6);
+}
+.sch-state__run { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ssc-space-3) var(--ssc-space-5); min-width: 0; }
+.sch-state__run p { margin: 0; }
+.sch-state__label { color: var(--ssc-text-2); }
+.sch-state__label strong { color: var(--ssc-text-1); font-weight: var(--ssc-weight-strong); }
+.sch-state__actions { display: flex; flex-direction: column; gap: var(--ssc-space-2); flex: 0 1 20rem; min-width: min(100%, 14rem); }
+.sch-state__actions .form-label { margin: 0; color: var(--ssc-text-2); font-size: var(--ssc-text-footnote); }
+.sch-state__actions select,
+.sch-state .btn,
+.sch-buttons .btn { min-height: var(--ssc-touch); }
+.sch-buttons { display: flex; flex-wrap: wrap; gap: var(--ssc-space-3); }
+/* One primary per view: Append or Add. Stop and Delete are quiet red text on a tint. */
+.sch-page .btn-danger {
+    border: 0;
+    background: var(--ssc-fill-2);
+    color: var(--ssc-red);
+}
+.sch-page .btn-secondary { border: 0; background: var(--ssc-fill-1); color: var(--ssc-text-1); }
+.sch-page .btn-primary { border: 0; background: var(--ssc-primary-bg); color: var(--ssc-primary-fg); }
+.sch-actions { margin: var(--ssc-space-4) 0 var(--ssc-space-6); }
+
+.sch-list { margin-top: var(--ssc-space-2); }
+.sch-head,
+.sch-row { display: grid; grid-template-columns: var(--ssc-touch) minmax(0, 1fr); align-items: start; }
+.sch-head { display: none; }
+.sch-row {
+    border-bottom: 1px solid var(--ssc-separator);
+    border-radius: var(--ssc-radius-control);
+}
+.sch-row:last-child { border-bottom: 0; }
+.schedule-row-current,
+.sch-row:has(input:checked) { background: var(--ssc-fill-1); }
+.schedule-row-current .sch-cell--target { font-weight: var(--ssc-weight-strong); }
+.sch-check { display: flex; align-items: center; justify-content: center; min-height: var(--ssc-touch); margin: 0; }
+.sch-check input { margin: 0; }
+.sch-main { min-width: 0; padding: var(--ssc-space-3) var(--ssc-space-3) var(--ssc-space-3) 0; }
+.sch-simple { display: flex; flex-direction: column; justify-content: center; min-height: var(--ssc-touch); }
+.sch-cells { display: flex; flex-direction: column; width: 100%; }
+.sch-toggle {
+    border: 0;
+    padding: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+}
+.sch-cell { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.sch-sub { color: var(--ssc-text-2); font-size: var(--ssc-text-footnote); }
+.sch-detail { padding: var(--ssc-space-3) 0 0; color: var(--ssc-text-2); }
+.sch-detail p { margin: 0 0 var(--ssc-space-2); }
+
+/* Phone: label on the left, value on the right. */
+.sch-row .sch-cell {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--ssc-space-4);
+    padding: var(--ssc-space-2) 0;
+    text-align: right;
+}
+.sch-row .sch-cell::before {
+    content: attr(data-label);
+    flex: none;
+    color: var(--ssc-text-2);
+    font-size: var(--ssc-text-footnote);
+    text-align: left;
+}
+.sch-row .sch-cell > span { display: block; }
+.sch-row .sch-cell > .sch-v { display: flex; flex-direction: column; align-items: flex-end; }
+.sch-row .sch-cell--target { justify-content: flex-start; padding-bottom: var(--ssc-space-3); text-align: left; }
+.sch-row .sch-cell--target::before { display: none; }
+.sch-row .sch-cell:has(> .sch-sub) { flex-wrap: wrap; }
+
+@media (min-width: 768px) {
+    .sch-head { display: grid; border-bottom: 1px solid var(--ssc-separator); color: var(--ssc-text-2); font-size: var(--ssc-text-footnote); }
+    .sch-head .sch-cells,
+    .sch-row .sch-cells {
+        display: grid;
+        grid-template-columns: 2fr 1.4fr 1.1fr 0.9fr 0.8fr 1.5fr 0.7fr 0.7fr 0.7fr 1.6fr;
+        gap: var(--ssc-space-4);
+        align-items: start;
+    }
+    .sch-head .sch-cell { padding: var(--ssc-space-3) 0; }
+    .sch-row .sch-toggle { display: grid; }
+    .sch-row .sch-cell { flex-direction: column; align-items: flex-start; justify-content: flex-start; text-align: left; padding: var(--ssc-space-2) 0; }
+    .sch-row .sch-cell::before { display: none; }
+    .sch-row .sch-cell > .sch-v { align-items: flex-start; }
+    .sch-row .sch-cell--target { padding-bottom: var(--ssc-space-2); }
+}
+
+/* Add-an-item tabs: one line of quiet pills that scroll rather than wrap into a block. */
+.sch-page .nav-pills { flex-wrap: wrap; gap: var(--ssc-space-2); }
+.sch-page .nav-pills .nav-link {
+    min-height: var(--ssc-touch);
+    display: inline-flex;
+    align-items: center;
+    background: var(--ssc-fill-1);
+    color: var(--ssc-text-1);
+}
+.sch-page .nav-pills .nav-link.active { background: var(--ssc-fill-2); font-weight: var(--ssc-weight-strong); color: var(--ssc-text-1); }
+
+/* ---- System pages on base.html: Config, Commands, Stats, Guest mode ------------------------- */
+
+.sys-rows .stat-row { display: flex; justify-content: space-between; gap: var(--ssc-space-4); min-height: var(--ssc-touch); align-items: center; }
+.sys-rows .stat-value { text-align: right; }
+
+/* Config: its markup comes from device/config.py, so the cards are flattened here. */
+.sys-config { display: flex; flex-direction: column; gap: var(--ssc-space-5); }
+.sys-config .card {
+    margin: 0;
+    border: 0;
+    border-radius: var(--ssc-radius-panel);
+    background: var(--ssc-surface);
+}
+.sys-config .card-header { padding: var(--ssc-inset) var(--ssc-inset) 0; border: 0; background: none; }
+.sys-config .card-header h3 { margin: 0; font-size: var(--ssc-text-section); font-weight: var(--ssc-weight-strong); }
+.sys-config .card-body { padding: var(--ssc-inset); border: 0; }
+.sys-config .form-label { margin: 0; color: var(--ssc-text-2); font-size: var(--ssc-text-footnote); }
+.sys-config .form-control,
+.sys-config .form-select { min-height: var(--ssc-control-height); }
+.sys-config__save { position: sticky; bottom: 0; display: flex; justify-content: flex-end; padding: var(--ssc-space-3) 0; background: var(--ssc-canvas); }
+.sys-config__save .btn { min-height: var(--ssc-touch); }
+
+/* Commands */
+.sys-event .accordion-button { min-height: var(--ssc-touch); padding-inline: 0; background: none; box-shadow: none; color: var(--ssc-text-1); font-weight: var(--ssc-weight-strong); }
+.sys-event .accordion-body { padding: var(--ssc-space-3) 0 0; color: var(--ssc-text-2); }
+.command-groups .row > div { padding-block: var(--ssc-space-3); border-top: 1px solid var(--ssc-separator); }
+.command-groups form { display: flex; flex-direction: column; gap: var(--ssc-space-2); }
+.command-groups .form-label { margin: 0; color: var(--ssc-text-2); font-size: var(--ssc-text-footnote); }
+.command-groups select,
+.command-groups .command-exec-btn,
+#magdecform .btn,
+#magdecform .form-control { min-height: var(--ssc-touch); }
+#guestmode-content .btn { min-height: var(--ssc-touch); }

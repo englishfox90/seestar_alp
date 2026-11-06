@@ -8,3 +8,4 @@
 @import url("nav.css") layer(components);
 @import url("pages.css") layer(pages);
 @import url("red-floor.css");
+@import url("settings.css") layer(pages);

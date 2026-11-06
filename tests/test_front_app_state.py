@@ -2802,8 +2802,9 @@ def test_schedule_list_renders_framed_mosaic_item():
     )
 
     assert "M31" in html
-    assert "Scale: 1.5x" in html
-    assert "Angle: 45.0&deg;" in html
+    # The schedule rows moved to label and value cells (labels render beside the value on phones).
+    assert 'data-label="Scale">1.5x<' in html
+    assert 'data-label="Angle">45.0&deg;<' in html
 
 
 def test_schedule_list_shows_total_mosaic_time_and_labeled_current_panel():
@@ -2851,10 +2852,10 @@ def test_schedule_list_shows_total_mosaic_time_and_labeled_current_panel():
 
 
 def _row_column_count(html):
-    """Count top-level Bootstrap grid columns (col/col-2/col-auto) in a
-    rendered schedule_list.html row, to catch column-count drift between
-    action-type branches that share the same table header."""
-    return len(re.findall(r'class="col(?:-\d+|-auto)?[ "]', html))
+    """Count the cells in a rendered schedule_list.html row, to catch
+    column-count drift between action-type branches that share the same
+    table header."""
+    return len(re.findall(r'class="sch-cell[ "]', html))
 
 
 @pytest.mark.parametrize("is_current", [True, False])

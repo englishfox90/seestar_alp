@@ -1,178 +1,139 @@
-{% extends 'base.html' %}
+{% extends 'ssc/shell.html' %}
+{% import 'ssc/ui.html' as ui %}
+{% import 'ssc/form.html' as form %}
 
-{% block header %}
-    <meta http-equiv="Cache-Control" content="no-cache">
-    <div class="page-hero">
-        <div>
-            <h1 class="page-title">{% block title %}Settings{% endblock %}</h1>
-            <p class="page-subtitle">Device capture, processing and behavior controls</p>
-        </div>
-        {% if firmware_ver_int is defined %}
-            {% set fw = firmware_ver_int|int %}
-            <div class="panel-muted">Firmware: {{ fw }}</div>
-        {% endif %}
-    </div>
-{% endblock %}
+{% block title %}Settings{% endblock %}
 
 {% block content %}
-    {%- macro group_for_key(key) -%}
-        {%- set key_l = key|lower -%}
-        {%- if "gain" in key_l or "exp" in key_l or "stack" in key_l or "frame" in key_l or "light" in key_l or "lenhance" in key_l or "wide" in key_l -%}
-            Imaging
-        {%- elif "temp" in key_l or "heater" in key_l or "dew" in key_l -%}
-            Environment
-        {%- elif "dither" in key_l or "focus" in key_l or "track" in key_l or "mount" in key_l -%}
-            Mount and focus
-        {%- else -%}
-            General
-        {%- endif -%}
-    {%- endmacro -%}
+{#- Same keys, names and values as before; only the markup around them changed. -#}
+{%- macro group_for_key(key) -%}
+    {%- set key_l = key|lower -%}
+    {%- if "gain" in key_l or "exp" in key_l or "stack" in key_l or "frame" in key_l or "light" in key_l or "lenhance" in key_l or "wide" in key_l -%}
+        Imaging
+    {%- elif "temp" in key_l or "heater" in key_l or "dew" in key_l -%}
+        Environment
+    {%- elif "dither" in key_l or "focus" in key_l or "track" in key_l or "mount" in key_l -%}
+        Mount and focus
+    {%- else -%}
+        General
+    {%- endif -%}
+{%- endmacro -%}
 
-    {%- macro render_setting_row(key, value) -%}
-        <div class="setting-row row g-2 align-items-center py-3 border-bottom">
-            <div class="col-12 col-md-7">
-                <div class="fw-semibold">{{ settings_friendly_names[key] }}</div>
-                <div class="form-text mt-0">{{ settings_helper_text[key] }}</div>
-                {% if key == "light_duration_min" and value == -1 %}
-                    <div class="form-text mt-0">
-                        Your firmware may not support stack settings; using the device default (-1).
-                    </div>
-                {% endif %}
-            </div>
-            {% if value is true or value is false %}
-                <div class="col-12 col-md-5 d-flex gap-3 justify-content-md-end">
-                    {% if value is true %}
-                        <div class="form-check form-check-inline m-0">
-                            <input class="form-check-input" type="radio" id="{{ key }}_enable" name="{{ key }}" value="{{ value }}" checked>
-                            <label class="form-check-label" for="{{ key }}_enable">Enable</label>
-                        </div>
-                        <div class="form-check form-check-inline m-0">
-                            <input class="form-check-input" type="radio" id="{{ key }}_disable" name="{{ key }}" value="false">
-                            <label class="form-check-label" for="{{ key }}_disable">Disable</label>
-                        </div>
-                    {% else %}
-                        <div class="form-check form-check-inline m-0">
-                            <input class="form-check-input" type="radio" id="{{ key }}_enable" name="{{ key }}" value="true">
-                            <label class="form-check-label" for="{{ key }}_enable">Enable</label>
-                        </div>
-                        <div class="form-check form-check-inline m-0">
-                            <input class="form-check-input" type="radio" id="{{ key }}_disable" name="{{ key }}" value="{{ value }}" checked>
-                            <label class="form-check-label" for="{{ key }}_disable">Disable</label>
-                        </div>
-                    {% endif %}
-                </div>
-            {% elif key == "temp_unit" %}
-                <div class="col-12 col-md-5">
-                    <input class="form-control" type="text" id="{{ key }}" name="{{ key }}" value="{{ value }}" required pattern="[Cc]|[Ff]" aria-describedby="cfHelp">
-                    <div id="cfHelp" class="form-text">C or F</div>
-                </div>
-            {% elif value is number %}
-                {% if key == "exp_ms_stack_l" %}
-                    <div class="col-12 col-md-5">
-                        <input class="form-control" type="number" id="{{ key }}" name="{{ key }}" value="{{ value }}" min="5" max="90000" required aria-describedby="numberHelp">
-                        <div id="numberHelp" class="form-text">Numbers only, 5 to 90000 ms</div>
-                    </div>
-                {% elif key == "stack_dither_pix" %}
-                    <div class="col-12 col-md-5">
-                        <input class="form-control" type="number" id="{{ key }}" name="{{ key }}" value="{{ value }}" min="10" max="200" required aria-describedby="numberHelp">
-                        <div id="numberHelp" class="form-text">Numbers only, 10 to 200 pixels</div>
-                    </div>
-                {% else %}
-                    <div class="col-12 col-md-5">
-                        <input class="form-control" type="number" id="{{ key }}" name="{{ key }}" value="{{ value }}" required aria-describedby="numberHelp">
-                        <div id="numberHelp" class="form-text">Numbers only</div>
-                    </div>
-                {% endif %}
-            {% else %}
-                <div class="col-12 col-md-5"><input class="form-control" type="text" id="{{ key }}" name="{{ key }}" value="{{ value }}" required></div>
-            {% endif %}
-        </div>
-    {%- endmacro -%}
+{# Enable and Disable keep the old radio values: "true"/"false", or the current value on the checked side. #}
+{%- macro bool_field(key, value) -%}
+<fieldset class="ssc-segmented">
+  <legend class="ssc-field__label">{{ settings_friendly_names[key]|e }}</legend>
+  <div class="ssc-segmented__cells">
+    <label class="ssc-segmented__cell">
+      <input type="radio" id="{{ key }}_enable" name="{{ key }}" value="{{ value if value is true else 'true' }}"{% if value is true %} checked{% endif %}>
+      <span>Enable</span>
+    </label>
+    <label class="ssc-segmented__cell">
+      <input type="radio" id="{{ key }}_disable" name="{{ key }}" value="{{ 'false' if value is true else value }}"{% if value is not true %} checked{% endif %}>
+      <span>Disable</span>
+    </label>
+  </div>
+  <p class="ssc-field__help">{{ settings_helper_text[key]|e }}</p>
+</fieldset>
+{%- endmacro -%}
 
-    {% if firmware_ver_int is defined %}
-        {% set fw = firmware_ver_int|int %}
-    {% endif %}
+{%- macro render_setting(key, value) -%}
+  {%- set label = settings_friendly_names[key] -%}
+  {%- set helper = settings_helper_text[key] -%}
+  {%- if key == "light_duration_min" and value == -1 -%}
+    {%- set helper = helper ~ " Your firmware may not support stack settings; using the device default (-1)." -%}
+  {%- endif -%}
+  {%- if value is true or value is false -%}
+    {{ bool_field(key, value) }}
+  {%- elif key == "temp_unit" -%}
+    {{ form.field(label, key, key, value, help=(helper ~ " C or F.")|trim, attrs='required pattern="[Cc]|[Ff]"') }}
+  {%- elif value is number -%}
+    {%- if key == "exp_ms_stack_l" -%}
+      {{ form.field(label, key, key, value, "number", help=helper ~ " Numbers only, 5 to 90000 ms.", attrs='min="5" max="90000" required') }}
+    {%- elif key == "stack_dither_pix" -%}
+      {{ form.field(label, key, key, value, "number", help=helper ~ " Numbers only, 10 to 200 pixels.", attrs='min="10" max="200" required') }}
+    {%- else -%}
+      {{ form.field(label, key, key, value, "number", help=helper ~ " Numbers only.", attrs='required') }}
+    {%- endif -%}
+  {%- else -%}
+    {{ form.field(label, key, key, value, help=helper, attrs='required') }}
+  {%- endif -%}
+{%- endmacro -%}
+
+<main class="ssc-page s-page">
+  <header class="s-head">
+    <h1 class="ssc-title">Settings</h1>
+    {% if firmware_ver_int is defined %}<p class="ssc-footnote s-firmware">Firmware {{ firmware_ver_int|int }}</p>{% endif %}
+  </header>
+
+  <div class="s-column">
+    {% for message in ((flashed_messages or []) + (messages or []))|unique %}{{ ui.notice("neutral", message) }}{% endfor %}
+
+    {# Outside the form: it is a device-local display choice and must never be posted with the scope's settings. #}
+    {% call form.group("Appearance") %}{% include 'ssc/appearance.html' ignore missing %}{% endcall %}
+
     {% if client_master and online and settings %}
-        <div class="panel-card">
-            {% if output %}
-                <div class="alert alert-primary" role="alert">{{output}}</div>
-            {% endif %}
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <div class="panel-muted">Changes apply immediately after save</div>
-                <div id="unsavedPill" class="unsaved-pill d-none">
-                    <span class="dot"></span>
-                    Unsaved changes
-                </div>
-            </div>
-            <form id="settingsForm" method="post" action="{{ action }}">
-                {% for group in ["Imaging", "Environment", "Mount and focus", "General"] %}
-                    {% set ns = namespace(has_rows=false) %}
-                    {% for key, value in settings.items() %}
-                        {% if group_for_key(key) == group %}
-                            {% set ns.has_rows = true %}
-                        {% endif %}
-                    {% endfor %}
-                    {% if ns.has_rows %}
-                        <h2 class="panel-title mt-3 mb-1">{{ group }}</h2>
-                        {% for key, value in settings.items() %}
-                            {% if group_for_key(key) == group %}
-                                {{ render_setting_row(key, value) }}
-                            {% endif %}
-                        {% endfor %}
-                    {% endif %}
-                {% endfor %}
-                <div class="action-row d-flex flex-wrap mt-3">
-                    <button id="saveSettingsBtn" type="submit" class="btn btn-primary">Save</button>
-                    <button id="resetSettingsBtn" type="button" class="btn btn-secondary">Reset form</button>
-                </div>
-            </form>
-        </div>
+      {% if output %}{{ ui.notice("neutral", output) }}{% endif %}
+      <form id="settingsForm" class="s-form" method="post" action="{{ action }}">
+        <p class="ssc-footnote s-saved">Changes apply immediately after save. <span id="unsavedPill" hidden>{{ ui.status("attention", "Unsaved changes") }}</span></p>
+        {% for group in ["Imaging", "Environment", "Mount and focus", "General"] %}
+          {% set ns = namespace(has_rows=false) %}
+          {% for key, value in settings.items() %}
+            {% if group_for_key(key)|trim == group %}{% set ns.has_rows = true %}{% endif %}
+          {% endfor %}
+          {% if ns.has_rows %}
+            {% call form.group(group) %}
+              {% for key, value in settings.items() %}
+                {% if group_for_key(key)|trim == group %}{{ render_setting(key, value) }}{% endif %}
+              {% endfor %}
+            {% endcall %}
+          {% endif %}
+        {% endfor %}
+        {% call form.action_bar() %}
+          <button id="resetSettingsBtn" type="button" class="ssc-button" data-kind="secondary">Reset form</button>
+          <button id="saveSettingsBtn" type="submit" class="ssc-button" data-kind="primary">Save</button>
+        {% endcall %}
+      </form>
     {% elif not client_master %}
-        <div class="panel-card">
-          <p>You are currently in guest mode. You can release this in the Advanced->Guest Mode of the SeeStar app.</p>
-          <p>See the <a href="https://github.com/smart-underworld/seestar_alp/wiki/Guest-Mode">Guest Mode</a> wiki page for details</p>
-        </div>
+      {% call form.group("") %}
+        <p>You are currently in guest mode. You can release this in the Advanced->Guest Mode of the SeeStar app.</p>
+        <p>See the <a href="https://github.com/smart-underworld/seestar_alp/wiki/Guest-Mode">Guest Mode</a> wiki page for details.</p>
+      {% endcall %}
     {% else %}
-        <div class="panel-card">
-            <p>You are currently in offline mode</p>
-        </div>
+      {% call form.group("") %}<p>You are currently in offline mode.</p>{% endcall %}
     {% endif %}
-    <footer class="footer-meta">
-        Version: {{ version }}
-    </footer>
+    <p class="ssc-footnote s-version">Version {{ version }}</p>
+  </div>
+</main>
+{% endblock %}
 
-    <script>
-      document.addEventListener("DOMContentLoaded", function () {
-        const form = document.getElementById("settingsForm");
-        if (!form) return;
-        const saveBtn = document.getElementById("saveSettingsBtn");
-        const resetBtn = document.getElementById("resetSettingsBtn");
-        const unsavedPill = document.getElementById("unsavedPill");
-        const baseline = new FormData(form);
+{% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("settingsForm");
+    if (!form) return;
+    const saveBtn = document.getElementById("saveSettingsBtn");
+    const resetBtn = document.getElementById("resetSettingsBtn");
+    const unsavedPill = document.getElementById("unsavedPill");
 
-        function serialize(fd) {
-          return Array.from(fd.entries()).map(([k, v]) => `${k}=${v}`).sort().join("&");
-        }
+    function serialize(fd) {
+      return Array.from(fd.entries()).map(([k, v]) => `${k}=${v}`).sort().join("&");
+    }
 
-        const baselineSig = serialize(baseline);
-        function refreshDirtyState() {
-          const currentSig = serialize(new FormData(form));
-          const dirty = currentSig !== baselineSig;
-          saveBtn.disabled = !dirty;
-          if (dirty) {
-            unsavedPill.classList.remove("d-none");
-          } else {
-            unsavedPill.classList.add("d-none");
-          }
-        }
+    const baselineSig = serialize(new FormData(form));
+    function refreshDirtyState() {
+      const dirty = serialize(new FormData(form)) !== baselineSig;
+      saveBtn.disabled = !dirty;
+      unsavedPill.hidden = !dirty;
+    }
 
-        form.addEventListener("input", refreshDirtyState);
-        form.addEventListener("change", refreshDirtyState);
-        resetBtn.addEventListener("click", function () {
-          form.reset();
-          refreshDirtyState();
-        });
-        refreshDirtyState();
-      });
-    </script>
+    form.addEventListener("input", refreshDirtyState);
+    form.addEventListener("change", refreshDirtyState);
+    resetBtn.addEventListener("click", function () {
+      form.reset();
+      refreshDirtyState();
+    });
+    refreshDirtyState();
+  });
+</script>
 {% endblock %}
