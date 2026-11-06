@@ -55,6 +55,7 @@
             {{ stat("Frames", session.stack.stacked ~ " stacked, " ~ session.stack.dropped ~ " dropped" ~ ((" (" ~ session.stack.drop_percent ~ "%)") if session.stack.drop_percent is not none else "")) }}
             {{ stat("Time on target", session.stack.elapsed ~ ((" of " ~ session.planned) if session.planned else "")) }}
           {% endif %}
+          {% if session.goal %}{{ stat("Goal", session.goal) }}{% endif %}
         </div>
       {% else %}
         <p class="mb-0">Not imaging right now.</p>
@@ -66,7 +67,9 @@
         <div class="dashboard-stat-list">
           {% for row in plan %}
             <div class="dash-plan-row {% if row.progress %}is-{{ row.progress }}{% endif %}">
-              <div class="dash-plan-name">{{ row.name|e }}{% if row.progress == "now" %} <span class="badge text-bg-primary">Now</span>{% elif row.progress == "done" %} <span class="badge text-bg-secondary">Passed</span>{% endif %}</div>
+              <div class="dash-plan-name">{{ row.name|e }}{% if row.progress == "now" %} <span class="badge text-bg-primary">Now</span>{% elif row.progress == "done" %} <span class="badge text-bg-secondary">Passed</span>{% endif %}
+                {% if row.when %}<div class="small text-body-secondary fw-normal">{{ row.when|e }}{% if row.goal %}. {{ row.goal|e }}{% endif %}</div>{% endif %}
+              </div>
               <div class="dash-plan-meta">
                 {% if row.altitude is none %}Alt unknown{% else %}{{ "%.0f"|format(row.altitude) }}&deg;{% endif %}
                 {% if not row.ok %}<span class="badge text-bg-secondary">Too low</span>{% endif %}
@@ -74,8 +77,15 @@
             </div>
           {% endfor %}
         </div>
+      {% elif status.uses_target_list %}
+        <p class="mb-0">{% if plan_error %}{{ plan_error|e }}{% else %}Nothing on the target list can be imaged for the rest of this night.{% endif %}</p>
       {% else %}
         <p class="mb-0">No schedule selected.</p>
+      {% endif %}
+      {% if plan_skipped %}
+        <div class="small text-body-secondary mt-2">
+          {% for s in plan_skipped %}<div>{{ s.name|e }}: {{ s.why|e }}</div>{% endfor %}
+        </div>
       {% endif %}
     </section>
 </div>

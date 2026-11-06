@@ -9,6 +9,8 @@ Run ``python -m roof.planner --nights 7`` to see the plan without touching the s
 """
 
 import math
+import json
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
@@ -380,7 +382,54 @@ def write_night_plan(settings, targets, log, now: float, directory: str) -> tupl
     schedule_tools.write_schedule(
         schedule_tools.PLAN_FILE.removesuffix(".json"), to_schedule(plan), directory
     )
+    _write_plan_times(plan, targets, directory)
     return True, ""
+
+
+def plan_summary(plan: NightPlan, targets) -> dict:
+    """A plan as plain data: the blocks in order, and why other targets got no time."""
+    names = {t.id: t.name for t in targets}
+    return {
+        "night": plan.key,
+        "blocks": [
+            {
+                "id": b.target.id,
+                "name": b.target.name,
+                "kind": "Framed" if b.target.framed else "Single",
+                "ra": b.target.ra,
+                "dec": b.target.dec,
+                "start": b.start,
+                "end": b.end,
+            }
+            for b in plan.blocks
+        ],
+        "skipped": [
+            {"id": target_id, "name": names[target_id], "why": why}
+            for target_id, why in plan.skipped.items()
+            if target_id in names
+        ],
+    }
+
+
+def _write_plan_times(plan, targets, directory):
+    # Only the dashboard reads this, so failing to write it mustn't stop a start.
+    path = os.path.join(directory, schedule_tools.PLAN_TIMES_FILE)
+    try:
+        with open(f"{path}.tmp", "w") as f:
+            json.dump(plan_summary(plan, targets), f)
+        os.replace(f"{path}.tmp", path)
+    except OSError:
+        pass
+
+
+def read_plan_times(directory: str, night: str) -> dict | None:
+    """The summary of the plan last started on this night, if there is one."""
+    try:
+        with open(os.path.join(directory, schedule_tools.PLAN_TIMES_FILE)) as f:
+            doc = json.load(f)
+    except (OSError, ValueError):
+        return None
+    return doc if isinstance(doc, dict) and doc.get("night") == night else None
 
 
 def describe(plans, targets, log, tz=None) -> str:

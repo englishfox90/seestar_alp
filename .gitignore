@@ -10,6 +10,7 @@ device/roof_targets.json
 device/roof_sessions.json
 device/roof_framing.json
 schedule/target_list_plan.json
+schedule/target_list_plan.times
 device/config.toml.kai
 dist
 build

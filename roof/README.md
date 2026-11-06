@@ -92,4 +92,5 @@ Upstream files touched: one hook in `FrontMain.start` (`front/app.py`), and in
 - `web.py`: page, buttons and badge
 - `queue.py`, `queue_web.py`: the target list and its page, `/targets`
 - `planner.py`: picks targets for a night (`python -m roof.planner --nights 7`)
+- `dashboard.py`: `/dashboard`, including tonight's plan and goal progress from the list
 - `sessions.py`: what was actually stacked, kept in `roof_sessions.json`

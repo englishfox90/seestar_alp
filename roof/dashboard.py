@@ -9,15 +9,19 @@ import json
 import re
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import cv2
 import falcon
 import numpy as np
 import pydash
 
-from roof import focus
-from roof.automation import get_automation
+from roof import config as roof_config
+from roof import focus, planner, schedule_tools
+from roof.automation import get_automation, session_log, target_queue
+from roof.sessions import base_name
+from roof.sun import night_key
+from roof.targets import target_altitude_deg
 
 PREVIEW_WIDTH = 720
 PREVIEW_QUALITY = 80
@@ -122,6 +126,101 @@ def plan_rows(status, session) -> list:
                 progress = "next"
         rows.append({**target, "progress": progress})
     return rows
+
+
+def goal_text(target, log) -> str:
+    """Hours toward a target's goal. Runs too short to count yet are shown apart."""
+    progress = log.progress(target)
+    have = target.prior_hours + progress.counted_hours
+    text = f"{have:.1f} of {target.goal_hours:g} h"
+    if progress.partial_hours >= 0.05:
+        text += f", plus {progress.partial_hours:.1f} h not counted yet"
+    return text
+
+
+def _clock(timestamp) -> str:
+    return datetime.fromtimestamp(timestamp).strftime("%H:%M")
+
+
+def _list_summary(status, targets, log, settings, now) -> dict | None:
+    """The plan running now, or while not running, what a start now would do."""
+    night = night_key(now, settings.lon)
+    if status.get("sched_state") == "working":
+        running = planner.read_plan_times(schedule_tools.schedule_dir(), night)
+        if running:
+            return running
+    cfg = planner.config_from_settings(settings)
+    return planner.plan_summary(planner.forecast(targets, log, cfg, now, 1)[0], targets)
+
+
+def target_list_plan(status, session, targets, log, settings, now, altitude=None) -> dict:
+    """Tonight's plan from the target list, ready for the page."""
+    summary = _list_summary(status, targets, log, settings, now) or {"blocks": [], "skipped": []}
+    by_id = {t.id: t for t in targets}
+    altitude = altitude or _altitude_now
+    working = status.get("sched_state") == "working"
+    position = (status.get("target_index") or 0) - 1 if working else None
+    rows = []
+    for index, block in enumerate(summary["blocks"]):
+        progress = None
+        if position is not None and position >= 0:
+            progress = "done" if index < position else "now" if index == position else "next"
+        target = by_id.get(block["id"])
+        rows.append(
+            {
+                "name": block["name"],
+                "kind": block["kind"],
+                "altitude": altitude(block, settings, now),
+                "ok": True,  # the planner chose its time, so being low now doesn't matter
+                "progress": progress,
+                "when": f"{_clock(block['start'])} to {_clock(block['end'])}",
+                "goal": goal_text(target, log) if target else None,
+            }
+        )
+    return {
+        "rows": rows,
+        "skipped": [{"name": s["name"], "why": s["why"]} for s in summary["skipped"]],
+    }
+
+
+def _altitude_now(block, settings, now):
+    try:
+        return target_altitude_deg(
+            {"ra": block["ra"], "dec": block["dec"], "is_j2000": True},
+            settings.lat,
+            settings.lon,
+            datetime.fromtimestamp(now, timezone.utc),
+        )
+    except Exception:
+        return None
+
+
+def session_goal(session, targets, log) -> str | None:
+    """Goal progress for the target being imaged, if it's on the list."""
+    name = session.get("target")
+    if not name:
+        return None
+    key = base_name(name)
+    for target in targets:
+        if base_name(target.name) == key:
+            return goal_text(target, log)
+    return None
+
+
+def list_details(status, session, now=None) -> dict:
+    """Everything the page shows from the target list. It's optional, so a problem
+    here falls back to the plain plan rather than breaking the dashboard."""
+    if not status.get("uses_target_list"):
+        return {}
+    now = now or time.time()
+    try:
+        targets = target_queue().all()
+        log = session_log()
+        details = target_list_plan(status, session, targets, log, roof_config.load(), now)
+        details["goal"] = session_goal(session, targets, log)
+        return details
+    except Exception as e:
+        return {"error": f"Could not read the target list: {e}"}
 
 
 def _number(text):
@@ -539,13 +638,17 @@ class DashboardLive:
         session = session_summary(view, schedule)
         events = event_map(front.do_action_device("get_event_state", telescope_id, {}))
         session["filter"] = filter_name(events)
+        details = list_details(status, session)
+        session["goal"] = details.get("goal")
         front.render_fragment(
             req,
             resp,
             "partials/dashboard_live.html",
             status=status,
             session=session,
-            plan=plan_rows(status, session),
+            plan=details["rows"] if "rows" in details else plan_rows(status, session),
+            plan_skipped=details.get("skipped") or [],
+            plan_error=details.get("error"),
         )
 
 

@@ -832,3 +832,103 @@ def test_scope_read_carries_the_framing_estimate():
     )
     state = RealScope(lambda: device).read()
     assert (state.mosaic_scale, state.mosaic_estimate_h) == (1.7, 1.375)
+
+
+# ---- dashboard -------------------------------------------------------------
+
+
+def _running_status(**kw):
+    return {"uses_target_list": True, "sched_state": "working", "target_index": 1, **kw}
+
+
+def _dash():
+    from roof import dashboard
+
+    return dashboard
+
+
+def _no_altitude(block, settings, now):
+    return 50.0
+
+
+LATE = datetime(2026, 11, 6, 4, tzinfo=timezone.utc).timestamp()
+
+
+def test_written_plan_times_are_read_back_for_that_night_only(tmp_path, plain_config):
+    log = SessionLog(str(tmp_path / "s.json"))
+    assert planner.write_night_plan(SETTINGS, [framed()], log, DUSK, str(tmp_path))[0]
+    assert schedule_tools.PLAN_TIMES_FILE not in schedule_tools.list_schedules(str(tmp_path))
+    times = planner.read_plan_times(str(tmp_path), NIGHT)
+    assert times["blocks"][0]["name"] == "NGC 6960"
+    assert planner.read_plan_times(str(tmp_path), "2026-11-06") is None
+
+
+def test_running_plan_shows_its_saved_times_and_progress(tmp_path, plain_config, monkeypatch):
+    dash = _dash()
+    log = SessionLog(str(tmp_path / "s.json"))
+    first, second = framed(priority="high", goal_hours=3.0), single(goal_hours=20.0)
+    assert planner.write_night_plan(SETTINGS, [first, second], log, DUSK, str(tmp_path))[0]
+    monkeypatch.setattr(schedule_tools, "schedule_dir", lambda: str(tmp_path))
+    details = dash.target_list_plan(
+        _running_status(target_index=2), {}, [first, second], log, SETTINGS, LATE, _no_altitude
+    )
+    assert [r["progress"] for r in details["rows"]] == ["done", "now"]
+    assert details["rows"][0]["goal"] == "0.0 of 3 h"
+    assert " to " in details["rows"][0]["when"]
+
+
+def test_parked_plan_is_worked_out_live(tmp_path, plain_config, monkeypatch):
+    dash = _dash()
+    log = SessionLog(str(tmp_path / "s.json"))
+    monkeypatch.setattr(schedule_tools, "schedule_dir", lambda: str(tmp_path))
+    target = single()
+    details = dash.target_list_plan(
+        {"uses_target_list": True, "sched_state": "stopped"}, {}, [target], log, SETTINGS, LATE, _no_altitude
+    )
+    assert details["rows"][0]["name"] == target.name
+    assert details["rows"][0]["progress"] is None
+
+
+def test_parked_plan_explains_targets_left_out(tmp_path, plain_config, monkeypatch):
+    dash = _dash()
+    log = SessionLog(str(tmp_path / "s.json"))
+    monkeypatch.setattr(schedule_tools, "schedule_dir", lambda: str(tmp_path))
+    target = framed(min_session_hours=12.0)
+    details = dash.target_list_plan(
+        {"uses_target_list": True, "sched_state": "stopped"}, {}, [target], log, SETTINGS, DUSK, _no_altitude
+    )
+    assert details["rows"] == []
+    assert details["skipped"][0]["name"] == "NGC 6960"
+    assert "12 h framed run" in details["skipped"][0]["why"]
+
+
+def test_goal_text_counts_only_full_framed_runs(tmp_path):
+    dash = _dash()
+    log = SessionLog(str(tmp_path / "s.json"))
+    log.observe(stacking(stacked=180, lapse=3600, exposure=20), "n", 10000)
+    assert dash.goal_text(framed(goal_hours=15.0), log) == "0.0 of 15 h, plus 1.0 h not counted yet"
+    assert dash.goal_text(framed(goal_hours=15.0, prior_hours=2.0), log).startswith("2.0 of 15 h")
+
+
+def test_session_goal_finds_the_current_target(tmp_path):
+    dash = _dash()
+    log = SessionLog(str(tmp_path / "s.json"))
+    target = single("M 42", goal_hours=6.0)
+    assert dash.session_goal({"target": "m 42"}, [target], log) == "0.0 of 6 h"
+    assert dash.session_goal({"target": "Other"}, [target], log) is None
+    assert dash.session_goal({}, [target], log) is None
+
+
+def test_schedule_files_get_no_list_details():
+    assert _dash().list_details({"uses_target_list": False}, {}) == {}
+
+
+def test_a_target_list_problem_never_breaks_the_dashboard(monkeypatch):
+    dash = _dash()
+
+    def broken():
+        raise RuntimeError("unreadable")
+
+    monkeypatch.setattr(dash, "target_queue", broken)
+    details = dash.list_details({"uses_target_list": True}, {})
+    assert "unreadable" in details["error"] and "rows" not in details

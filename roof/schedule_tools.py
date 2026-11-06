@@ -30,6 +30,8 @@ TARGET_LIST = "target-list"
 TARGET_LIST_LABEL = "Target list"
 # The plan it writes, replaced at every start.
 PLAN_FILE = "target_list_plan.json"
+# When that plan's targets run and why others don't. Not a .json, so it isn't listed.
+PLAN_TIMES_FILE = "target_list_plan.times"
 
 
 def label(name: str) -> str:

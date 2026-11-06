@@ -912,6 +912,7 @@ class RoofAutomation:
             "enabled": s.enabled,
             "dry_run": s.dry_run,
             "schedule": schedule_tools.label(s.schedule),
+            "uses_target_list": s.schedule == schedule_tools.TARGET_LIST,
             "safe": safety.safe,
             "safety_detail": safety.detail,
             "sun_deg": sun,
@@ -958,6 +959,9 @@ class RoofAutomation:
             self._snapshot = snapshot
 
 
+_target_queue = None
+
+
 def _default_target_altitude(params, lat, lon, when):
     from roof.targets import target_altitude_deg
 
@@ -972,6 +976,11 @@ def _default_scopes(s):
 
 
 _instance = None
+
+
+def target_queue() -> TargetQueue:
+    get_automation()
+    return _target_queue
 
 
 def session_log() -> SessionLog | None:
@@ -997,6 +1006,8 @@ def get_automation() -> RoofAutomation:
             logger.addHandler(handler)
         log = SessionLog(os.path.join(base, "roof_sessions.json"))
         targets = TargetQueue(os.path.join(base, "roof_targets.json"))
+        global _target_queue
+        _target_queue = targets
         _instance = RoofAutomation(
             state_path=os.path.join(base, "roof_state.json"),
             logger=logger,
