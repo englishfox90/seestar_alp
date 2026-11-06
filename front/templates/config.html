@@ -1,27 +1,19 @@
-{% extends 'base.html' %}
+{% extends 'ssc/system_page.html' %}
+{% import 'ssc/form.html' as form %}
 
-{% block header %}
-<div class="page-hero">
-	<div>
-		<h1 class="page-title">{% block title %}SSC Config{% endblock %}</h1>
-		<p class="page-subtitle">Settings from config.toml. Some only take effect after SSC restarts.</p>
-	</div>
-</div>
+{% block title %}Config{% endblock %}
+
+{% block body %}
+<p class="ssc-footnote s-saved">Settings from config.toml. Some apply only after SSC restarts.</p>
+{# The groups and fields come from device/config.py, because the form's names belong with the code that reads them. #}
+<form method="post" action="{{ root_path }}/config" class="s-form">
+  {{ config.render_config_html() }}
+  {% call form.action_bar() %}
+    <button type="submit" class="ssc-button" data-kind="primary">Save</button>
+  {% endcall %}
+</form>
 {% endblock %}
 
-{% block content %}
-<link rel="stylesheet" href="{{ root_path }}/public/ssc/settings.css">
-
-<p class="panel-muted">Hover over an input section to see what the setting is for and its default.</p>
-
-<form method="post" action="{{ root_path }}/config" class="sys-config">
-	{{ config.render_config_html() }}
-	<div class="sys-config__save">
-		<button type="submit" class="btn btn-primary">Save</button>
-	</div>
-</form>
-
-<footer class="footer-meta">
-	Version: {{ version }}
-</footer>
+{% block scripts %}
+<script src="{{ root_path }}/public/main.js"></script>
 {% endblock %}

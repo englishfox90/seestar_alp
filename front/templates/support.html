@@ -1,82 +1,41 @@
-{% extends 'base.html' %}
+{% extends 'ssc/system_page.html' %}
+{% import 'ssc/form.html' as form %}
 
-{% block header %}
-	<div class="page-hero">
-		<div>
-			<h1 class="page-title">{% block title %}Support{% endblock %}</h1>
-			<p class="page-subtitle">Documentation, community and bug reporting</p>
-		</div>
-	</div>
-{% endblock %}
+{% block title %}Support{% endblock %}
 
-{% block content %}
-  <div class="card mb-3">
-    <div class="card-header">
-      <h2 class="panel-title mb-0">Documentation</h2>
-    </div>
-    <div class="card-body">
-      Seestar_alp documentation can be found on:
-      <ul>
-        <li>The github <a href="https://github.com/smart-underworld/seestar_alp/blob/main/README.md">README.md</a> file</li>
-        <li>The <a href="https://github.com/smart-underworld/seestar_alp/wiki">github wiki</a></li>
-      </ul>
-      <p>
-      Wiki contributors are always welcome, to improve our docs!
-    </div>
-  </div>
+{% macro link_group(title, note="") -%}
+<section class="ssc-form-group">
+  <h2 class="ssc-form-group__title">{{ title|e }}</h2>
+  <div class="ssc-group">{{ caller() }}</div>
+  {% if note %}<p class="ssc-footnote s-saved">{{ note|e }}</p>{% endif %}
+</section>
+{%- endmacro %}
 
-  <div class="card mb-3">
-    <div class="card-header">
-      <h2 class="panel-title mb-0">Collaboration</h2>
-    </div>
-    <div class="card-body">
-      Seestar_alp developers use Discord as the primary means of collaboration.<p>
-      The discord server can be found via <a href="https://discord.gg/B3zDCAMP4V">this link</a><p>
-      Some channels to find help/advice might be:
-      <ul>
-        <li>#seestar_alp-user-channel</li>
-        <li>#seestar_alp-ask-developers</li>
-      </ul>
-    </div>
-  </div>
+{% block body %}
+{% call link_group("Documentation", "Wiki contributors are always welcome, to improve our docs.") %}
+  {{ form.link_row("README", "https://github.com/smart-underworld/seestar_alp/blob/main/README.md") }}
+  {{ form.link_row("GitHub wiki", "https://github.com/smart-underworld/seestar_alp/wiki") }}
+{% endcall %}
 
-  <div class="card mb-3">
-    <div class="card-header">
-      <h2 class="panel-title mb-0">Feature requests and bug reports</h2>
-    </div>
-    <div class="card-body">
-      Seestar_alp developers use github "issues" as a means of tracking bugs, and feature requests.<p>
-      Please search the existing bugs and features <a href="https://github.com/smart-underworld/seestar_alp/issues">here</a> and "thumbs-up" or comment
-      on issues that you would like to see worked on.<p>
-      <p>
-      If you need to create a new issue, please use the "new issue" button, or <a href="https://github.com/smart-underworld/seestar_alp/issues/new">this link</a> to do so.<p>
-      Optionally, you can collect a support bundle to attach to this issue, for better developer debugging (see below)
-    </div>
-  </div>
+{% call link_group("Collaboration", "For help or advice, try #seestar_alp-user-channel or #seestar_alp-ask-developers.") %}
+  {{ form.link_row("Discord server", "https://discord.gg/B3zDCAMP4V", sub="Where the developers work together") }}
+{% endcall %}
 
-	<div class="card mb-3">
-    <div class="card-header">
-		  <h2 class="panel-title mb-0">Support bundle</h2>
+{% call link_group("Feature requests and bug reports", "Thumbs-up or comment on the issues you would like to see worked on. A support bundle attached to a new issue helps with debugging.") %}
+  {{ form.link_row("Search existing issues", "https://github.com/smart-underworld/seestar_alp/issues") }}
+  {{ form.link_row("Create a new issue", "https://github.com/smart-underworld/seestar_alp/issues/new") }}
+{% endcall %}
+
+{% call form.group("Support bundle") %}
+  <form method="post" action="{{ root_path }}/gensupportbundle" class="s-form">
+    <div class="ssc-field">
+      <label class="ssc-field__label" for="desc">Generate a zip file for debugging, or for sharing with developers</label>
+      <textarea class="ssc-input s-textarea" id="desc" name="desc" rows="8" required>Please describe your problem here in as much detail as you are able to provide.
+
+Reproduction steps, and times it occurred are all helpful details.</textarea>
     </div>
-    <div class="card-body">
-      <form method="post" action="{{ root_path }}/gensupportbundle">
-        <label for="desc" class="form-label">Generate a support bundle (zip file) for debugging, or sharing with developers</label>
-        <textarea class="form-control" id="desc" name="desc" rows="10"
-          aria-describedby="descHelp" value="" required>
-    Please describe your problem here in as much detail as you are able to provide.
-
-    Reproduction steps, and times it occurred are all helpful details.</textarea>
-        <div class="form-check my-3">
-          <input class="form-check-input" type="checkbox" id="getSeestarLogs" name="getSeestarLogs">
-          <label class="form-check-label" for="getSeestarLogs">Collect embedded logs from SeeStar</label>
-        </div>
-        <button type="submit" class="btn btn-primary">Download bundle</button>
-      </form>
-    </div>
-  </div>
-
-
-	<footer class="footer-meta">
-		Version: {{ version }}
-	</footer>
+    {{ form.toggle("Collect embedded logs from Seestar", "getSeestarLogs", "getSeestarLogs") }}
+    <div class="s-actions"><button type="submit" class="ssc-button" data-kind="primary">Download bundle</button></div>
+  </form>
+{% endcall %}
 {% endblock %}

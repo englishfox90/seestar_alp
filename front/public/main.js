@@ -438,73 +438,21 @@ function addSeestar(){
     var devicecount = document.getElementsByName('ss_name').length + 1; //parseInt(document.getElementById('devicecount') + 1);
     var lastElement = document.getElementById(`device_div_${devicecount - 1}`);
 
-    var insertBlock = `<div id="device_div_${devicecount}">
-                            <div class="col-sm-4 text-end">
-                                <label class="form-label">
-                                    <h3>Device number ${devicecount}</h3>
-                                </label>
+    var insertBlock = `<div id="device_div_${devicecount}" class="s-device">
+                            <h3 class="s-device__title">Device ${devicecount}</h3>
+                            <div class="ssc-field">
+                                <label for="ss_name" class="ssc-field__label">Name</label>
+                                <input id="ss_name" name="ss_name" type="text" class="ssc-input" value="" required>
                             </div>
-                            <div class="row mb-3 align-items-center">
-                                <!-- Row -->
-                                <div class="col-sm-4 text-end">
-                                    <!-- Col -->
-                                    <label for="ss_name" class="form-label">Name</label>
-                                </div>
-                                <!-- Close Col -->
-                                <div class="col-sm-8 col-md-6">
-                                    <!-- Col -->
-                                    <input id="ss_name" name="ss_name" type="text" class="form-control" title="" value="" required>
-                                </div>
-                                <!-- Close Col -->
+                            <div class="ssc-field">
+                                <label for="ss_ip_address" class="ssc-field__label">IP Address</label>
+                                <input id="ss_ip_address" name="ss_ip_address" type="text" class="ssc-input" value="" required>
                             </div>
-                            <!-- Close Row -->
-                            <div class="row mb-3 align-items-center">
-                                <!-- Row -->
-                                <div class="col-sm-4 text-end">
-                                    <!-- Col -->
-                                    <label for="ss_ip_address" class="form-label">IP Address</label>
-                                </div>
-                                <!-- Close Col -->
-                                <div class="col-sm-8 col-md-6">
-                                    <!-- Col -->
-                                    <input id="ss_ip_address" name="ss_ip_address" type="text" class="form-control" title="" value="" required>
-                                </div>
-                                <!-- Close Col -->
-                            </div>
-                            <!-- Close Row -->
-                            <input id="ss_is_EQ_mode_hidden_${devicecount}" name="ss_is_EQ_mode" type="hidden" value="False">
-                            <div class="row mb-3 align-items-center">
-                                <!-- Checkbox Row -->
-                                <div class="col-sm-4 text-end">
-                                    <!-- Checkbox label -->
-                                    <label for="ss_is_EQ_mode_${devicecount}" class="form-label">
-                                    Is device in EQ mode
-                                    </label>
-                                </div>
-                                <!-- Close checkbox label -->
-                                <div class="col-sm-8 col-md-6">
-                                    <!-- Checkbox -->
-                                    <input id="ss_is_EQ_mode_${devicecount}" class="form-check-input" title="Is device in EQ mode" type="checkbox" onclick="NewCheckboxChange('ss_is_EQ_mode_hidden_${devicecount}')">
-                                </div>
-                                <!--Close checkbox -->
-                            </div>
-                            <!-- Close checkbox row -->
-                            <div class="row mb-3 align-items-center">
-                                <!-- Checkbox Row -->
-                                <div class="col-sm-4 text-end">
-                                    <!-- Checkbox label -->
-                                    <label for="delete_${devicecount}" class="form-label">
-                                    Delete device
-                                    </label>
-                                </div>
-                                <!-- Close checkbox label -->
-                                <div class="col-sm-8 col-md-6">
-                                    <!-- Checkbox -->
-                                    <input id="delete_${devicecount}" name="delete_${devicecount}" class="form-check-input" title="" type="checkbox" >
-                                </div>
-                                <!--Close checkbox -->
-                            </div>
-                            <!-- Close checkbox row -->
+                            <label class="ssc-toggle" for="delete_${devicecount}">
+                                <span class="ssc-toggle__text"><span>Delete device</span></span>
+                                <input id="delete_${devicecount}" name="delete_${devicecount}" class="ssc-toggle__input" type="checkbox" role="switch">
+                                <span class="ssc-toggle__track" aria-hidden="true"></span>
+                            </label>
                         </div>
                             `;
     lastElement.insertAdjacentHTML('afterend', insertBlock);

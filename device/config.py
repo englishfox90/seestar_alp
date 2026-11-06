@@ -37,6 +37,7 @@
 # 27-Dec-2022   rbd 0.1 Move shared logger construction and global
 #               var here. MIT license and module header. No mcast.
 #
+import html
 import sys
 import math
 import tomlkit
@@ -49,6 +50,18 @@ import os
 
 ### end rwr
 import typing
+
+
+def _config_label(label):
+    """The config form's labels are written with a colon, which the design leaves out."""
+    return html.escape(label.rstrip(": "))
+
+
+def _config_help(description):
+    """Help is shown under the field, because a hover title never appears on a phone."""
+    if not description:
+        return ""
+    return f'<p class="ssc-field__help">{html.escape(description)}</p>'
 
 
 class ConfigError(Exception):
@@ -571,7 +584,7 @@ class _Config:
     #
     def render_text(self, name, label, value, description="", required=False):
         """
-        Render config html form text input
+        Render config html form text input. The classes are the shell's: front/public/ssc/forms.css
         """
         if type(value) is tomlkit.items.Integer or type(value) is tomlkit.items.Float:
             strType = "number"
@@ -585,16 +598,12 @@ class _Config:
         else:
             valRequired = ""
 
-        ret = f'''<div class="row mb-3 align-items-center"> <!-- Row -->
-                            <div class="col-sm-4 text-end"> <!-- Col -->
-                                <label for="{name}" class="form-label">{label}</label>
-                            </div> <!-- Close Col -->
-                            <div class="col-sm-8 col-md-6"> <!-- Col -->
-                                <input id="{name}" name="{name}" type="{strType}" class="form-control" title="{description}" {step} value="{value}" {valRequired}>
-                            </div> <!-- Close Col -->
-                        </div> <!-- Close Row -->
-                    '''
-        return ret
+        return f"""<div class="ssc-field">
+                            <label for="{name}" class="ssc-field__label">{_config_label(label)}</label>
+                            <input id="{name}" name="{name}" type="{strType}" class="ssc-input" {step} value="{html.escape(str(value))}" {valRequired}>
+                            {_config_help(description)}
+                        </div>
+                    """
 
     def render_checkbox(self, name, label, checked, description="", hidden=False):
         """
@@ -607,29 +616,22 @@ class _Config:
             c = ""
 
         if hidden:
-            t = "hidden"
-            v = 'value=""'
+            return f"""<input id="{name}_hidden" name="{name}" type="hidden" value="" {c}>"""
 
-            ret = f'''<div class="col-sm-8 col-md-6"> <!-- Checkbox -->
-                                <input id="{name}_hidden" name="{name}" class="form-check-input" title="{description}" type="{t}" {v} {c}>
-                            </div> <!--Close checkbox -->'''
-
-        else:
-            t = "checkbox"
-            v = ""
-
-            ret = f'''<div class="row mb-3 align-items-center"> <!-- Checkbox Row -->
-                                <div class="col-sm-4 text-end"> <!-- Checkbox label -->
-                                    <label for="{name}" class="form-label">
-                                        {label}
-                                    </label>
-                                </div> <!-- Close checkbox label -->
-                                <div class="col-sm-8 col-md-6"> <!-- Checkbox -->
-                                    <input id="{name}" name="{name}" class="form-check-input" title="{description}" type="{t}" {c}>
-                                </div> <!--Close checkbox -->
-                            </div> <!-- Close checkbox row -->
-                        '''
-        return ret
+        help_text = (
+            f'<span class="ssc-field__help">{html.escape(description)}</span>'
+            if description
+            else ""
+        )
+        return f"""<label class="ssc-toggle" for="{name}">
+                            <span class="ssc-toggle__text">
+                                <span>{_config_label(label)}</span>
+                                {help_text}
+                            </span>
+                            <input id="{name}" name="{name}" class="ssc-toggle__input" type="checkbox" role="switch" {c}>
+                            <span class="ssc-toggle__track" aria-hidden="true"></span>
+                        </label>
+                    """
 
     def render_select(self, name, label, options, default, description=""):
         """
@@ -641,46 +643,29 @@ class _Config:
                 s = "selected"
             else:
                 s = ""
-            retOpt += f'<option value="{opt}" {s}>{opt}</option>'
+            retOpt += f'<option value="{html.escape(str(opt))}" {s}>{html.escape(str(opt))}</option>'
 
-        ret = f'''<div class="row mb-3 align-items-center">
-                            <div class="col-sm-4 text-end">
-                                <label for="{name}" class="form-label">
-                                    {label}
-                                </label>
-                            </div>
-                            <div class="col-sm-8 col-md-6">
-                                <select class="custom-select" id="{name}" name="{name}" title="{description}">
-                                    {retOpt}
-                                </select>
-                            </div>
+        return f"""<div class="ssc-field">
+                            <label for="{name}" class="ssc-field__label">{_config_label(label)}</label>
+                            <select class="ssc-input" id="{name}" name="{name}">
+                                {retOpt}
+                            </select>
+                            {_config_help(description)}
                        </div>
-                    '''
-        return ret
+                    """
 
     def render_config_section(self, title, content, id=""):
         """
         Render config html config section div
         """
-        divtxt = ""
-
-        if id != "":
-            needID = f'id="{id}">'
-        else:
-            needID = ">"
-
-        divtxt += f"""<div class="card border-primary mb-3"> <!-- Card Border -->
-                            <div class="card-header"> <!-- Card header -->
-                                <h3>{title}</h3>
-                            </div> <!-- Close card header -->
-                            <div class="card-body border-primary mb-3" {needID}
-                                <div class="container"> <!-- Container -->
-                                    {content}
-                                </div> <!-- Close container -->
-                            </div> <!-- Close card body border -->
-                     </div> <!-- Close card border -->
+        body_id = f' id="{id}"' if id != "" else ""
+        return f"""<section class="ssc-form-group">
+                            <h2 class="ssc-form-group__title">{html.escape(title)}</h2>
+                            <div class="ssc-form-group__body"{body_id}>
+                                {content}
+                            </div>
+                     </section>
                    """
-        return divtxt
 
     def render_seestars(self):
         """
@@ -688,34 +673,26 @@ class _Config:
         """
         ssHTML = ""
         for seestar in self.seestars:
-            ssHTML += f"""<div id="device_div_{seestar["device_num"]}">
-                                <div class="col-sm-4 text-end">
-                                    <label class="form-label">
-                                    <h3>Device number {seestar["device_num"]}</h3>
-                                    </label>
-                                </div>
+            ssHTML += f"""<div id="device_div_{seestar["device_num"]}" class="s-device">
+                                <h3 class="s-device__title">Device {seestar["device_num"]}</h3>
                                 {self.render_text("ss_name", "Name", seestar["name"], required=True)}
                                 {self.render_text("ss_ip_address", "IP Address", seestar["ip_address"], required=True)}
                                 {self.render_checkbox(f"delete_{seestar['device_num']}", "Delete device", False)}
-
                             </div>
 
                         """
 
-        ret = f"""
-                <div class="row mb-3 align-items-center">
-                    {ssHTML}
-                </div>
-                <div class="align-items-center">
-                    <button style="margin:5px;" type="button" class="btn btn-primary" id="add_seestar" onclick="addSeestar()">
-                        Add Seestar Device
+        return f"""
+                {ssHTML}
+                <div class="s-actions s-actions--start">
+                    <button type="button" class="ssc-button" data-kind="secondary" id="add_seestar" onclick="addSeestar()">
+                        Add Seestar device
                     </button>
-                    <button style="margin:5px;" type="button" class="btn btn-primary" id="del_Seestar" onclick="delSeestar()">
-                        Delete selected Seestar(s)
+                    <button type="button" class="ssc-button" data-kind="secondary" id="del_Seestar" onclick="delSeestar()">
+                        Delete selected devices
                     </button>
                 </div>
                 """
-        return ret
 
     def convert_AOT(self, settings):
         seestars = settings["seestars"]

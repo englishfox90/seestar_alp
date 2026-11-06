@@ -1,33 +1,26 @@
-{% extends 'base.html' %}
+{% extends 'ssc/system_page.html' %}
+{% import 'ssc/form.html' as form %}
+{% import 'ssc/ui.html' as ui %}
 
-{% block header %}
-    <div class="page-hero">
-        <div>
-            <h1 class="page-title">{% block title %}System{% endblock %}</h1>
-            <p class="page-subtitle">Background threads and when they last ran</p>
-        </div>
-    </div>
+{% block title %}System{% endblock %}
+
+{% block body %}
+<section class="ssc-form-group">
+  <h2 class="ssc-form-group__title">Background threads</h2>
+  <div class="ssc-group">
+    {% for thread in threads %}
+      {% set last_run = (thread["last_run"]|string).split(".")[0] %}
+      <div class="ssc-row">
+        <span class="ssc-row__label">{{ thread["name"]|e }}{% if last_run != "n/a" %}<span class="ssc-row__sub">Last loop {{ last_run|e }}</span>{% endif %}</span>
+        <span class="ssc-row__value">
+          {%- if thread["running"] is true %}{{ ui.status("ok", "Running") }}
+          {%- elif thread["running"] is false %}{{ ui.status("attention", "Stopped") }}
+          {%- else %}{{ ui.status("neutral", "Not started") }}{% endif -%}
+        </span>
+      </div>
+    {% endfor %}
+  </div>
+</section>
 {% endblock %}
 
-{% block content %}
-
-    <div class="panel-card">
-        <div class="row border-bottom py-1 text-start panel-muted">
-            <div class="col">Thread</div>
-            <div class="col">Running</div>
-            <div class="col">Last loop</div>
-        </div>
-        {% for thread in threads %}
-            <div class="row border-bottom py-2 text-start">
-                <div class="col">{{ thread["name"] }}</div>
-                <div class="col">{{ thread["running"] }}</div>
-                <div class="col">{{ thread["last_run"] }}</div>
-            </div>
-        {% endfor %}
-    </div>
-
-    <footer class="footer-meta">
-        Version: {{ version }} | Last updated: {{ now }}
-    </footer>
-
-{% endblock %}
+{% block version %}Version {{ version }}, updated {{ (now|string).split(".")[0] }}{% endblock %}

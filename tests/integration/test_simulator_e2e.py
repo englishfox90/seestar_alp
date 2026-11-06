@@ -502,6 +502,45 @@ def test_05_htmx_fragment_endpoints(front_sim_bridge):
             assert len(resp.text.strip()) > 0
 
 
+def test_05b_system_pages_on_the_shell(front_sim_bridge):
+    client = front_sim_bridge["client"]
+    for path in [
+        "/1/config",
+        "/1/command",
+        "/1/stats",
+        "/1/guestmode",
+        "/1/support",
+        "/1/platform-rpi",
+    ]:
+        resp = client.simulate_get(path)
+        assert resp.status_code == 200, path
+        assert "ssc-page" in resp.text, path
+        assert "bootstrap" not in resp.text, path
+        assert "Seestar Federation" in resp.text, path
+
+
+def test_05c_commands_event_status_fills_after_a_reload(front_sim_bridge):
+    client = front_sim_bridge["client"]
+    headers = {"HX-Current-URL": "http://localhost/1/command"}
+    for _ in range(2):
+        resp = client.simulate_get(
+            "/1/eventstatus", query_string="action=command&fresh=1", headers=headers
+        )
+        assert resp.status_code == 200
+        assert "Filter wheel" in resp.text
+
+
+def test_05d_command_post_shows_output_on_the_shell(front_sim_bridge):
+    client = front_sim_bridge["client"]
+    resp = client.simulate_post(
+        "/1/command",
+        body="command=get_wheel_state",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert resp.status_code == 200
+    assert 'id="outputAlert"' in resp.text
+
+
 def test_06_live_page_mode_routing(front_sim_bridge):
     client = front_sim_bridge["client"]
     for path in ["/1/live", "/1/live/star", "/1/live/moon", "/1/live/scenery"]:

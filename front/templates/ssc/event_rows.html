@@ -1,0 +1,45 @@
+{# Event status for the Commands page, polled every second. Legacy pages keep eventstatus.html. #}
+{% import 'ssc/ui.html' as ui %}
+{% set names = {"WheelMove": "Filter wheel", "AutoFocus": "Autofocus", "DarkLibrary": "Dark library", "3PPA": "Polar align", "PlateSolve": "Plate solve", "Scheduler": "Scheduler"} %}
+{% set filters = {0: "Dark", 1: "IR cut", 2: "LP"} %}
+
+{% macro event_row(event_name, event_status) -%}
+{%- set state = event_status.state if event_status and event_status.state else "Idle" -%}
+{%- set tone = {"complete": "ok", "fail": "danger", "in progress": "attention", "working": "attention"}.get(state, "neutral") -%}
+{%- set details = [] -%}
+{%- if event_status -%}
+  {%- if event_status.error %}{% set _ = details.append("Error: " ~ event_status.error) %}{% endif -%}
+  {%- if event_name == "3PPA" -%}
+    {%- if event_status.percent %}{% set _ = details.append(event_status.percent ~ "% complete") %}{% endif -%}
+    {%- if event_status.eq_offset_alt and event_status.eq_offset_az -%}
+      {%- set _ = details.append("Alt error " ~ event_status.eq_offset_alt|round(3)) -%}
+      {%- set _ = details.append("Az error " ~ event_status.eq_offset_az|round(3)) -%}
+    {%- endif -%}
+  {%- elif event_name == "AutoFocus" and event_status.position -%}
+    {%- set _ = details.append("Position " ~ event_status.position) -%}
+  {%- elif event_name == "DarkLibrary" and event_status.percent -%}
+    {%- set _ = details.append(event_status.percent|round(2) ~ "% complete") -%}
+  {%- elif event_name == "WheelMove" and event_status.position is defined and event_status.position in filters -%}
+    {%- set _ = details.append("Filter " ~ filters[event_status.position]) -%}
+  {%- elif event_name == "Scheduler" and event_status.cur_scheduler_item -%}
+    {%- set _ = details.append("Action " ~ event_status.cur_scheduler_item.type) -%}
+  {%- endif -%}
+{%- endif -%}
+<div class="ssc-row">
+  <span class="ssc-row__label">{{ names.get(event_name, event_name)|e }}{% if details %}<span class="ssc-row__sub">{{ details|join(", ")|e }}</span>{% endif %}</span>
+  <span class="ssc-row__value">{{ ui.status(tone, state|capitalize) }}</span>
+</div>
+{%- endmacro %}
+
+{% if results and results|length > 0 %}
+  {% if results[0].DeviceID is defined %}
+    {% for device_id, device_events in results|groupby("DeviceID") %}
+      <h3 class="s-device__title s-event-device">Device {{ device_id|e }}</h3>
+      {% for event_name in events %}{{ event_row(event_name, device_events|selectattr("Event", "equalto", event_name)|first) }}{% endfor %}
+    {% endfor %}
+  {% else %}
+    {% for event_name in events %}{{ event_row(event_name, results|selectattr("Event", "equalto", event_name)|first) }}{% endfor %}
+  {% endif %}
+{% else %}
+  <p class="ssc-footnote s-empty">No events yet</p>
+{% endif %}

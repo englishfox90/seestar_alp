@@ -1,54 +1,32 @@
+{% import 'ssc/ui.html' as ui %}
+{% import 'ssc/form.html' as form %}
 {% if online %}
   {% if state %}
     {% if state["guest_mode"] %}
-      <div class="panel-card sys-rows">
-        <h2 class="panel-title mb-2">Clients</h2>
-        {% for client in state["client_list"] %}
-          <div class="stat-row">
-            <div class="stat-key">{{ client }}</div>
-            <div class="stat-value">{% if loop.index0 == state["master_index"] %}Controller{% else %}Guest{% endif %}</div>
-          </div>
-        {% endfor %}
-      </div>
-
-      <div class="panel-card">
-        <div class="action-row d-flex flex-wrap">
-          {% if state["master_index"] == -1 %}
-            {% set claimbtnstate = "" %}
-          {% else %}
-            {% set claimbtnstate = " disabled" %}
-          {% endif %}
-          {% if state["client_master"] %}
-            {% set relbtnstate = "" %}
-          {% else %}
-            {% set relbtnstate = " disabled" %}
-          {% endif %}
-          <form method="post" action="{{ action }}">
-            <input type="hidden" name="command" value="grab_control">
-            <button type="submit" class="btn btn-primary"{{claimbtnstate}}>Claim control</button>
-          </form>
-          <form method="post" action="{{ action }}">
-            <input type="hidden" name="command" value="release_control">
-            <button type="submit" class="btn btn-secondary"{{relbtnstate}}>Release control</button>
-          </form>
+      <section class="ssc-form-group">
+        <h2 class="ssc-form-group__title">Clients</h2>
+        <div class="ssc-group">
+          {% for client in state["client_list"] %}
+            {{ ui.row(client, "Controller" if loop.index0 == state["master_index"] else "Guest") }}
+          {% endfor %}
         </div>
+      </section>
+      <div class="s-actions">
+        <form method="post" action="{{ action }}">
+          <input type="hidden" name="command" value="release_control">
+          <button type="submit" class="ssc-button" data-kind="secondary"{% if not state["client_master"] %} disabled{% endif %}>Release control</button>
+        </form>
+        <form method="post" action="{{ action }}">
+          <input type="hidden" name="command" value="grab_control">
+          <button type="submit" class="ssc-button" data-kind="primary"{% if state["master_index"] != -1 %} disabled{% endif %}>Claim control</button>
+        </form>
       </div>
     {% else %}
-      <div class="panel-card">
-        <p class="mb-0">Guest mode is unavailable</p>
-      </div>
+      {{ ui.notice("neutral", "Guest mode is unavailable") }}
     {% endif %}
   {% else %}
-    <div class="panel-card">
-      <p class="mb-0">You have the Seestar Federation Device selected. Please select an actual telescope from the dropdown.</p>
-    </div>
+    {{ ui.notice("neutral", "You have the Seestar Federation Device selected. Please select an actual telescope from the dropdown.") }}
   {% endif %}
 {% else %}
-  <div class="panel-card">
-    <p class="mb-0">You are currently in offline mode</p>
-  </div>
+  {{ ui.notice("neutral", "You are currently in offline mode") }}
 {% endif %}
-
-<footer class="footer-meta">
-  Version: {{ version }}
-</footer>

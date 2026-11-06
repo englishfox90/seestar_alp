@@ -3115,3 +3115,155 @@ def test_cached_context_is_not_rewritten_by_a_request_prefix(monkeypatch):
     assert out_b["root"] == "/b/1" and out_b["action"] == "/b/1/live"
     assert out_plain["root"] == "/1" and out_plain["action"] == "/1/live"
     assert out_a["root_path"] == "/a" and out_plain["root_path"] == ""
+
+
+# --- System pages on the shell ---
+
+
+def _render_page(template_name, **extra):
+    context = _minimal_context(template_name.split(".")[0])
+    context.update(root_path="", version="test", webui_theme="dark", action="/1/page")
+    context.update(extra)
+    return front_app.fetch_template(template_name).render(**context)
+
+
+@pytest.mark.parametrize(
+    "template_name, extra",
+    [
+        ("config.html", {"config": Config}),
+        ("command.html", {"output": ""}),
+        ("stats.html", {"stats": {"Battery %": 90}}),
+        ("guestmode.html", {"state": {"guest_mode": False}}),
+        ("support.html", {}),
+        ("system.html", {"threads": [], "now": "now"}),
+        ("platform_rpi.html", {"platform": "raspberry_pi", "display": None, "now": "now"}),
+    ],
+)
+def test_system_pages_render_on_the_shell(template_name, extra):
+    html = _render_page(template_name, **extra)
+    assert 'class="ssc-page s-page"' in html
+    assert "bootstrap" not in html
+    # The federation option stays in the device menu on every page.
+    assert "Seestar Federation" in html
+    for legacy in ("panel-card", "page-hero", 'class="btn', "form-control", "text-bg-"):
+        assert legacy not in html, legacy
+
+
+def test_config_shows_help_and_keeps_field_names():
+    html = Config.render_config_html()
+    assert 'class="ssc-field__help"' in html
+    assert 'name="ss_name"' in html
+    assert 'name="uitheme"' in html
+    assert 'type="checkbox" role="switch"' in html
+    assert 'onclick="addSeestar()"' in html
+    assert "col-sm-4" not in html
+
+
+def test_config_escapes_values_in_attributes():
+    html = Config.render_text("field", "Field:", 'a"b<c')
+    assert 'value="a&quot;b&lt;c"' in html
+    assert ">Field<" in html
+
+
+def test_commands_page_keeps_every_form_contract():
+    html = _render_page("command.html", output="done")
+    assert 'id="outputAlert"' in html and "done" in html
+    assert 'value="adjust_mag_declination"' in html
+    assert 'name="fudge_angle"' in html
+    # Flat frames need the sheet, and it can't depend on Bootstrap.
+    assert 'id="flatFrameModal"' in html and "bootstrap.Modal" not in html
+    assert html.count('name="command"') == 9
+
+
+def test_commands_page_hides_empty_output():
+    assert 'id="outputAlert"' not in _render_page("command.html", output={})
+
+
+def test_commands_event_status_first_fill_asks_for_content():
+    html = _render_page("command.html", output="")
+    assert "eventstatus?action=command&amp;fresh=1" in html
+    assert "document.getElementById('eventStatusDiv').open" in html
+
+
+def _event_status(monkeypatch, results, params):
+    monkeypatch.setattr(
+        front_app,
+        "get_context",
+        lambda _tid, _req: _minimal_context("eventstatus", online=True),
+    )
+    monkeypatch.setattr(
+        front_app,
+        "do_action_device",
+        lambda *_a, **_k: {"Value": {"result": results}},
+    )
+    resp = DummyResp()
+    req = DummyHTMXReq(relative_uri="/1/eventstatus", params=params)
+    front_app.EventStatus.on_get(req, resp, telescope_id=1)
+    return resp
+
+
+def test_event_rows_for_commands_say_state_in_words(monkeypatch):
+    front_app.EventStatus._last_render_by_key.clear()
+    results = {
+        "WheelMove": {"Event": "WheelMove", "state": "complete", "position": 0},
+        "DarkLibrary": {"Event": "DarkLibrary", "state": "fail", "error": "busy"},
+    }
+    html = _event_status(monkeypatch, results, {"action": "command"}).text
+    assert "Filter wheel" in html and "Filter Dark" in html
+    assert 'data-tone="danger"' in html and "Error: busy" in html
+    assert "text-bg-" not in html
+
+
+def test_other_pages_keep_the_event_cards(monkeypatch):
+    front_app.EventStatus._last_render_by_key.clear()
+    results = {"WheelMove": {"Event": "WheelMove", "state": "complete"}}
+    html = _event_status(monkeypatch, results, {"action": "goto"}).text
+    assert "text-bg-success" in html
+
+
+def test_event_status_fresh_returns_content_when_unchanged(monkeypatch):
+    front_app.EventStatus._last_render_by_key.clear()
+    results = {"WheelMove": {"Event": "WheelMove", "state": "complete"}}
+    _event_status(monkeypatch, results, {"action": "command"})
+    unchanged = _event_status(monkeypatch, results, {"action": "command"})
+    assert unchanged.status == falcon.HTTP_204
+    fresh = _event_status(monkeypatch, results, {"action": "command", "fresh": "1"})
+    assert "Filter wheel" in fresh.text
+
+
+def test_stats_rows_keep_bars_and_drop_the_storage_one():
+    template = front_app.fetch_template("partials/stats_content.html")
+    html = template.render(
+        online=True,
+        stats={
+            "Free Storage": "120.0 GB",
+            "Battery %": 80,
+            "Wi-Fi Signal": "Unavailable in AP mode.",
+            "Temperature Sensor": 32.939999,
+            "Heater?": False,
+            "Balance Sensor (angle)": 1.5,
+        },
+    )
+    assert html.count('role="progressbar"') == 1
+    assert 'aria-valuenow="80"' in html
+    assert "32.94" in html and "32.939999" not in html
+    assert 'data-open-sheet="bubbleLevelSheet"' in html
+
+
+def test_polled_system_regions_survive_an_empty_reply():
+    for template_name, extra in (
+        ("stats.html", {"stats": {}}),
+        ("guestmode.html", {"state": {"guest_mode": False}}),
+    ):
+        assert "data-keep-on-empty" in _render_page(template_name, **extra)
+    shell_js = (Path(front_app.__file__).parent / "public/ssc/shell.js").read_text()
+    assert "data-keep-on-empty" in shell_js
+
+
+def test_bubble_level_sits_outside_the_polled_stats_region():
+    html = _render_page("stats.html", stats={"Balance Sensor (angle)": 1.5})
+    assert html.index('id="stats-content"') < html.index('id="bubbleLevelSheet"')
+    fragment = front_app.fetch_template("partials/stats_content.html").render(
+        online=True, stats={"Balance Sensor (angle)": 1.5}
+    )
+    assert 'id="bubbleLevelSheet"' not in fragment

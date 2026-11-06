@@ -3665,7 +3665,8 @@ class EventStatus:
         render_template(
             req,
             resp,
-            "eventstatus.html",
+            # Commands is on the shell, which has no Bootstrap for the cards.
+            "ssc/event_rows.html" if action == "command" else "eventstatus.html",
             results=results,
             events=eventlist,
             now=now,
@@ -3681,7 +3682,9 @@ class EventStatus:
         html = resp.text
         with EventStatus._lock:
             last_html = EventStatus._last_render_by_key.get(cache_key)
-            if last_html == html:
+            # A page that has just loaded has nothing on screen to keep, so "fresh"
+            # asks for the content even when it hasn't changed since the last poll.
+            if last_html == html and not req.get_param("fresh"):
                 resp.status = falcon.HTTP_204
                 resp.text = ""
                 return

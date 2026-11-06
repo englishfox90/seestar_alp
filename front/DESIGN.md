@@ -39,7 +39,8 @@ The design language and framework for the whole web UI. The owner approved this 
 - [x] Tonight on the new shell: all states, Night Line with roof history, morning card, image viewer, Stop with confirm
 - [x] Tonight, Plan, Scope and System with a shared sub-navigation, on old and new pages
 - [x] Targets, Automation and Settings on the new shell
-- [x] Schedule, System, Live, Prepare and capture pages restyled on `base.html`
+- [x] Schedule, Live, Prepare and capture pages restyled on `base.html`
+- [x] Config, Commands, Stats, Guest mode, Support, System and Platform on the new shell, as one 640 column like Settings
 - [x] Per-device Auto, Day, Night and Red
 - [x] Phosphor icons and idiomorph
 
@@ -57,6 +58,7 @@ The design language and framework for the whole web UI. The owner approved this 
 
 ## Decision log
 
+- **2026-11-06:** Every System sub-page moves to the shell, overturning "Leave" for Support, Platform and System, because the owner saw them as dated next to Settings. Commands gets event rows; pages still on `base.html` keep the event cards.
 - **2026-11-06:** The Targets sky view marks popular objects from `ssc/sky_catalog.json`, built by `scripts/build_sky_catalog.py`. Marker shape carries the type, because Red has no hues, and each marker has one soft colour so the owner's frames and white labels stay loudest. What a tapped object is shows below the view, not on the image, and its action uses the search result's path. Canvas colours in Red are full red, since the floor would erase the blue frame.
 - **2026-11-06:** Final design review: the language is done. Phone Tonight now puts the Night Line directly under the sentence, because a glance has to show the night. Image corners are 0 everywhere. Schedule and Live stay on Bootstrap unless they earn the move.
 - **2026-11-05:** Keep htmx and server templates. New screens get their own shell without Bootstrap, and legacy pages stay on it.
@@ -229,13 +231,14 @@ html[data-theme="red"] img,html[data-theme="red"] canvas,html[data-theme="red"] 
 | Startup, `do_startup` | T3 | Scope › Prepare | Restyle |
 | Polar align (`pa_refine`) | T4 | Scope › Prepare | Restyle |
 | Settings | T3 | System | Rewrite rows only |
-| Config | T3 | System | Restyle |
-| Commands (+`do_command`) | T3 | System › Advanced | Restyle |
-| Console, System page | T2 | System › Advanced | Leave |
-| Stats | T2 | System | Restyle |
-| Guest Mode | T2 | System | Restyle |
-| Platform | T3 | System | Leave |
-| Support | T2 | System | Leave |
+| Config | T3 | System | On the shell. Fields come from `device/config.py` |
+| Commands (+`do_command`) | T3 | System | On the shell |
+| Console | T2 | System › Advanced | Leave. It has a route but no template |
+| System page | T2 | System | On the shell |
+| Stats | T2 | System | On the shell |
+| Guest Mode | T2 | System | On the shell |
+| Platform | T3 | System | On the shell |
+| Support | T2 | System | On the shell |
 | Event status, telescope list, no telescopes | T2 | System, or empty state | Leave |
 
 I did not render Console, System, Search, Position, Config, Image, Planning, Platform or Support in this pass.
@@ -411,7 +414,7 @@ A ratchet test also records current inline-style counts for legacy pages, and th
 
 - **Rewrite:** Dashboard, Roof, Targets, Home, nav. Settings rows later.
 - **Restyle:** Schedule, Live, mosaics, Goto, Image, Startup, Stats.
-- **Leave alone:** Support, Platform, Console, System, Event status.
+- **Leave alone:** Console, and Event status on the pages still on `base.html`.
 
 **From `design.css`:** keep as the frozen legacy skin. Update its tokens to the new values and allow only bug fixes. Its Bootstrap overrides are not carried into `ssc/`. Delete `base.html` rules only as each page leaves.
 

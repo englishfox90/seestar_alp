@@ -52,6 +52,13 @@
     if (event.key === "Escape") closeMenus(null);
   });
 
+  // A poll that comes back empty must not blank the page.
+  document.addEventListener("htmx:beforeSwap", function (event) {
+    const target = event.detail.target;
+    if (!target || !target.hasAttribute("data-keep-on-empty")) return;
+    if (!(event.detail.xhr.responseText || "").trim()) event.detail.shouldSwap = false;
+  });
+
   // A control can arrive in a swapped fragment.
   document.addEventListener("htmx:afterSettle", syncThemeControls);
 

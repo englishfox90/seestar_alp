@@ -1,21 +1,13 @@
-{% extends 'base.html' %}
+{% extends 'ssc/system_page.html' %}
 
-{% block header %}
-    <div class="page-hero">
-        <div>
-            <h1 class="page-title">{% block title %}Guest Mode{% endblock %}</h1>
-            <p class="page-subtitle">Control ownership and active clients.</p>
-        </div>
-    </div>
-{% endblock %}
+{% block title %}Guest mode{% endblock %}
 
-{% block content %}
-    <link rel="stylesheet" href="{{ root_path }}/public/ssc/settings.css">
-    <div id="guestmode-content"
-         class="no-htmx-fx"
-         hx-get="{{ root }}/guestmode-content"
-         hx-trigger="load, every 15s"
-         hx-swap="innerHTML">
-      {% include 'partials/guestmode_content.html' with context %}
-    </div>
+{% block body %}
+<div id="guestmode-content" class="s-column no-htmx-fx" data-keep-on-empty
+     hx-get="{{ root }}/guestmode-content"
+     hx-trigger="every 15s [!document.hidden]"
+     hx-sync="this:drop"
+     hx-swap="innerHTML">
+  {% include 'partials/guestmode_content.html' with context %}
+</div>
 {% endblock %}

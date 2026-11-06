@@ -121,36 +121,64 @@
 }
 .sch-page .nav-pills .nav-link.active { background: var(--ssc-fill-2); font-weight: var(--ssc-weight-strong); color: var(--ssc-text-1); }
 
-/* ---- System pages on base.html: Config, Commands, Stats, Guest mode ------------------------- */
+/* ---- System pages on the shell: Config, Commands, Stats, Guest mode, Support, System ------- */
 
-.sys-rows .stat-row { display: flex; justify-content: space-between; gap: var(--ssc-space-4); min-height: var(--ssc-touch); align-items: center; }
-.sys-rows .stat-value { text-align: right; }
+.s-auth:not(:has(*)) { display: none; }
+.s-empty { margin: 0; padding: var(--ssc-space-4) var(--ssc-inset) var(--ssc-space-4) 0; }
+.s-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--ssc-space-3); }
+.s-actions--start { justify-content: flex-start; }
+.s-textarea { padding-block: var(--ssc-space-3); resize: vertical; }
+.s-output { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.s-sheet-text { margin: 0; }
+.s-metric { min-width: 0; }
+.s-metric .ssc-bar { width: 120px; margin: var(--ssc-space-2) 0 0 auto; }
+.s-page .ssc-row > .ssc-button { padding: 0; }
 
-/* Config: its markup comes from device/config.py, so the cards are flattened here. */
-.sys-config { display: flex; flex-direction: column; gap: var(--ssc-space-5); }
-.sys-config .card {
-    margin: 0;
-    border: 0;
-    border-radius: var(--ssc-radius-panel);
-    background: var(--ssc-surface);
+.s-device { display: flex; flex-direction: column; gap: var(--ssc-space-5); padding-bottom: var(--ssc-space-5); border-bottom: 1px solid var(--ssc-separator); }
+.s-device__title { margin: 0; font-size: var(--ssc-text-body); font-weight: var(--ssc-weight-strong); }
+.s-event-device { padding-top: var(--ssc-space-4); }
+
+.s-disclosure { display: flex; flex-direction: column; }
+.s-disclosure > summary { cursor: pointer; min-height: var(--ssc-touch); display: flex; align-items: center; gap: var(--ssc-space-2); }
+.s-disclosure > summary::before { content: "\25B8"; }
+.s-disclosure[open] > summary::before { content: "\25BE"; }
+.s-disclosure > summary::-webkit-details-marker { display: none; }
+
+.s-command { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: var(--ssc-space-3); }
+
+/* Bubble level */
+.s-level { display: flex; flex-direction: column; align-items: center; gap: var(--ssc-space-3); }
+.s-level__readout { margin: 0; font-variant-numeric: tabular-nums; }
+#bubble_level {
+    position: relative;
+    width: 300px;
+    height: 300px;
+    border: 2px solid var(--ssc-separator);
+    border-radius: var(--ssc-radius-sheet);
+    background: var(--ssc-canvas);
 }
-.sys-config .card-header { padding: var(--ssc-inset) var(--ssc-inset) 0; border: 0; background: none; }
-.sys-config .card-header h3 { margin: 0; font-size: var(--ssc-text-section); font-weight: var(--ssc-weight-strong); }
-.sys-config .card-body { padding: var(--ssc-inset); border: 0; }
-.sys-config .form-label { margin: 0; color: var(--ssc-text-2); font-size: var(--ssc-text-footnote); }
-.sys-config .form-control,
-.sys-config .form-select { min-height: var(--ssc-control-height); }
-.sys-config__save { position: sticky; bottom: 0; display: flex; justify-content: flex-end; padding: var(--ssc-space-3) 0; background: var(--ssc-canvas); }
-.sys-config__save .btn { min-height: var(--ssc-touch); }
+#bubble_ball {
+    position: absolute;
+    top: 140px;
+    left: 140px;
+    width: 20px;
+    height: 20px;
+    border: 1px solid var(--ssc-text-1);
+    border-radius: var(--ssc-radius-full);
+    background: var(--ssc-green);
+    z-index: 10;
+}
+#bubble_level::after,
+#bubble_level::before {
+    content: "";
+    position: absolute;
+    background: var(--ssc-text-3);
+    border-radius: var(--ssc-radius-bar);
+    pointer-events: none;
+}
+#bubble_level::after { left: 149px; width: 2px; height: 100%; }
+#bubble_level::before { top: 149px; width: 100%; height: 2px; }
 
-/* Commands */
-.sys-event .accordion-button { min-height: var(--ssc-touch); padding-inline: 0; background: none; box-shadow: none; color: var(--ssc-text-1); font-weight: var(--ssc-weight-strong); }
-.sys-event .accordion-body { padding: var(--ssc-space-3) 0 0; color: var(--ssc-text-2); }
-.command-groups .row > div { padding-block: var(--ssc-space-3); border-top: 1px solid var(--ssc-separator); }
-.command-groups form { display: flex; flex-direction: column; gap: var(--ssc-space-2); }
-.command-groups .form-label { margin: 0; color: var(--ssc-text-2); font-size: var(--ssc-text-footnote); }
-.command-groups select,
-.command-groups .command-exec-btn,
-#magdecform .btn,
-#magdecform .form-control { min-height: var(--ssc-touch); }
-#guestmode-content .btn { min-height: var(--ssc-touch); }
+/* Support: the rows are links, and nothing else on them says so. */
+.s-page .ssc-link-row .ssc-row__label { color: var(--ssc-accent); }
+.s-page .ssc-link-row .ssc-row__sub { color: var(--ssc-text-2); }

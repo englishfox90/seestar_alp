@@ -1,22 +1,17 @@
-{% extends 'base.html' %}
+{% extends 'ssc/system_page.html' %}
 
-{% block header %}
-    <div class="page-hero">
-        <div>
-            <h1 class="page-title">{% block title %}Stats{% endblock %}</h1>
-            <p class="page-subtitle">Current telescope measurements and health metrics.</p>
-        </div>
-        <div class="panel-muted">Auto refresh every 15s</div>
-    </div>
-{% endblock %}
+{% block title %}Stats{% endblock %}
 
-{% block content %}
-    <link rel="stylesheet" href="{{ root_path }}/public/ssc/settings.css">
-    <div id="stats-content"
-         class="no-htmx-fx"
-         hx-get="{{ root }}/stats-content"
-         hx-trigger="load, every 15s"
-         hx-swap="innerHTML">
-        {% include 'partials/stats_content.html' with context %}
-    </div>
+{% block head_note %}<p class="ssc-footnote s-firmware">Refreshes every 15 s</p>{% endblock %}
+
+{% block body %}
+<div id="stats-content" class="no-htmx-fx" data-keep-on-empty
+     hx-get="{{ root }}/stats-content"
+     hx-trigger="every 15s [!document.hidden]"
+     hx-sync="this:drop"
+     hx-swap="innerHTML">
+  {% include 'partials/stats_content.html' with context %}
+</div>
+{# Outside the polled region, so a refresh can't close it. #}
+{% include 'partials/bubble_level.html' with context %}
 {% endblock %}

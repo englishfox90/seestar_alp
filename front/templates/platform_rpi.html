@@ -1,54 +1,35 @@
-{% extends 'base.html' %}
+{% extends 'ssc/system_page.html' %}
+{% import 'ssc/form.html' as form %}
+{% import 'ssc/ui.html' as ui %}
 
-{% block header %}
-  <div class="page-hero">
-    <div>
-      <h1 class="page-title">{% block title %}Raspberry Pi System{% endblock %}</h1>
-      <p class="page-subtitle">Restart services or power off the Raspberry Pi</p>
+{% block title %}Raspberry Pi{% endblock %}
+
+{% macro action_form(command, label, action) -%}
+<form method="post" action="{{ action }}">
+  <input type="hidden" name="command" value="{{ command }}">
+  <button type="submit" class="ssc-button" data-kind="secondary">{{ label|e }}</button>
+</form>
+{%- endmacro %}
+
+{% block body %}
+{% if platform != "raspberry_pi" %}
+  {{ ui.notice("neutral", "This page is not available for your platform") }}
+{% elif display != None %}
+  {{ ui.notice("neutral", display) }}
+{% else %}
+  {% call form.group("Services") %}
+    <div class="s-actions s-actions--start">
+      {{ action_form("restart_alp", "Restart SSC/Alp service", action) }}
+      {{ action_form("restart_indi", "Restart INDI service", action) }}
     </div>
-  </div>
+  {% endcall %}
+  {% call form.group("Power") %}
+    <div class="s-actions s-actions--start">
+      {{ action_form("reboot_rpi", "Reboot Raspberry Pi", action) }}
+      {{ action_form("shutdown_rpi", "Shut down Raspberry Pi", action) }}
+    </div>
+  {% endcall %}
+{% endif %}
 {% endblock %}
 
-{% block content %}
-  {% if platform != "raspberry_pi" %}
-    <div class="panel-card">
-      <p class="mb-0">This page is not available for your platform</p>
-    </div>
-  {% elif display != None %}
-    <div class="panel-card">
-      <p class="mb-0">{{ display }}</p>
-    </div>
-  {% else %}
-    <div class="row g-3 mb-3">
-      <div class="col-12 col-md-6 col-lg-3">
-        <form method="post" action="{{ action }}">
-          <input type="hidden" name="command" value="restart_alp">
-          <button type="submit" class="btn btn-secondary w-100">Restart SSC/Alp service</button>
-        </form>
-      </div>
-      <div class="col-12 col-md-6 col-lg-3">
-        <form method="post" action="{{ action }}">
-          <input type="hidden" name="command" value="restart_indi">
-          <button type="submit" class="btn btn-secondary w-100">Restart INDI service</button>
-        </form>
-      </div>
-      <div class="col-12 col-md-6 col-lg-3">
-        <form method="post" action="{{ action }}">
-          <input type="hidden" name="command" value="reboot_rpi">
-          <button type="submit" class="btn btn-secondary w-100">Reboot Rpi</button>
-        </form>
-      </div>
-      <div class="col-12 col-md-6 col-lg-3">
-        <form method="post" action="{{ action }}">
-          <input type="hidden" name="command" value="shutdown_rpi">
-          <button type="submit" class="btn btn-secondary w-100">Shutdown Rpi</button>
-        </form>
-      </div>
-    </div>
-  {% endif %}
-
-  <footer class="footer-meta">
-    Version: {{ version }} | Last updated: {{ now }}
-  </footer>
-
-{% endblock %}
+{% block version %}Version {{ version }}, updated {{ (now|string).split(".")[0] }}{% endblock %}

@@ -1,195 +1,55 @@
-<style>
-    /* Dialog colours come from the theme, so it reads in Day, Night and Red. */
-    .ssc-level-dialog {
-        --bs-modal-width: 400px;
-    }
-
-    .ssc-level-content {
-        background: var(--ssc-raised);
-        color: var(--ssc-text-1);
-    }
-
-    .ssc-level-content .modal-header {
-        border-bottom-color: var(--ssc-separator);
-    }
-
-    .ssc-level-content .btn-close {
-        width: var(--ssc-touch);
-        height: var(--ssc-touch);
-        padding: 0;
-        margin: 0 0 0 auto;
-        background-size: 1rem;
-    }
-
-    .ssc-level-body {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: var(--ssc-space-5);
-    }
-
-    .bubble-level-gap {
-        display: inline-block;
-        width: var(--ssc-space-6);
-    }
-
-    #bubble_level {
-        position: relative;
-        width: 300px;
-        height: 300px;
-        border: 2px solid var(--ssc-separator);
-        border-radius: 14px;
-        background: var(--ssc-canvas);
-    }
-
-    #bubble_ball {
-        position: absolute;
-        top: 140px;
-        left: 140px;
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        background: var(--ssc-green);
-        border: 1px solid var(--ssc-text-1);
-        z-index: 10;
-    }
-
-    #bubble_level::after,
-    #bubble_level::before {
-        content: "";
-        position: absolute;
-        background: var(--ssc-text-3);
-        border-radius: 2px;
-        pointer-events: none;
-    }
-
-    #bubble_level::after {
-        left: 149px;
-        width: 2px;
-        height: 100%;
-    }
-
-    #bubble_level::before {
-        top: 149px;
-        width: 100%;
-        height: 2px;
-    }
-
-    .bubble-level-readout {
-        margin-top: 0.75rem;
-        font-size: var(--ssc-text-body);
-        opacity: 0.9;
-    }
-
-    .bubble-level-readout .value {
-        font-variant-numeric: tabular-nums;
-        font-weight: var(--ssc-weight-strong);
-    }
-</style>
-
-<button type="button" class="btn btn-secondary js-bubble-level-open">
-    Show bubble level
-</button>
-
-<!-- Based on https://developer.mozilla.org/en-US/docs/Web/API/Device_orientation_events/Detecting_device_orientation -->
+{# The level on a native sheet. It reads the sensor only while the sheet is open.
+   Based on https://developer.mozilla.org/en-US/docs/Web/API/Device_orientation_events/Detecting_device_orientation #}
+{% import 'ssc/ui.html' as ui %}
+{% call ui.sheet("bubbleLevelSheet", "Bubble level") %}
+  <div class="s-level">
+    <div id="bubble_level"><div id="bubble_ball"></div></div>
+    <p class="s-level__readout">X: <span id="bubble_output_x">0.00</span> Y: <span id="bubble_output_y">0.00</span></p>
+  </div>
+  <button type="button" class="ssc-button" data-kind="secondary" data-tall data-close-sheet>Close</button>
+{% endcall %}
 <script>
-(() => {
-    const MODAL_ID = "bubbleLevelModal";
-    let bubbleModal = document.getElementById(MODAL_ID);
+(function () {
+  const sheet = document.getElementById("bubbleLevelSheet");
+  const ball = document.getElementById("bubble_ball");
+  const garden = document.getElementById("bubble_level");
+  const outputX = document.getElementById("bubble_output_x");
+  const outputY = document.getElementById("bubble_output_y");
+  let timer = null;
 
-    if (!bubbleModal) {
-        document.body.insertAdjacentHTML(
-            "beforeend",
-            `
-            <div class="modal fade" id="bubbleLevelModal" tabindex="-1"
-                 aria-labelledby="bubbleLevelModalLabel" aria-hidden="true">
-                <div class="modal-dialog modal-dialog-centered ssc-level-dialog" role="document">
-                    <div class="modal-content ssc-level-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="bubbleLevelModalLabel">Bubble level</h5>
-                            <button type="button" class="btn-close"
-                                    data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body ssc-level-body">
-                            <div id="bubble_level">
-                                <div id="bubble_ball"></div>
-                            </div>
-                            <div class="bubble-level-readout">
-                                X: <span id="bubble_output_x" class="value">0.00</span>
-                                <span class="bubble-level-gap"></span>
-                                Y: <span id="bubble_output_y" class="value">0.00</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            `
-        );
-        bubbleModal = document.getElementById(MODAL_ID);
+  function update(x, y) {
+    const maxX = garden.clientWidth - ball.clientWidth;
+    const maxY = garden.clientHeight - ball.clientHeight;
+    x = x * 100;
+    y = y * 100;
+    outputX.textContent = x.toFixed(2);
+    outputY.textContent = y.toFixed(2);
+    x += 100;
+    y += 100;
+    ball.style.top = `${(maxY * x) / 180 - 10}px`;
+    ball.style.left = `${(maxX * y) / 180 - 10}px`;
+  }
+
+  async function read() {
+    try {
+      const response = await fetch("{{ root_path }}/getbalancesensor");
+      const data = await response.json();
+      update(data["x"], data["y"]);
+    } catch (error) {
+      console.error("Error fetching data:", error);
     }
+  }
 
-    const bubbleBall = bubbleModal.querySelector("#bubble_ball");
-    const bubbleGarden = bubbleModal.querySelector("#bubble_level");
-    const bubbleOutputX = bubbleModal.querySelector("#bubble_output_x");
-    const bubbleOutputY = bubbleModal.querySelector("#bubble_output_y");
-
-    function updateBubbleOrientation(x, y) {
-        const maxX = bubbleGarden.clientWidth - bubbleBall.clientWidth;
-        const maxY = bubbleGarden.clientHeight - bubbleBall.clientHeight;
-
-        x = x * 100;
-        y = y * 100;
-
-        bubbleOutputX.textContent = x.toFixed(2);
-        bubbleOutputY.textContent = y.toFixed(2);
-
-        x += 100;
-        y += 100;
-
-        bubbleBall.style.top = `${(maxY * x) / 180 - 10}px`;
-        bubbleBall.style.left = `${(maxX * y) / 180 - 10}px`;
+  // The button is in a polled region, so listen above it.
+  document.addEventListener("click", function (event) {
+    if (timer === null && event.target.closest('[data-open-sheet="bubbleLevelSheet"]')) {
+      read();
+      timer = setInterval(read, 250);
     }
-
-    async function getBalanceSensor() {
-        try {
-            const baseURL = `${window.location.protocol}//${window.location.hostname}${window.location.port ? ":" + window.location.port : ""}`;
-            const response = await fetch(baseURL + "{{ root_path }}/getbalancesensor");
-            const data = await response.json();
-            updateBubbleOrientation(data["x"], data["y"]);
-        } catch (error) {
-            console.error("Error fetching data:", error);
-        }
-    }
-
-    function startBubbleLevel() {
-        if (bubbleModal.dataset.polling === "true") {
-            return;
-        }
-        bubbleModal.dataset.polling = "true";
-        getBalanceSensor();
-        bubbleModal._bubbleInterval = setInterval(getBalanceSensor, 250);
-    }
-
-    function stopBubbleLevel() {
-        if (bubbleModal._bubbleInterval) {
-            clearInterval(bubbleModal._bubbleInterval);
-            bubbleModal._bubbleInterval = null;
-        }
-        bubbleModal.dataset.polling = "false";
-    }
-
-    if (bubbleModal.dataset.initialized !== "true") {
-        bubbleModal.addEventListener("shown.bs.modal", startBubbleLevel);
-        bubbleModal.addEventListener("hidden.bs.modal", stopBubbleLevel);
-        bubbleModal.dataset.initialized = "true";
-        bubbleModal.dataset.polling = "false";
-    }
-
-    document.querySelectorAll(".js-bubble-level-open").forEach((btn) => {
-        btn.onclick = () => {
-            const modalInstance = bootstrap.Modal.getOrCreateInstance(bubbleModal);
-            modalInstance.show();
-        };
-    });
+  });
+  sheet.addEventListener("close", function () {
+    clearInterval(timer);
+    timer = null;
+  });
 })();
 </script>

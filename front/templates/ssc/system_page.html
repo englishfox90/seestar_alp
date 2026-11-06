@@ -1,0 +1,19 @@
+{# The System pages: one 640 column of grouped panels, as on Settings. A page sets title and
+   body, and imports the macros it uses. Spec: front/DESIGN.md, template T3. #}
+{% extends 'ssc/shell.html' %}
+{% import 'ssc/ui.html' as ui %}
+
+{% block content %}
+<main class="ssc-page s-page">
+  <header class="s-head">
+    <h1 class="ssc-title">{{ self.title() }}</h1>
+    {% block head_note %}{% endblock %}
+  </header>
+  <div class="s-column">
+    {% for message in ((flashed_messages or []) + (messages or []))|unique %}{{ ui.notice("neutral", message) }}{% endfor %}
+    <div id="s-auth" class="s-auth no-htmx-fx" hx-get="{{ root }}/tonight/auth" hx-trigger="every 15s [!document.hidden]" hx-sync="this:drop" hx-swap="innerHTML">{% if needs_auth_warning %}{% include 'ssc/auth_notice.html' %}{% endif %}</div>
+    {% block body %}{% endblock %}
+    <p class="ssc-footnote s-version">{% block version %}Version {{ version }}{% endblock %}</p>
+  </div>
+</main>
+{% endblock %}

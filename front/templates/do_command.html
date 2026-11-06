@@ -1,207 +1,130 @@
-<div class="panel-card">
-	<h2 class="panel-title mb-3">Output</h2>
-	<div id="outputAlert" class="alert alert-secondary mb-0" role="alert">
-		{% if output %}
-			{{ output }}
-		{% else %}
-			<!-- Output will be placed here if any -->
-		{% endif %}
-	</div>
-</div>
+{% import 'ssc/ui.html' as ui %}
+{% import 'ssc/form.html' as form %}
 
-<div class="panel-card">
-	<h2 class="panel-title mb-3">Magnetic declination adjustment</h2>
-	<div class="row g-3">
-		<div id="magdecform" class="col-12 col-md-6">
-			<form method="post" action="{{ action }}" class="bordered-form">
-				<input type="hidden" name="command" value="adjust_mag_declination">
-				<div class="mb-3">
-					<input type="checkbox" name="adjust_mag_dec" id="adjust_mag_dec" class="form-check-input">
-					<label class="form-check-label" for="adjust_mag_dec">Adjust mag dec</label>
-				</div>
-				<div class="mb-3">
-					<label for="fudge_angle" class="form-label">Add offset</label>
-					<input type="text" class="form-control" id="fudge_angle" name="fudge_angle">
-				</div>
-				<button type="submit" class="btn btn-secondary">Execute</button>
-			</form>
-		</div>
-		<div id="magdec" class="col-12 col-md-6">
-			<p>Selecting the check box will adjust your magnetic declination to the value appropriate to your current location.  The 'Add Offset' can be used to adjust this further.</p>
-			<p><b>Please note, you should not use this unless you've recently performed a compass calibration at your present location.</b></p>
-		</div>
-	</div>
-</div>
+{% macro command_form(select_id, label, action, form_id="") -%}
+<form method="post" action="{{ action }}" class="s-command"{% if form_id %} id="{{ form_id }}"{% endif %}>
+  <div class="ssc-field">
+    <label class="ssc-field__label" for="{{ select_id }}">{{ label|e }}</label>
+    <select class="ssc-input" id="{{ select_id }}" name="command">
+      <option value="" selected>Select an option</option>
+      {{ caller() }}
+    </select>
+  </div>
+  <button type="submit" class="ssc-button" data-kind="secondary">Execute</button>
+</form>
+{%- endmacro %}
 
-<div class="panel-card command-groups">
-	<h2 class="panel-title mb-3">Commands</h2>
-	<div class="row g-3">
-		<div class="col-12 col-md-6 col-lg-4">
-			<form method="post" action="{{ action }}">
-				<label class="form-label" for="dropdown1">Startup / shutdown</label>
-				<select id="dropdown1" name="command" class="form-select app-select">
-					<option value="" disable selected>Select an Option</option>
-					<option value="scope_move_to_horizon">Scope Move to Horizon</option>
-					<option value="scope_park">Scope Park</option>
-					<option value="pi_reboot">Scope Reboot</option>
-					<option value="pi_shutdown">Scope Shutdown</option>
-					<option value="grab_control">Grab scope control</option>
-					<option value="release_control">Release scope control</option>
-				</select>
-				<button type="submit" class="btn btn-secondary command-exec-btn">Execute</button>
-			</form>
-		</div>
-		<div class="col-12 col-md-6 col-lg-4">
-			<form method="post" action="{{ action }}">
-				<label class="form-label" for="dropdown3">Autofocus</label>
-				<select id="dropdown3" name="command" class="form-select app-select">
-					<option value="" disable selected>Select an Option</option>
-					<option value="start_auto_focus">Start AutoFocus</option>
-					<option value="stop_auto_focus">Stop AutoFocus</option>
-					<option value="get_focuser_position">Get Current Focuser Position</option>
-					<option value="get_last_focuser_position">Get Last Focuser Position</option>
-				</select>
-				<button type="submit" class="btn btn-secondary command-exec-btn">Execute</button>
-			</form>
-		</div>
-		<div class="col-12 col-md-6 col-lg-4">
-			<form method="post" action="{{ action }}" id="calibrationForm">
-				<label class="form-label" for="dropdown4">Calibration frame generation</label>
-				<select id="dropdown4" name="command" class="form-select app-select">
-					<option value="" disable selected>Select an Option</option>
-					<optgroup label="Dark Frames">
-					<option value="start_create_dark">Create Dark Frames</option>
-					</optgroup>
-					<optgroup label="Hot Pixel Correction">
-					<option value="start_create_hpc">Hot Pixel Correction</option>
-					</optgroup>
-					<optgroup label="Flat Frames">
-					<option value="start_create_calib_frame">Create Flat Frames</option>
-					</optgroup>
-				</select>
-				<button type="submit" class="btn btn-secondary command-exec-btn">Execute</button>
-			</form>
-		</div>
-		<div class="col-12 col-md-6 col-lg-4">
-			<form method="post" action="{{ action }}">
-				<label class="form-label" for="dropdown5">Filter</label>
-				<select id="dropdown5" name="command" class="form-select app-select">
-					<option value="" disable selected>Select an Option</option>
-					<option value="set_wheel_position_LP">Use LP Filter</option>
-					<option value="set_wheel_position_IR_Cut">Use IR Cut Filter</option>
-					<option value="set_wheel_position_Dark">Use Dark Filter</option>
-					<option value="get_wheel_state">Get Wheel State</option>
-					<option value="get_wheel_setting">Get Wheel Setting</option>
-				</select>
-				<button type="submit" class="btn btn-secondary command-exec-btn">Execute</button>
-			</form>
-		</div>
-		<div class="col-12 col-md-6 col-lg-4">
-			<form method="post" action="{{ action }}">
-				<label class="form-label" for="dropdown6">Plate solve</label>
-				<select id="dropdown6" name="command" class="form-select app-select">
-					<option value="" disable selected>Select an Option</option>
-					<option value="start_solve">Start Plate Solve</option>
-					<option value="get_solve_result">Get Current Plate Solve Result</option>
-					<option value="get_last_solve_result">Get Last Plate Solve Result</option>
-				</select>
-				<button type="submit" class="btn btn-secondary command-exec-btn">Execute</button>
-			</form>
-		</div>
-		<div class="col-12 col-md-6 col-lg-4">
-			<form method="post" action="{{ action }}">
-				<label class="form-label" for="dropdown8">Imaging</label>
-				<select id="dropdown8" name="command" class="form-select app-select">
-					<option value="" disable selected>Select an Option</option>
-					<option value="iscope_start_stack">Start Imaging</option>
-					<option value="iscope_stop_view">Stop Imaging</option>
-					<option value="get_view_state">Get View State</option>
-					<option value="get_stack_info">Get Stack Info</option>
-					<option value="get_img_name_field">Get Image Name Field</option>
-					<option value="get_image_save_path">Get Image Save Path</option>
-					<option value="get_camera_state">Get Camera State</option>
-					<option value="get_camera_exp_and_bin">Get Camera Exposure & Bin</option>
-				</select>
-				<button type="submit" class="btn btn-secondary command-exec-btn">Execute</button>
-			</form>
-		</div>
-		<div class="col-12 col-md-6 col-lg-4">
-			<form method="post" action="{{ action }}">
-				<label class="form-label" for="dropdown7">Get information / settings</label>
-				<select id="dropdown7" name="command" class="form-select app-select">
-					<option value="" disable selected>Select an Option</option>
-					<option value="get_device_state">Get Device State</option>
-					<option value="iscope_get_app_state">Get App State</option>
-					<option value="get_event_state">Get Event State</option>
-					<option value="pi_get_ap">Get AP (WiFi) Info</option>
-					<option value="get_app_setting">Get App Setting</option>
-					<option value="get_controls">Get Controls</option>
-					<option value="get_disk_volume">Get Disk Volume</option>
-					<option value="get_setting">Get Settings</option>
-					<option value="get_test_setting">Get Test Settings</option>
-					<option value="get_user_location">Get User Location</option>
-					<option value="scope_get_equ_coord">Get Equatorial Coordinate</option>
-					<option value="scope_get_horiz_coord">Get Horizon Coordinates</option>
-					<option value="scope_get_ra_dec">Get RA/Dec</option>
-				</select>
-				<button type="submit" class="btn btn-secondary command-exec-btn">Execute</button>
-			</form>
-		</div>
-		<div class="col-12 col-md-6 col-lg-4">
-			<form method="post" action="{{ action }}">
-				<label class="form-label" for="dropdown9">Set mount mode</label>
-				<select id="dropdown9" name="command" class="form-select app-select">
-					<option value="" disable selected>Select an Option</option>
-					<option value="set_eq_mode">Equatorial</option>
-					<option value="set_alt_az_mode">Alt Azimuth</option>
-				</select>
-				<button type="submit" class="btn btn-secondary command-exec-btn">Execute</button>
-			</form>
-		</div>
-	</div>
-</div>
+{% if output %}
+  {% call form.group("Output") %}<div id="outputAlert" class="s-output" role="status">{{ output|e }}</div>{% endcall %}
+{% endif %}
+
+{% call form.group("Commands") %}
+  {% call command_form("dropdown1", "Startup and shutdown", action) %}
+    <option value="scope_move_to_horizon">Scope Move to Horizon</option>
+    <option value="scope_park">Scope Park</option>
+    <option value="pi_reboot">Scope Reboot</option>
+    <option value="pi_shutdown">Scope Shutdown</option>
+    <option value="grab_control">Grab scope control</option>
+    <option value="release_control">Release scope control</option>
+  {% endcall %}
+  {% call command_form("dropdown3", "Autofocus", action) %}
+    <option value="start_auto_focus">Start AutoFocus</option>
+    <option value="stop_auto_focus">Stop AutoFocus</option>
+    <option value="get_focuser_position">Get Current Focuser Position</option>
+    <option value="get_last_focuser_position">Get Last Focuser Position</option>
+  {% endcall %}
+  {% call command_form("dropdown4", "Calibration frames", action, "calibrationForm") %}
+    <optgroup label="Dark Frames">
+      <option value="start_create_dark">Create Dark Frames</option>
+    </optgroup>
+    <optgroup label="Hot Pixel Correction">
+      <option value="start_create_hpc">Hot Pixel Correction</option>
+    </optgroup>
+    <optgroup label="Flat Frames">
+      <option value="start_create_calib_frame">Create Flat Frames</option>
+    </optgroup>
+  {% endcall %}
+  {% call command_form("dropdown5", "Filter", action) %}
+    <option value="set_wheel_position_LP">Use LP Filter</option>
+    <option value="set_wheel_position_IR_Cut">Use IR Cut Filter</option>
+    <option value="set_wheel_position_Dark">Use Dark Filter</option>
+    <option value="get_wheel_state">Get Wheel State</option>
+    <option value="get_wheel_setting">Get Wheel Setting</option>
+  {% endcall %}
+  {% call command_form("dropdown6", "Plate solve", action) %}
+    <option value="start_solve">Start Plate Solve</option>
+    <option value="get_solve_result">Get Current Plate Solve Result</option>
+    <option value="get_last_solve_result">Get Last Plate Solve Result</option>
+  {% endcall %}
+  {% call command_form("dropdown8", "Imaging", action) %}
+    <option value="iscope_start_stack">Start Imaging</option>
+    <option value="iscope_stop_view">Stop Imaging</option>
+    <option value="get_view_state">Get View State</option>
+    <option value="get_stack_info">Get Stack Info</option>
+    <option value="get_img_name_field">Get Image Name Field</option>
+    <option value="get_image_save_path">Get Image Save Path</option>
+    <option value="get_camera_state">Get Camera State</option>
+    <option value="get_camera_exp_and_bin">Get Camera Exposure &amp; Bin</option>
+  {% endcall %}
+  {% call command_form("dropdown7", "Information and settings", action) %}
+    <option value="get_device_state">Get Device State</option>
+    <option value="iscope_get_app_state">Get App State</option>
+    <option value="get_event_state">Get Event State</option>
+    <option value="pi_get_ap">Get AP (WiFi) Info</option>
+    <option value="get_app_setting">Get App Setting</option>
+    <option value="get_controls">Get Controls</option>
+    <option value="get_disk_volume">Get Disk Volume</option>
+    <option value="get_setting">Get Settings</option>
+    <option value="get_test_setting">Get Test Settings</option>
+    <option value="get_user_location">Get User Location</option>
+    <option value="scope_get_equ_coord">Get Equatorial Coordinate</option>
+    <option value="scope_get_horiz_coord">Get Horizon Coordinates</option>
+    <option value="scope_get_ra_dec">Get RA/Dec</option>
+  {% endcall %}
+  {% call command_form("dropdown9", "Mount mode", action) %}
+    <option value="set_eq_mode">Equatorial</option>
+    <option value="set_alt_az_mode">Alt Azimuth</option>
+  {% endcall %}
+{% endcall %}
+
+{% call form.group("Magnetic declination") %}
+  <form id="magdecform" method="post" action="{{ action }}" class="s-form">
+    <input type="hidden" name="command" value="adjust_mag_declination">
+    {{ form.toggle("Adjust mag dec", "adjust_mag_dec", "adjust_mag_dec", help="Sets your magnetic declination to the value for your current location.") }}
+    {{ form.field("Add offset", "fudge_angle", "fudge_angle", help="Adjusts the declination further.") }}
+    {{ ui.notice("attention", "Use this only if you've recently calibrated the compass at your present location.") }}
+    <div class="s-actions"><button type="submit" class="ssc-button" data-kind="secondary">Execute</button></div>
+  </form>
+{% endcall %}
+
+{% call ui.sheet("flatFrameModal", "Create flat frames") %}
+  <p class="s-sheet-text">Make sure your Seestar is open and pointing at a white light source.</p>
+  <button type="button" id="confirmFlatFrame" class="ssc-button" data-kind="primary" data-tall>Create flat frames</button>
+  <button type="button" class="ssc-button" data-kind="secondary" data-tall data-close-sheet>Cancel</button>
+{% endcall %}
 
 <script>
-  const form = document.getElementById('calibrationForm');
-  const dropdown = document.getElementById('dropdown4');
-  let shouldSubmit = false;
+(function () {
+  const form = document.getElementById("calibrationForm");
+  const dropdown = document.getElementById("dropdown4");
+  const sheet = document.getElementById("flatFrameModal");
+  let confirmed = false;
 
-  form.addEventListener('submit', function (e) {
-    if (shouldSubmit) {
-      // allow normal submission after confirmation
-      shouldSubmit = false;
+  form.addEventListener("submit", function (event) {
+    if (confirmed) {
+      confirmed = false;
       return;
     }
-
-    if (dropdown.value === 'start_create_calib_frame') {
-      e.preventDefault();
-      const modal = new bootstrap.Modal(document.getElementById('flatFrameModal'));
-      modal.show();
+    if (dropdown.value === "start_create_calib_frame") {
+      event.preventDefault();
+      sheet.showModal();
     }
   });
 
-  document.getElementById('confirmFlatFrame').addEventListener('click', function () {
-    shouldSubmit = true;
-    const modal = bootstrap.Modal.getInstance(document.getElementById('flatFrameModal'));
-    modal.hide();
-    form.requestSubmit(); // submit the form programmatically
+  document.getElementById("confirmFlatFrame").addEventListener("click", function () {
+    confirmed = true;
+    sheet.close();
+    form.requestSubmit();
   });
+})();
 </script>
-
-<div class="modal fade" id="flatFrameModal" tabindex="-1" aria-labelledby="flatFrameModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="flatFrameModalLabel">Confirm Flat Frame Generation</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        Please ensure that your Seestar is open and pointing at a white light source.
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" id="confirmFlatFrame" class="btn btn-primary">Confirm</button>
-      </div>
-    </div>
-  </div>
-</div>

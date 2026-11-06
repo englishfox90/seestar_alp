@@ -18,7 +18,6 @@ INLINE_STYLE_BASELINE = {
     "partials/framed_mosaic_planning.html": 1,
     "partials/home_content.html": 4,
     "partials/mosaic_order_diagram.html": 1,
-    "partials/stats_content.html": 4,
     "ssc/shell.html": 1,
     "ssc/ui.html": 5,
 }

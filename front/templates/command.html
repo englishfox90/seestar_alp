@@ -1,60 +1,22 @@
-{% extends 'base.html' %}
+{% extends 'ssc/system_page.html' %}
+{% import 'ssc/ui.html' as ui %}
 
-{% block header %}
-    <div class="page-hero">
-        <div>
-            <h1 class="page-title">{% block title %}Commands{% endblock %}</h1>
-            <p class="page-subtitle">Send commands directly to the telescope</p>
-        </div>
-    </div>
+{% block title %}Commands{% endblock %}
+
+{% block body %}
+{% if online %}
+  <details id="eventStatusDiv" class="s-disclosure" open>
+    <summary class="ssc-form-group__title">Event status</summary>
+    <div id="eventStatusContent" class="ssc-group no-htmx-fx"
+         hx-get="{{ root }}/eventstatus?action=command"
+         hx-trigger="every 1s [!document.hidden &amp;&amp; document.getElementById('eventStatusDiv').open]"
+         hx-sync="this:drop"
+         hx-swap="innerHTML"></div>
+    {# The polls answer 204 when nothing changed, so the first fill has to ask for the content. #}
+    <div class="no-htmx-fx" hx-get="{{ root }}/eventstatus?action=command&amp;fresh=1" hx-trigger="load" hx-target="#eventStatusContent" hx-swap="innerHTML"></div>
+  </details>
+  {% include 'do_command.html' with context %}
+{% else %}
+  {{ ui.notice("neutral", "You are currently in offline mode") }}
+{% endif %}
 {% endblock %}
-
-{% block content %}
-	<link rel="stylesheet" href="{{ root_path }}/public/ssc/settings.css">
-	{% if online %}
-		<div class="panel-card sys-event">
-			<div class="acordion" id="eventStatusAccordion">
-				<div class="accordion-item">
-					<h2 class="accordion-header" id="headingOne">
-						<button class="accordion-button" type="button"
-								data-bs-toggle="collapse"
-								data-bs-target="#eventStatusDiv"
-								aria-expanded="true"
-								aria-controls="eventStatusDiv">
-							Event status
-						</button>
-					</h2>
-				</div>
-			</div>
-			<div id="eventStatusDiv" class="accordion-collapse collapse show"
-				 aria-labelledby="headingOne"
-				 data-bs-parent="#eventStatusAccordion">
-				<div class="accordion-body no-htmx-fx" id="eventStatusContent"
-					 hx-get="{{ root }}/eventstatus?action=command"
-					 hx-trigger="load, every 1s"
-					 hx-swap="innerHTML">
-					Loading event status...
-				</div>
-			</div>
-		</div>
-		<h2 class="panel-title mb-3">Select a command to execute</h2>
-		{% include 'do_command.html' with context %}
-
-		<script>
-			const confirm = {{ confirm|tojson }};
-		</script>
-
-	{% else %}
-		<div class="panel-card">
-			<p class="mb-0">You are currently in offline mode</p>
-		</div>
-	{% endif %}
-	<footer class="footer-meta">
-		Version: {{ version }}
-	</footer>
-{% endblock %}
-
-{% block scripts %}
-	<script src="{{ root_path }}/public/command.js"></script>
-{% endblock %}
-
