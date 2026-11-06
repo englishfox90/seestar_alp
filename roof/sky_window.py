@@ -15,6 +15,8 @@ from roof.planner import night_times
 from roof.sun import night_key
 
 STEP_S = 900
+# Sky that can't stay above the limit this long isn't worth planning on.
+MIN_USABLE_HOURS = 1.0
 MAX_DAYS = 366
 
 
@@ -49,6 +51,8 @@ def sky_window(days: int, clock, now: float | None = None, settings=None) -> dic
         "night": key,
         "lat": settings.lat,
         "floor": settings.min_target_alt_deg,
+        "min_hours": MIN_USABLE_HOURS,
+        "step_minutes": STEP_S // 60,
         "horizon": None,
         "steps": [],
     }

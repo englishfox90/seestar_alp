@@ -62,7 +62,7 @@
   }
 
   function isOut(entry) {
-    return Boolean(win && win.steps.length && reachOn() && reachOf(entry).first === null);
+    return Boolean(win && win.steps.length && reachOn() && !reachOf(entry).usable);
   }
 
   function reachText(entry) {
@@ -75,6 +75,9 @@
     }
     const from = win.steps[found.first].at;
     const to = win.steps[found.last].at;
+    if (!found.usable) {
+      return `Only ${found.minutes} minutes above ${floor} in the dark, from ${from} to ${to}. Peak ${Math.round(found.peak)}°`;
+    }
     return `Above ${floor} from ${from} to ${to}, peak ${Math.round(found.peak)}°`;
   }
 
@@ -163,8 +166,8 @@
     // Where the sky is out of reach whatever the date.
     const limit = -(90 - win.floor - win.lat);
     note.textContent =
-      `Dark ${first} to ${last} on the night of ${win.night}. Shaded sky stays below ${win.floor}° ` +
-      `all that time. South of Dec ${limit.toFixed(1)}° never rises that high from here.`;
+      `Dark ${first} to ${last} on the night of ${win.night}. Shaded sky has less than an hour ` +
+      `above ${win.floor}° in the dark. South of Dec ${limit.toFixed(1)}° never rises that high from here.`;
   }
 
   function loadReach(days) {
@@ -334,6 +337,7 @@
   }
 
   function showAll() {
+    field("target-sky-frame-reach").textContent = "";
     current.target = null;
     current.ra = null;
     current.dec = null;

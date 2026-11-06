@@ -122,3 +122,47 @@ def test_shading_covers_the_far_south_and_spares_the_imaged_sky():
     assert holds(100, -80)
     assert not holds(349, 60)  # SH2-157 was imaged this very night
     assert not holds(84, -5)  # M 42
+
+
+def _fake_window(hours):
+    """Sidereal time running through the dark for this many hours, in 15 minute steps."""
+    steps = [{"lst": 12 * 15 + i * 3.75, "at": f"t{i}"} for i in range(int(hours * 4) + 1)]
+    return {"lat": 31.5, "floor": 20.0, "horizon": None, "steps": steps, "min_hours": 1.0, "step_minutes": 15}
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="needs node")
+def test_an_hour_above_the_limit_is_usable_and_less_is_not():
+    # Hours of darkness either side of an object crossing the 20 degree line.
+    win = _fake_window(4)
+    # Dec -30 at this site: climbs through 20 degrees only near its peak of 28.5.
+    long_up = _node(f"r.reach({json.dumps(win)}, 210, -30)")
+    assert long_up["usable"] is True and long_up["minutes"] >= 60
+    # Dec -38.2: peaks at 20.3, so clears the limit for under an hour.
+    brief = _node(f"r.reach({json.dumps(win)}, 210, -38.2)")
+    assert brief["first"] is not None and brief["usable"] is False and brief["minutes"] < 60
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="needs node")
+def test_the_shading_agrees_with_the_hour_rule():
+    win = json.dumps(_fake_window(4))
+    assert _node(f"r.outOfReach({win}, 4).cells.length") > 0
+    # A brief visitor is shaded, though it does touch the limit.
+    margin_brief = _node(f"r.reach({win}, 210, -38.2)")
+    assert margin_brief["first"] is not None
+    cells = _node(f"r.outOfReach({win}, 4)")["cells"]
+    assert any(
+        min(p[0] for p in c) <= 210 < max(p[0] for p in c) and min(p[1] for p in c) <= -38.2 < max(p[1] for p in c)
+        for c in cells
+    )
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="needs node")
+def test_a_night_shorter_than_an_hour_has_nothing_usable():
+    win = json.dumps(_fake_window(0.5))
+    assert _node(f"r.reach({win}, 210, 30)")["usable"] is False
+    assert _node(f"r.outOfReach({win}, 4).lines.length") == 0
+
+
+def test_the_window_says_what_counts_as_usable():
+    win = _window()
+    assert win["min_hours"] == 1.0 and win["step_minutes"] == 15

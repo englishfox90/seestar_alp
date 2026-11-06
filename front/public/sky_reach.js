@@ -2,6 +2,19 @@
 // No page, so a test can run it next to the planner's own answer.
 (function (root) {
   const RAD = Math.PI / 180;
+  // Until the server says otherwise, as a page can be newer than a running server.
+  const DEFAULT_MIN_HOURS = 1;
+  const DEFAULT_STEP_MINUTES = 15;
+
+  function stepMinutes(win) {
+    return win.step_minutes || DEFAULT_STEP_MINUTES;
+  }
+
+  // How many steps in a row make the minimum usable time. 5 steps span 4 gaps: an hour.
+  function stepsNeeded(win) {
+    const hours = win.min_hours === undefined ? DEFAULT_MIN_HOURS : win.min_hours;
+    return Math.ceil((hours * 60) / stepMinutes(win)) + 1;
+  }
 
   function altAz(lat, ra, dec, lst) {
     const h = (lst - ra) * RAD;
@@ -30,29 +43,51 @@
     return 90 - Math.abs(lat - dec);
   }
 
-  // first and last are indexes into win.steps, or null if it's never high enough.
+  // The longest unbroken time above the limit. first and last are indexes into win.steps, or
+  // null if it's never high enough. usable: it lasts the minimum time, so worth planning on.
   function reach(win, ra, dec) {
     let first = null;
     let last = null;
+    let runStart = null;
     let peak = -90;
     win.steps.forEach(function (step, index) {
       const place = altAz(win.lat, ra, dec, step.lst);
       if (place.alt > peak) peak = place.alt;
       if (place.alt >= floorAt(win, place.az)) {
-        if (first === null) first = index;
-        last = index;
+        if (runStart === null) runStart = index;
+        if (first === null || index - runStart > last - first) {
+          first = runStart;
+          last = index;
+        }
+      } else {
+        runStart = null;
       }
     });
-    return { first: first, last: last, peak: peak, never: ceiling(win.lat, dec) < win.floor };
+    const minutes = first === null ? 0 : (last - first) * stepMinutes(win);
+    return {
+      first: first,
+      last: last,
+      peak: peak,
+      minutes: minutes,
+      usable: first !== null && last - first + 1 >= stepsNeeded(win),
+      never: ceiling(win.lat, dec) < win.floor,
+    };
   }
 
-  // How far above its limit a point gets in the dark, in degrees. Negative is out of reach.
+  // How far above its limit a point stays for the minimum usable time, in degrees: the best
+  // hour's lowest point, so it's smooth across the sky. Negative is out of reach.
   function margin(win, ra, dec) {
-    let best = -Infinity;
-    win.steps.forEach(function (step) {
+    const heights = win.steps.map(function (step) {
       const place = altAz(win.lat, ra, dec, step.lst);
-      best = Math.max(best, place.alt - floorAt(win, place.az));
+      return place.alt - floorAt(win, place.az);
     });
+    const needed = stepsNeeded(win);
+    let best = -Infinity;
+    for (let start = 0; start + needed <= heights.length; start++) {
+      let lowest = Infinity;
+      for (let i = start; i < start + needed; i++) lowest = Math.min(lowest, heights[i]);
+      best = Math.max(best, lowest);
+    }
     return best;
   }
 
