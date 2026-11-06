@@ -114,7 +114,11 @@ def get_platform():
 
 
 base_url = "http://" + get_listening_ip() + ":" + str(Config.port)
-simbad_url = "https://simbad.cds.unistra.fr/simbad/sim-id?output.format=ASCII&obj.bibsel=off&Ident="
+# Tried in order: the CDS host stopped answering from the observatory on 2026-11-05.
+simbad_urls = (
+    "https://simbad.cds.unistra.fr/simbad/sim-id?output.format=ASCII&obj.bibsel=off&Ident=",
+    "https://simbad.harvard.edu/simbad/sim-id?output.format=ASCII&obj.bibsel=off&Ident=",
+)
 messages: list[str] = []
 online = None
 client_master = True
@@ -4939,9 +4943,14 @@ class SimbadResource:
         objName = urllib.parse.quote_plus(
             req.get_param("name")
         )  # get the name to lookup from the request
-        try:
-            r = requests.get(simbad_url + objName, timeout=10)
-        except Exception:
+        r = None
+        for simbad_url in simbad_urls:
+            try:
+                r = requests.get(simbad_url + objName, timeout=5)
+                break
+            except Exception:
+                continue
+        if r is None:
             resp.status = falcon.HTTP_500
             resp.content_type = "application/text"
             resp.text = "Request had communications error."

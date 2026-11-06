@@ -123,6 +123,27 @@ def _context() -> dict:
     return context
 
 
+def _sky_targets() -> list[dict]:
+    return [
+        {
+            "id": t.id,
+            "name": t.name,
+            "ra": t.ra * 15.0,
+            "dec": t.dec,
+            "scale": t.mosaic_scale,
+            "angle": t.mosaic_angle,
+        }
+        for t in _queue().all()
+    ]
+
+
+def _scope_model(front, telescope_id) -> str:
+    try:
+        return front.planner_model_key(front.get_device_model(telescope_id)) or ""
+    except Exception:
+        return ""  # the page falls back to this rig's S30 Pro
+
+
 class QueuePage:
     @staticmethod
     def on_get(req, resp, telescope_id=1):
@@ -139,6 +160,8 @@ class QueuePage:
                 for name in schedule_tools.list_schedules()
                 if name != schedule_tools.PLAN_FILE
             ],
+            sky_targets=_sky_targets(),
+            sky_model=_scope_model(front, telescope_id),
             page_root=f"/{telescope_id}/targets",
             roof_url=f"/{telescope_id}/roof",
             **_context(),
@@ -175,6 +198,18 @@ def _coordinate(text, unit, low, high) -> float:
     return round(float(value), 4)
 
 
+def _form_framing(form) -> tuple[float, float]:
+    """Scale and angle from a form, in the ranges the firmware accepts."""
+    try:
+        scale = float(form.get("mosaic_scale", 1.0) or 1.0)
+        angle = float(form.get("mosaic_angle", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        raise falcon.HTTPBadRequest(description="scale and angle must be numbers") from None
+    if not 1.0 <= scale <= 4.0 or not -90.0 <= angle <= 90.0:
+        raise falcon.HTTPBadRequest(description="scale or angle is out of range")
+    return round(scale, 2), round(angle, 2)
+
+
 class QueueAdd(_QueueAction):
     @staticmethod
     def act(req):
@@ -182,16 +217,19 @@ class QueueAdd(_QueueAction):
         name = " ".join(str(form.get("name", "")).split())
         if not name:
             raise falcon.HTTPBadRequest(description="a target needs a name")
+        scale, angle = _form_framing(form)
+        fields = target_queue.with_framing(
+            {
+                "name": name,
+                "ra": _coordinate(form.get("ra"), "hour", 0.0, 24.0),
+                "dec": _coordinate(form.get("dec"), "deg", -90.0, 90.0),
+                "lp_filter": form.get("lp_filter") == "on",
+                "source": "added by hand",
+            },
+            {"scale": scale, "angle": angle},
+        )
         added, _ = _queue().merge(
-            [
-                {
-                    "name": name,
-                    "ra": _coordinate(form.get("ra"), "hour", 0.0, 24.0),
-                    "dec": _coordinate(form.get("dec"), "deg", -90.0, 90.0),
-                    "lp_filter": form.get("lp_filter") == "on",
-                    "source": "added by hand",
-                }
-            ],
+            target_queue.apply_estimates([fields], _estimates()),
             goal_hours=_positive(form, "goal_hours", target_queue.DEFAULT_GOAL_HOURS),
         )
         return f"Added {name}." if added else f"{name} was already listed; updated its coordinates."
@@ -263,6 +301,38 @@ class QueueUpdate(_QueueAction):
         return "Saved."
 
 
+class QueueFraming(_QueueAction):
+    """Save a listed target's position and framing, keeping its goal and progress."""
+
+    @staticmethod
+    def act(req):
+        form = _form(req)
+        target = next((t for t in _queue().all() if t.id == form.get("id")), None)
+        if target is None:
+            return "That target is no longer listed."
+        scale, angle = _form_framing(form)
+        changes = {
+            "ra": _coordinate(form.get("ra"), "hour", 0.0, 24.0),
+            "dec": _coordinate(form.get("dec"), "deg", -90.0, 90.0),
+            "mosaic_scale": scale,
+            "mosaic_angle": angle,
+        }
+        if target.mosaic_star_map_angle is not None:
+            # The app's star map angle tracks the framing angle at a fixed offset.
+            changes["mosaic_star_map_angle"] = target.mosaic_star_map_angle + angle - target.mosaic_angle
+        estimate = _estimates().hours(scale) if scale > 1.0 else None
+        if scale > 1.0 and not target.framed:
+            changes["min_session_hours"] = estimate or target_queue.DEFAULT_FRAMED_SESSION_HOURS
+        _queue().update(target.id, **changes)
+        minimum = changes.get("min_session_hours", target.min_session_hours)
+        if _short_of_estimate(minimum, estimate):
+            return (
+                f"Saved {target.name}, but its {minimum:g} h shortest run is under "
+                f"the scope's {estimate:g} h estimate for this framing."
+            )
+        return f"Saved {target.name}'s framing. It applies from the next start."
+
+
 class QueueRemove(_QueueAction):
     @staticmethod
     def act(req):
@@ -275,5 +345,6 @@ PAGES = {
     "targets/add": QueueAdd,
     "targets/import": QueueImport,
     "targets/update": QueueUpdate,
+    "targets/framing": QueueFraming,
     "targets/remove": QueueRemove,
 }

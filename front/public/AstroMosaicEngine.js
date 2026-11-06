@@ -2002,7 +2002,7 @@ function StartAstroMosaicViewerEngine(
         }
         if (A) {
             document.getElementById(engine_panels.aladin_panel).innerHTML = "";
-            aladin = A.aladin('#'+engine_panels.aladin_panel, {survey: "P/DSS2/color", fov:aladin_fov, target:aladin_target,
+            aladin = A.aladin('#'+engine_panels.aladin_panel, {survey: window.ALADIN_SURVEY, fov:aladin_fov, target:aladin_target,
                             showReticle:false, showZoomControl:false, showFullscreenControl:fullscreen, 
                             showLayersControl:layers, showGotoControl:false, 
                             showControl: false, cooFrame: "J2000", showFrame: false,
@@ -2671,7 +2671,7 @@ function StartAstroMosaicViewerEngine(
                     document.getElementById(panel_id).style.height = "300px";
                 }
                 if (A) {
-                    engine_data.aladinarr[i] = A.aladin('#'+panel_id, {survey: "P/DSS2/color", fov:engine_params.am_fov_x, target: aladin_target_str,
+                    engine_data.aladinarr[i] = A.aladin('#'+panel_id, {survey: window.ALADIN_SURVEY, fov:engine_params.am_fov_x, target: aladin_target_str,
                                                 showReticle:false, showZoomControl:false, showFullscreenControl:false, 
                                                 showLayersControl:false, showGotoControl:false,
                                                 showControl: false, cooFrame: "J2000", showFrame: false});
@@ -2726,7 +2726,7 @@ function StartAstroMosaicViewerEngine(
                 document.getElementById(panel_id).style.height = "300px";
             }
             if (A) {
-                engine_data.aladinarr[i] = A.aladin('#'+panel_id, {survey: "P/DSS2/color", fov:engine_params.am_fov_x, target: radec,
+                engine_data.aladinarr[i] = A.aladin('#'+panel_id, {survey: window.ALADIN_SURVEY, fov:engine_params.am_fov_x, target: radec,
                                             showReticle:false, showZoomControl:false, showFullscreenControl:false, 
                                             showLayersControl:false, showGotoControl:false,
                                             showControl: false, cooFrame: "J2000", showFrame: false});

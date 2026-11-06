@@ -13,27 +13,26 @@
   let currentRaDeg = 10.68;
   let currentDecDeg = 41.27;
   let isDragging = false;
+  let dragOffset = [0, 0];
 
   function rectangleCorners(raDeg, decDeg, scale, angleDeg) {
-    const halfW = (baseFovXDeg() * scale) / 2.0;
-    const halfH = (baseFovYDeg() * scale) / 2.0;
-    const angleRad = (angleDeg * Math.PI) / 180.0;
-    const cosA = Math.cos(angleRad);
-    const sinA = Math.sin(angleRad);
-    const cosDec = Math.cos((decDeg * Math.PI) / 180.0) || 1e-6;
+    return window.FrameGeometry.corners(raDeg, decDeg, baseFovXDeg(), baseFovYDeg(), scale, angleDeg);
+  }
 
-    const localCorners = [
-      [-halfW, -halfH],
-      [halfW, -halfH],
-      [halfW, halfH],
-      [-halfW, halfH],
-    ];
-
-    return localCorners.map(([x, y]) => {
-      const rotatedX = x * cosA - y * sinA;
-      const rotatedY = x * sinA + y * cosA;
-      return [raDeg + rotatedX / cosDec, decDeg + rotatedY];
-    });
+  // Zoom so the whole frame shows. It can be far larger than a default view.
+  function fitFrame() {
+    if (!aladin) return;
+    const rect = aladinDiv.getBoundingClientRect();
+    aladin.setFoV(
+      window.FrameGeometry.fitFov(
+        baseFovXDeg(),
+        baseFovYDeg(),
+        parseFloat(document.getElementById("framed_mosaic_scale").value),
+        parseFloat(document.getElementById("framed_mosaic_angle").value),
+        rect.width,
+        rect.height
+      )
+    );
   }
 
   // Inverse of rectangleCorners' rotation: is (raDeg, decDeg) inside the
@@ -81,16 +80,73 @@
     overlay.add(A.polygon(corners, { color: "#f59e0b", lineWidth: 2 }));
   };
 
+  function setSearchStatus(text) {
+    const status = document.getElementById("framed_mosaic_search_status");
+    if (status) status.textContent = text;
+  }
+
+  function showAt(raDeg, decDeg) {
+    currentRaDeg = raDeg;
+    currentDecDeg = decDeg;
+    aladin.gotoRaDec(raDeg, decDeg);
+    update_framed_mosaic();
+    fitFrame();
+    setSearchStatus("");
+  }
+
+  // Decimal degrees "313.1 30.7", or sexagesimal "20 52 24 +30 42 00".
+  function parseCoordinates(text) {
+    const parts = text.trim().split(/[\s,:]+/).map(Number);
+    if (parts.some(Number.isNaN)) return null;
+    if (parts.length === 2) return parts;
+    if (parts.length === 6) {
+      const sign = text.trim().split(/[\s,:]+/)[3].startsWith("-") ? -1 : 1;
+      return [
+        (parts[0] + parts[1] / 60 + parts[2] / 3600) * 15,
+        sign * (Math.abs(parts[3]) + parts[4] / 60 + parts[5] / 3600),
+      ];
+    }
+    return null;
+  }
+
+  // Names go through ALP's own lookup, because the browser can't reach Aladin's
+  // name resolver while the CDS hosts are down.
+  function findTarget(text) {
+    const coordinates = parseCoordinates(text);
+    if (coordinates) {
+      showAt(coordinates[0], coordinates[1]);
+      return;
+    }
+    setSearchStatus("Looking up...");
+    const root = window.location.pathname.replace(/(\/\d+)?\/planning.*$/, "");
+    fetch(`${root}/simbad?name=${encodeURIComponent(text)}`)
+      .then(function (reply) {
+        if (!reply.ok) throw new Error(String(reply.status));
+        return reply.text();
+      })
+      .then(function (found) {
+        // "20h52m24.0s +30d42m0.0s on": the last word is ALP's LP filter advice.
+        const position = found.trim().split(/\s+/).slice(0, 2).join(" ");
+        const parsed = parseCoordinates(position.replace(/[hmsd]/g, " "));
+        if (!parsed) throw new Error("unreadable coordinates");
+        showAt(parsed[0], parsed[1]);
+      })
+      .catch(function () {
+        setSearchStatus(`Could not find "${text}". You can enter coordinates instead, such as 20 52 24 +30 42 00.`);
+      });
+  }
+
   window.init_framed_mosaic_aladin = function init_framed_mosaic_aladin() {
     aladin = A.aladin("#framed-mosaic-aladin-div", {
-      survey: "P/DSS2/color",
+      survey: window.ALADIN_SURVEY,
       fov: 2,
-      target: document.getElementById("framed_mosaic_search_text").value,
+      target: `${currentRaDeg} ${currentDecDeg}`,
     });
     aladinDiv = document.getElementById("framed-mosaic-aladin-div");
     overlay = A.graphicOverlay({ color: "#f59e0b", lineWidth: 2 });
     aladin.addOverlay(overlay);
     update_framed_mosaic();
+    fitFrame();
     setUpFrameDrag();
   };
 
@@ -103,14 +159,15 @@
     aladinDiv.addEventListener(
       "mousedown",
       function (evt) {
+        // Aladin's own buttons sit over the sky, often inside the frame.
+        if (evt.target.closest("button, select, input, a, .aladin-box")) return;
         const [ra, dec] = eventToRaDec(evt);
         if (!isInsideFrame(ra, dec)) return;
         isDragging = true;
+        // Keep the frame where it is under the cursor rather than jumping to it.
+        dragOffset = [currentRaDeg - ra, currentDecDeg - dec];
         evt.stopPropagation();
         evt.preventDefault();
-        currentRaDeg = ra;
-        currentDecDeg = dec;
-        update_framed_mosaic();
       },
       true
     );
@@ -124,8 +181,8 @@
     document.addEventListener("mousemove", function (evt) {
       if (!isDragging) return;
       const [ra, dec] = eventToRaDec(evt);
-      currentRaDeg = ra;
-      currentDecDeg = dec;
+      currentRaDeg = ra + dragOffset[0];
+      currentDecDeg = dec + dragOffset[1];
       update_framed_mosaic();
     });
 
@@ -135,9 +192,14 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    if (typeof A !== "undefined" && A.init) {
-      A.init.then(init_framed_mosaic_aladin);
-    }
+    window.aladinReady.then(init_framed_mosaic_aladin).catch(function (e) {
+      setSearchStatus("The sky view could not load.");
+      console.log(e);
+    });
+
+    ["framed_mosaic_scale", "framed_mosaic_angle"].forEach(function (id) {
+      document.getElementById(id).addEventListener("input", fitFrame);
+    });
 
     // Redraw the frame when the planner's Seestar model changes.
     const modelSelect = document.getElementById("seestar");
@@ -153,20 +215,7 @@
         // success/error callbacks, not a bare callback function -- passing
         // a bare function silently registers nothing, so the view pans but
         // our overlay never redraws at the new position.
-        aladin.gotoObject(
-          document.getElementById("framed_mosaic_search_text").value,
-          {
-            success: function () {
-              const [ra, dec] = aladin.getRaDec();
-              currentRaDeg = ra;
-              currentDecDeg = dec;
-              update_framed_mosaic();
-            },
-            error: function () {
-              // Object not found -- leave the overlay at its last position.
-            },
-          }
-        );
+        findTarget(document.getElementById("framed_mosaic_search_text").value);
       });
     }
 

@@ -64,7 +64,7 @@ def _coerce(data: dict) -> Target | None:
         return None
 
 
-def _with_framing(target: dict, mosaic: dict | None) -> dict:
+def with_framing(target: dict, mosaic: dict | None) -> dict:
     if mosaic and float(mosaic.get("scale", 1.0)) > 1.0:
         target["mosaic_scale"] = round(float(mosaic["scale"]), 2)
         target["mosaic_angle"] = schedule_tools.norm_angle(mosaic.get("angle", 0.0))
@@ -82,7 +82,7 @@ def targets_from_plan(plan: dict, source: str = "Seestar plan") -> list[dict]:
         if len(ra_dec) != 2 or list(ra_dec) == [-1.0, -1.0]:
             continue
         found.append(
-            _with_framing(
+            with_framing(
                 {
                     "name": entry.get("alias_name") or entry.get("target_name") or "target",
                     "ra": round(float(ra_dec[0]), 4),
@@ -126,7 +126,7 @@ def targets_from_schedule(items: list, source: str) -> list[dict]:
                 "angle": params.get("mosaic_angle", 0.0),
                 "star_map_angle": params.get("mosaic_star_map_angle"),
             }
-        found.append(_with_framing(target, framing))
+        found.append(with_framing(target, framing))
     return found
 
 

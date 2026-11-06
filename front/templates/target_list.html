@@ -46,6 +46,7 @@
           </select></td>
           <td>{{ row.finish or "Beyond 2 weeks" }}</td>
           <td class="text-nowrap">
+            {% if sky_targets is defined %}<button class="btn btn-sm btn-outline-primary" type="button" data-sky-show="{{ t.id }}">Show</button>{% endif %}
             <form id="target-{{ t.id }}" method="post" action="{{ root_path }}{{ page_root }}/update" class="d-inline">
               <input type="hidden" name="id" value="{{ t.id }}">
               <button class="btn btn-sm btn-primary" type="submit">Save</button>
@@ -62,6 +63,8 @@
     <div class="form-text">Progress counts frames actually stacked. A framed run only counts once it reaches its shortest run, because a shorter one leaves uneven coverage.</div>
     {% endif %}
   </div></div>
+
+  {% if sky_targets is defined %}{% include 'partials/target_sky.html' %}{% endif %}
 
   {% if tonight %}
   <div class="card mb-3"><div class="card-header">{{ tonight.label }}, if it started now</div><div class="card-body">
