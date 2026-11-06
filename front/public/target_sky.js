@@ -37,15 +37,14 @@
 
   // ---- what's out of reach on the chosen night ----------------------------------------
   const REACH_KEY = "ssc-sky-reach";
-  const SHADE_SIZE_DEG = 5;
+  const SHADE_SIZE_DEG = 4;
   // A pale wash, because the sky is already black: darkening it wouldn't show. The same in
   // Red, where the floor turns it red. The dashed edge says where the limit is.
   const SHADE_FILL = "rgba(150, 150, 160, 0.28)";
   const SHADE_EDGE = "rgba(255, 255, 255, 0.75)";
   let shadeLayer = null;
   let shadePending = false;
-  let shadeBands = [];
-  let shadeCells = new Set();
+  let shape = { cells: [], lines: [] };
   let win = null;
   let reachCache = new Map();
 
@@ -105,49 +104,46 @@
     const ctx = canvas.getContext("2d");
     ctx.scale(ratio, ratio);
     ctx.fillStyle = SHADE_FILL;
-    const isCellOut = (ra, dec) => shadeCells.has(`${ra},${dec}`);
-    const edges = new Path2D();
-    // In a whole-sky view, a cell this wide has wrapped around the edge of the projection.
-    // Zoomed in, a cell can simply be wider than the view.
+    // In a whole-sky view, a shape this wide has wrapped around the edge of the projection.
+    // Zoomed in, one can simply be wider than the view.
     const wrapping = aladin.getFov()[0] > 100;
     const tooWide = Math.max(box.width, box.height) / 3;
+    const place = ([ra, dec]) => aladin.world2pix(((ra % 360) + 360) % 360, dec);
     ctx.beginPath();
-    shadeBands.forEach(function (band) {
-      for (let ra = band.raStart; ra < band.raEnd; ra += SHADE_SIZE_DEG) {
-        const corners = [
-          aladin.world2pix(ra, band.dec),
-          aladin.world2pix(ra + SHADE_SIZE_DEG, band.dec),
-          aladin.world2pix(ra + SHADE_SIZE_DEG, band.dec + SHADE_SIZE_DEG),
-          aladin.world2pix(ra, band.dec + SHADE_SIZE_DEG),
-        ];
-        if (corners.some((c) => !c)) continue;
+    shape.cells.forEach(function (cell) {
+      const corners = cell.map(place);
+      if (corners.some((c) => !c)) return;
+      if (wrapping) {
         const xs = corners.map((c) => c[0]);
         const ys = corners.map((c) => c[1]);
-        if (wrapping && (Math.max(...xs) - Math.min(...xs) > tooWide || Math.max(...ys) - Math.min(...ys) > tooWide)) continue;
-        ctx.moveTo(corners[0][0], corners[0][1]);
-        for (let i = 1; i < 4; i++) ctx.lineTo(corners[i][0], corners[i][1]);
-        ctx.closePath();
-        // An edge is drawn only where the next cell over is in reach.
-        const next = (360 + ra + SHADE_SIZE_DEG) % 360;
-        const last = (360 + ra - SHADE_SIZE_DEG) % 360;
-        const neighbours = [
-          [corners[0], corners[1], band.dec - SHADE_SIZE_DEG >= -90 && !isCellOut(ra, band.dec - SHADE_SIZE_DEG)],
-          [corners[1], corners[2], !isCellOut(next, band.dec)],
-          [corners[2], corners[3], band.dec + SHADE_SIZE_DEG < 90 && !isCellOut(ra, band.dec + SHADE_SIZE_DEG)],
-          [corners[3], corners[0], !isCellOut(last, band.dec)],
-        ];
-        neighbours.forEach(function ([a, b, inReach]) {
-          if (!inReach) return;
-          edges.moveTo(a[0], a[1]);
-          edges.lineTo(b[0], b[1]);
-        });
+        if (Math.max(...xs) - Math.min(...xs) > tooWide || Math.max(...ys) - Math.min(...ys) > tooWide) return;
       }
+      ctx.moveTo(corners[0][0], corners[0][1]);
+      for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i][0], corners[i][1]);
+      ctx.closePath();
     });
     ctx.fill("nonzero");
+
+    ctx.beginPath();
+    shape.lines.forEach(function (line) {
+      let last = null;
+      line.forEach(function (point) {
+        const here = place(point);
+        const jump = here && last && wrapping && Math.hypot(here[0] - last[0], here[1] - last[1]) > tooWide;
+        if (!here) {
+          last = null;
+          return;
+        }
+        if (last && !jump) ctx.lineTo(here[0], here[1]);
+        else ctx.moveTo(here[0], here[1]);
+        last = here;
+      });
+    });
     ctx.strokeStyle = SHADE_EDGE;
     ctx.lineWidth = 1.25;
-    ctx.setLineDash([5, 4]);
-    ctx.stroke(edges);
+    ctx.lineJoin = "round";
+    ctx.setLineDash([6, 5]);
+    ctx.stroke();
   }
 
   function drawShade() {
@@ -181,11 +177,7 @@
         if (!data.known) return;
         win = data;
         reachCache = new Map();
-        shadeBands = win.steps.length ? window.SkyReach.outOfReach(win, SHADE_SIZE_DEG) : [];
-        shadeCells = new Set();
-        shadeBands.forEach(function (band) {
-          for (let ra = band.raStart; ra < band.raEnd; ra += SHADE_SIZE_DEG) shadeCells.add(`${ra},${band.dec}`);
-        });
+        shape = win.steps.length ? window.SkyReach.outOfReach(win, SHADE_SIZE_DEG) : { cells: [], lines: [] };
         field("target-sky-reach").hidden = false;
         showReachNote();
         drawShade();

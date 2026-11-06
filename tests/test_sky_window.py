@@ -98,8 +98,27 @@ def test_reach_tells_the_south_from_the_rest():
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="needs node")
+def test_the_limit_is_a_smooth_line_not_the_grid():
+    win = json.dumps(_window())
+    shape = _node(f"r.outOfReach({win}, 4)")
+    assert shape["lines"], "there is an edge to draw"
+    points = [point for line in shape["lines"] for point in line]
+    off_grid = [p for p in points if p[0] % 4 and (p[1] + 90) % 4]
+    # A crossing sits on one grid line, and lands between the others. Blocks would land on both.
+    assert all(not (p[0] % 4) or not ((p[1] + 90) % 4) for p in points) and not off_grid
+    assert any((p[0] % 4) > 0.01 for p in points) and any(((p[1] + 90) % 4) > 0.01 for p in points)
+    # Segments that touch are joined, so a dashed line runs along it evenly.
+    assert max(len(line) for line in shape["lines"]) > 30
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="needs node")
 def test_shading_covers_the_far_south_and_spares_the_imaged_sky():
     win = json.dumps(_window())
-    bands = _node(f"r.outOfReach({win}, 5)")
-    assert any(b["dec"] == -80 and b["raStart"] == 0 and b["raEnd"] == 360 for b in bands)
-    assert not any(b["dec"] <= 60 < b["dec"] + 5 and b["raStart"] <= 349 < b["raEnd"] for b in bands)
+    cells = _node(f"r.outOfReach({win}, 4)")["cells"]
+
+    def holds(ra, dec):
+        return any(min(p[0] for p in c) <= ra < max(p[0] for p in c) and min(p[1] for p in c) <= dec < max(p[1] for p in c) for c in cells)
+
+    assert holds(100, -80)
+    assert not holds(349, 60)  # SH2-157 was imaged this very night
+    assert not holds(84, -5)  # M 42
