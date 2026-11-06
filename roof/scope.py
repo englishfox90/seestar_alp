@@ -26,6 +26,11 @@ class ScopeState:
     plan_state: str = ""
     mosaic_scale: float | None = None
     busy: bool = False  # a start-up or scheduler thread is still alive
+    view_target: str = ""  # what the firmware says it's stacking
+    stacked: int = 0
+    dropped: int = 0
+    exposure_s: float = 0.0
+    stack_lapse_s: float = 0.0
 
 
 def _failed(res) -> str | None:
@@ -83,8 +88,15 @@ class RealScope:
         app_state = self._rpc(dev, "iscope_get_app_state")
         view = app_state.get("View") or {}
         plan = app_state.get("ViewPlan") or {}
+        stack = view.get("Stack") if isinstance(view.get("Stack"), dict) else {}
+        exposure = stack.get("Exposure") if isinstance(stack.get("Exposure"), dict) else {}
         return replace(
             state,
+            view_target=str(view.get("target_name", "")),
+            stacked=int(stack.get("stacked_frame") or 0),
+            dropped=int(stack.get("dropped_frame") or 0),
+            exposure_s=float(exposure.get("exp_ms") or 0) / 1000,
+            stack_lapse_s=float(stack.get("lapse_ms") or 0) / 1000,
             view_state=str(view.get("state", "")),
             view_stage=str(view.get("stage", "")),
             plan_state=str(plan.get("state", "")),

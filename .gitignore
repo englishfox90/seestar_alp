@@ -6,6 +6,9 @@
 __pycache__
 device/__pycache__
 device/config.toml
+device/roof_targets.json
+device/roof_sessions.json
+schedule/target_list_plan.json
 device/config.toml.kai
 dist
 build

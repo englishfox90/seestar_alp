@@ -24,6 +24,18 @@ IMAGING_ACTIONS = {"start_mosaic", "start_framed_mosaic", "start_spectra"}
 FORBIDDEN_ACTIONS = {"start_polar_align", "shutdown", "pi_shutdown", "pi_reboot"}
 
 
+# Choosing this instead of a schedule file makes the automation plan from the
+# target list. It can't clash with a file: only .json names are listed.
+TARGET_LIST = "target-list"
+TARGET_LIST_LABEL = "Target list"
+# The plan it writes, replaced at every start.
+PLAN_FILE = "target_list_plan.json"
+
+
+def label(name: str) -> str:
+    return TARGET_LIST_LABEL if name == TARGET_LIST else name
+
+
 def schedule_dir() -> str:
     """Same folder ALP's Schedule -> Import dropdown lists."""
     return os.path.join(os.getcwd(), "schedule")
@@ -115,7 +127,7 @@ def describe_target(item: dict) -> str:
     return str(action)
 
 
-def _norm_angle(angle) -> float:
+def norm_angle(angle) -> float:
     # ALP wants mosaic_angle in [-90, 90]; framing is symmetric under +/-180.
     angle = float(angle)
     while angle > 90:
@@ -125,7 +137,7 @@ def _norm_angle(angle) -> float:
     return round(angle, 2)
 
 
-def _target_item(target: dict) -> dict:
+def target_item(target: dict) -> dict:
     ra, dec = target.get("target_ra_dec", [-1.0, -1.0])
     params = {
         "target_name": target.get("target_name", "target"),
@@ -140,12 +152,33 @@ def _target_item(target: dict) -> dict:
     mosaic = target.get("mosaic")
     if mosaic and float(mosaic.get("scale", 1.0)) > 1.0:
         params["mosaic_scale"] = round(float(mosaic.get("scale", 1.0)), 2)
-        params["mosaic_angle"] = _norm_angle(mosaic.get("angle", 0.0))
+        params["mosaic_angle"] = norm_angle(mosaic.get("angle", 0.0))
         if "star_map_angle" in mosaic:
             params["mosaic_star_map_angle"] = float(mosaic["star_map_angle"])
         return {"action": "start_framed_mosaic", "params": params}
     params.update(ra_num=1, dec_num=1, panel_overlap_percent=PANEL_OVERLAP)
     return {"action": "start_mosaic", "params": params}
+
+
+def loaded_plan(device) -> dict | None:
+    """The app plan the scope currently holds, or None.
+
+    iscope_get_app_state carries it while the scope holds one. This scope answers
+    get_view_plan with "method not found", so that's only a fallback for other firmware.
+    """
+    for method, path in (("iscope_get_app_state", ("ViewPlan", "plan")), ("get_view_plan", ("plan",))):
+        reply = device.send_message_param_sync({"method": method})
+        result = reply.get("result") if isinstance(reply, dict) else None
+        if not isinstance(result, dict):
+            continue
+        plan = result
+        for key in path:
+            plan = plan.get(key) if isinstance(plan, dict) else None
+        if not isinstance(plan, dict) and method == "get_view_plan":
+            plan = result
+        if isinstance(plan, dict) and plan.get("list"):
+            return plan
+    return None
 
 
 def plan_to_schedule(plan: dict) -> dict:
@@ -157,7 +190,7 @@ def plan_to_schedule(plan: dict) -> dict:
         "action": "set_setting",
         "params": {"exp_ms": {"stack_l": STACK_EXPOSURE_MS, "continuous": 500}},
     }
-    return {"list": [exposure] + [_target_item(t) for t in targets]}
+    return {"list": [exposure] + [target_item(t) for t in targets]}
 
 
 def safe_name(name: str) -> str:

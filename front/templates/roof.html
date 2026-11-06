@@ -17,10 +17,11 @@
 
   <div class="card mb-3"><div class="card-header">Controls</div><div class="card-body">
     <form method="post" action="{{ root_path }}{{ page_root }}/select" class="row g-2 align-items-center mb-3">
-      <div class="col-auto"><label for="roof-schedule" class="col-form-label">Schedule</label></div>
+      <div class="col-auto"><label for="roof-schedule" class="col-form-label">Image from</label></div>
       <div class="col-auto">
         <select id="roof-schedule" name="schedule" class="form-select">
           <option value="">None</option>
+          <option value="{{ target_list }}" {% if settings.schedule == target_list %}selected{% endif %}>{{ target_list_label }}</option>
           {% for row in schedules %}
             <option value="{{ row.name }}" {% if row.name == settings.schedule %}selected{% endif %}{% if row.errors %} disabled{% endif %}>
               {{ row.name }} ({{ row.targets|length }} targets){% if row.errors %}: rejected{% endif %}
@@ -29,7 +30,7 @@
         </select>
       </div>
       <div class="col-auto"><button class="btn btn-primary" type="submit">Save</button></div>
-      <div class="col-12 form-text">A change applies at the next start. A running session keeps going until the roof or dawn stops it.</div>
+      <div class="col-12 form-text">A change applies at the next start. A running session keeps going until the roof or dawn stops it.{% if settings.schedule == target_list %} Each start plans afresh from the <a href="{{ root_path }}{{ targets_url }}">target list</a>.{% endif %}</div>
     </form>
     {% for row in schedules %}
       {% if row.name == settings.schedule %}

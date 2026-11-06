@@ -23,10 +23,12 @@ from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 
 from roof import config as roof_config
-from roof import schedule_tools
+from roof import planner, schedule_tools
 from roof import sentinel
+from roof.queue import TargetQueue
 from roof.dew import DewMonitor
 from roof.scope import DryRunScope, RealScope, ScopeState
+from roof.sessions import SessionLog
 from roof.sun import night_key, sun_altitude_deg
 
 IDLE, OPENING, IMAGING, PARKING = "idle", "opening", "imaging", "parking"
@@ -40,6 +42,10 @@ PARK_ATTEMPTS = 3
 STOP_RETRY_S = 60
 START_RETRY_S = 120
 MAX_START_FAILURES = 3
+# A plan from the target list that ends well before its time means targets failed,
+# and replanning would pick the same ones. This also caps open/park cycles a night.
+EARLY_END_FRACTION = 0.5
+MAX_LIST_RUNS = 8
 HEARTBEAT_S = 1800
 LOOP_STALE_S = 90
 IDLE_VIEW_STAGES = {"", "None", "ContinuousExposure"}
@@ -59,6 +65,8 @@ class RoofAutomation:
         logger=None,
         target_altitude=None,
         dew_monitor=None,
+        session_log=None,
+        plan_targets=None,
     ):
         self._load_settings = load_settings
         self._read_safety = read_safety or (
@@ -122,6 +130,13 @@ class RoofAutomation:
         self._last_heartbeat = 0.0
         self._last_tick = 0.0
         self._started_at = clock()
+        self._session_log = session_log
+        self._plan_targets = plan_targets or (lambda s, now: (False, "no target list"))
+        self._list_note = ""
+        self._alarm_after_park = ""
+        self._list_runs = 0
+        self._list_runs_night = ""
+        self._launched_at = 0.0
 
         # Survives an ALP restart: a held or finished night must stay that way.
         self._hold_night = ""
@@ -189,6 +204,7 @@ class RoofAutomation:
         if not command:
             state = self._step(scope, s, state, safety, dark, night, now)
         self._manage_dew(scope, s, state)
+        self._record_stack(state, night, now)
         self._publish(s, safety, sun, dark, night, state, now)
         self._last_tick = now
         if now - self._last_heartbeat >= HEARTBEAT_S:
@@ -293,7 +309,13 @@ class RoofAutomation:
         return None
 
     def _begin_stop(self, scope, reason, state, night, now, keep_resume=True):
-        if keep_resume and self.phase == IMAGING and not self._adopted and self._last_item:
+        if (
+            keep_resume
+            and self.phase == IMAGING
+            and not self._adopted
+            and self._last_item
+            and self._active_schedule != schedule_tools.TARGET_LIST  # replans instead
+        ):
             self._resume = {
                 "schedule": self._active_schedule,
                 "item": self._last_item,
@@ -340,7 +362,8 @@ class RoofAutomation:
     def _advance_parking(self, scope, state, now):
         if state.parked is True:
             self.phase = IDLE
-            self._alarm = ""
+            # Parking clears alarms about parking, but not one that caused the park.
+            self._alarm, self._alarm_after_park = self._alarm_after_park, ""
             self._log("parked: firmware reports mount closed")
             return
         if now < self._deadline:
@@ -387,7 +410,7 @@ class RoofAutomation:
             self._resume = {}
         if self._first_item_to_run(s, night, now) is None:
             self._save_state()
-            self._log(f"Start refused: no remaining target is above {s.min_target_alt_deg:g} deg")
+            self._log(f"Start refused: {self._no_target_reason(s)}")
             return
         self._hold_night = ""
         self._save_state()
@@ -417,10 +440,10 @@ class RoofAutomation:
             self._note = blocked
             return
         if self._first_item_to_run(s, night, now) is None:
-            self._note = f"waiting: no remaining target is above {s.min_target_alt_deg:g} deg"
+            self._note = f"waiting: {self._no_target_reason(s)}"
             return
         self._last_start_attempt = now
-        self._log(f"roof safe and dark; starting '{s.schedule}'")
+        self._log(f"roof safe and dark; starting '{schedule_tools.label(s.schedule)}'")
         self._begin_start(scope, s, state, night, now)
 
     def _start_block(self, s, state, safety, dark, night, now):
@@ -457,9 +480,9 @@ class RoofAutomation:
         return state.view_state == "working" and state.view_stage not in IDLE_VIEW_STAGES
 
     def _begin_start(self, scope, s, state, night, now):
-        path = schedule_tools.resolve(s.schedule, self._schedule_dir) if s.schedule else None
+        path = self._schedule_path(s)
         if not path:
-            self._start_failed(f"schedule '{s.schedule}' not found", night)
+            self._start_failed(f"schedule '{schedule_tools.label(s.schedule)}' not found", night)
             return
         _, errors, warnings = schedule_tools.load(path)
         for warning in warnings:
@@ -484,12 +507,15 @@ class RoofAutomation:
 
     def _first_item_to_run(self, s, night, now):
         """Item to start from: the resume point or item 1, moved past any target
-        below the altitude limit. None if no target from there on is above it."""
+        below the altitude limit. None if no target from there on is above it.
+        The target list plans afresh instead, so it has no resume point."""
+        if s.schedule == schedule_tools.TARGET_LIST:
+            return 1 if self._refresh_list_plan(s, now) else None
         resume = self._resume
         start = 1
         if resume.get("night") == night and resume.get("schedule") == s.schedule:
             start = int(resume.get("item") or 1)
-        path = schedule_tools.resolve(s.schedule, self._schedule_dir) if s.schedule else None
+        path = self._schedule_path(s)
         items, errors, _ = schedule_tools.load(path) if path else ([], ["missing"], [])
         if errors:
             return start  # _begin_start reports it
@@ -504,6 +530,25 @@ class RoofAutomation:
             ):
                 return number
         return None
+
+    def _schedule_path(self, s) -> str | None:
+        name = schedule_tools.PLAN_FILE if s.schedule == schedule_tools.TARGET_LIST else s.schedule
+        return schedule_tools.resolve(name, self._schedule_dir) if name else None
+
+    def _refresh_list_plan(self, s, now) -> bool:
+        """Write tonight's plan from the target list. True if a target is ready now."""
+        try:
+            ready, self._list_note = self._plan_targets(s, now)
+        except Exception as e:
+            self._logger.warning("could not plan from the target list: %s", e)
+            self._list_note = f"cannot plan from the target list: {e}"
+            return False
+        return ready
+
+    def _no_target_reason(self, s) -> str:
+        if s.schedule == schedule_tools.TARGET_LIST:
+            return self._list_note
+        return f"no remaining target is above {s.min_target_alt_deg:g} deg"
 
     def _altitude(self, item, s, now):
         """Target altitude, or None when it has no fixed position."""
@@ -536,13 +581,13 @@ class RoofAutomation:
 
     def _launch(self, scope, s, night, now):
         self.phase = IDLE
-        path = schedule_tools.resolve(s.schedule, self._schedule_dir)
+        path = self._schedule_path(s)
         items, errors, _ = schedule_tools.load(path) if path else ([], ["schedule not found"], [])
         if errors:
             self._start_failed("; ".join(errors), night)
             return
         start_item = self._start_item if self._start_item <= len(items) else 1
-        self._log(f"import_schedule {s.schedule}")
+        self._log(f"import_schedule {os.path.basename(path)}")
         failure = self._guard(scope.import_schedule, path)
         if failure:
             self._start_failed(f"import_schedule: {failure}", night)
@@ -562,6 +607,8 @@ class RoofAutomation:
         self._adopted = False
         self._active_schedule = s.schedule
         self._active_items = items
+        self._launched_at = now
+        self._alarm_after_park = ""
         self._skip_asked = 0
         self._framing_checked = 0
         self._last_item = start_item
@@ -612,7 +659,8 @@ class RoofAutomation:
             self._adopted = False
             if adopted:
                 return
-            self._completed_night = night
+            if not self._list_run_may_replan(night, now):
+                self._completed_night = night
             self._resume = {}
             self._save_state()
             if s.enabled and state.connected:
@@ -625,6 +673,30 @@ class RoofAutomation:
         self._hold_night = night
         self._save_state()
         self._raise_alarm("scheduler stopped outside automation; holding until Start or the next night")
+
+    def _list_run_may_replan(self, night, now) -> bool:
+        """After a plan from the target list ends, may the night carry on?"""
+        if self._active_schedule != schedule_tools.TARGET_LIST:
+            return False
+        planned = sum(
+            item.get("params", {}).get("panel_time_sec", 0)
+            for item in self._active_items
+            if item.get("action") in schedule_tools.IMAGING_ACTIONS
+        )
+        if now - self._launched_at < planned * EARLY_END_FRACTION:
+            self._alarm_after_park = (
+                "the target list's plan ended well before its time, so a target probably "
+                "failed; done for tonight. Press Start to try again"
+            )
+            self._raise_alarm(self._alarm_after_park)
+            return False
+        if self._list_runs_night != night:
+            self._list_runs_night, self._list_runs = night, 0
+        self._list_runs += 1
+        if self._list_runs >= MAX_LIST_RUNS:
+            self._log(f"stopping for tonight after {MAX_LIST_RUNS} runs from the target list")
+            return False
+        return True
 
     def _skip_if_too_low(self, scope, s, state, now):
         number = state.item_number
@@ -710,13 +782,22 @@ class RoofAutomation:
         else:
             self._heater_on = on
 
+    def _record_stack(self, state, night, now):
+        """Bookkeeping only: a failure here must never stop the safety loop."""
+        if self._session_log is None:
+            return
+        try:
+            self._session_log.observe(state, night, now)
+        except Exception as e:
+            self._logger.warning("could not record the stack: %s", e)
+
     def _targets_now(self, s, now):
         """Altitudes for the page, refreshed once a minute."""
         if now - self._target_rows_at < 60 and self._target_rows_at:
             return self._target_rows
         self._target_rows_at = now
         rows = []
-        path = schedule_tools.resolve(s.schedule, self._schedule_dir) if s.schedule else None
+        path = self._schedule_path(s)
         items = schedule_tools.load(path)[0] if path else []
         for item in items:
             if item.get("action") not in schedule_tools.IMAGING_ACTIONS:
@@ -812,7 +893,7 @@ class RoofAutomation:
         snapshot = {
             "enabled": s.enabled,
             "dry_run": s.dry_run,
-            "schedule": s.schedule,
+            "schedule": schedule_tools.label(s.schedule),
             "safe": safety.safe,
             "safety_detail": safety.detail,
             "sun_deg": sun,
@@ -875,6 +956,10 @@ def _default_scopes(s):
 _instance = None
 
 
+def session_log() -> SessionLog | None:
+    return get_automation()._session_log
+
+
 def get_automation() -> RoofAutomation:
     """The process-wide automation, created on first use."""
     global _instance
@@ -892,7 +977,14 @@ def get_automation() -> RoofAutomation:
             )
             handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
             logger.addHandler(handler)
+        log = SessionLog(os.path.join(base, "roof_sessions.json"))
+        targets = TargetQueue(os.path.join(base, "roof_targets.json"))
         _instance = RoofAutomation(
-            state_path=os.path.join(base, "roof_state.json"), logger=logger
+            state_path=os.path.join(base, "roof_state.json"),
+            logger=logger,
+            session_log=log,
+            plan_targets=lambda s, now: planner.write_night_plan(
+                s, targets.all(), log, now, schedule_tools.schedule_dir()
+            ),
         )
     return _instance

@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+
+{% block title %}Target list{% endblock %}
+
+{% block header %}
+  <div class="container mt-3">
+    <p class="h1">Target list</p>
+  </div>
+{% endblock %}
+
+{% block content %}
+  {% if not site_known %}
+    <div class="alert alert-warning">Set the site latitude and longitude before planning.</div>
+  {% endif %}
+
+  <div class="card mb-3"><div class="card-header">Targets</div><div class="card-body">
+    {% if not rows %}
+      <p class="mb-0">Nothing listed yet. Import a plan below, or add a target by hand.</p>
+    {% else %}
+    <div class="table-responsive"><table class="table table-sm align-middle">
+      <thead><tr>
+        <th>On</th><th>Target</th><th>Framing</th><th>Progress</th>
+        <th>Goal (h)</th><th>Shortest run (h)</th><th>Earlier data (h)</th><th>Priority</th><th>Forecast done</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for row in rows %}
+        {% set t = row.target %}
+        <tr>
+          <td><input form="target-{{ t.id }}" type="checkbox" class="form-check-input" name="enabled" aria-label="Plan {{ t.name }}" {% if t.enabled %}checked{% endif %}></td>
+          <td>{{ t.name }}<div class="small text-body-secondary">{{ "LP filter" if t.lp_filter else "No filter" }}, {{ t.exposure_s | round(1) }} s, gain {{ t.gain }}</div></td>
+          <td>{{ row.framing }}</td>
+          <td style="min-width: 11rem">
+            <div class="progress" role="progressbar" aria-label="{{ t.name }} progress" aria-valuenow="{{ row.percent }}" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" style="width: {{ row.percent }}%"></div></div>
+            <div class="small">{{ row.have }} of {{ t.goal_hours }} h in {{ row.sessions }} {{ "run" if row.sessions == 1 else "runs" }}{% if row.rate %}, {{ row.rate }}% of time stacked{% endif %}</div>
+            {% if row.partial %}<div class="small text-warning">{{ row.partial }} h more from framed runs too short to count</div>{% endif %}
+          </td>
+          <td><input form="target-{{ t.id }}" class="form-control form-control-sm" style="width: 5rem" name="goal_hours" value="{{ t.goal_hours }}" aria-label="{{ t.name }} goal hours"></td>
+          <td><input form="target-{{ t.id }}" class="form-control form-control-sm" style="width: 5rem" name="min_session_hours" value="{{ t.min_session_hours }}" aria-label="{{ t.name }} shortest run"></td>
+          <td><input form="target-{{ t.id }}" class="form-control form-control-sm" style="width: 5rem" name="prior_hours" value="{{ t.prior_hours }}" aria-label="{{ t.name }} earlier data"></td>
+          <td><select form="target-{{ t.id }}" class="form-select form-select-sm" name="priority" aria-label="{{ t.name }} priority">
+            {% for p in priorities %}<option value="{{ p }}" {% if p == t.priority %}selected{% endif %}>{{ p | capitalize }}</option>{% endfor %}
+          </select></td>
+          <td>{{ row.finish or "Beyond 2 weeks" }}</td>
+          <td class="text-nowrap">
+            <form id="target-{{ t.id }}" method="post" action="{{ root_path }}{{ page_root }}/update" class="d-inline">
+              <input type="hidden" name="id" value="{{ t.id }}">
+              <button class="btn btn-sm btn-primary" type="submit">Save</button>
+            </form>
+            <form method="post" action="{{ root_path }}{{ page_root }}/remove" class="d-inline" onsubmit="return confirm('Remove {{ t.name | e }} from the list? Its recorded sessions are kept.');">
+              <input type="hidden" name="id" value="{{ t.id }}">
+              <button class="btn btn-sm btn-outline-danger" type="submit">Remove</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    <div class="form-text">Progress counts frames actually stacked. A framed run only counts once it reaches its shortest run, because a shorter one leaves uneven coverage.</div>
+    {% endif %}
+  </div></div>
+
+  {% if tonight %}
+  <div class="card mb-3"><div class="card-header">{{ tonight.label }}, if it started now</div><div class="card-body">
+    <p class="small">{% if tonight.dark %}Dark {{ tonight.dark }}, moon {{ tonight.moon }}%.{% else %}No astronomical darkness.{% endif %}
+      {% if uses_list %}Roof automation is using this list, and plans afresh at each start.{% else %}This is only a preview. Roof automation is set to {{ roof_source or "nothing" }}; choose Target list on the <a href="{{ root_path }}{{ roof_url }}">Roof page</a> to run from here.{% endif %}</p>
+    {% if tonight.blocks %}
+    <table class="table table-sm"><thead><tr><th>From</th><th>To</th><th>Target</th><th>Framing</th><th>Expected stacked</th></tr></thead><tbody>
+      {% for b in tonight.blocks %}<tr><td>{{ b.start }}</td><td>{{ b.end }}</td><td>{{ b.name }}</td><td>{{ b.framing }}</td><td>{{ b.expected }} h of {{ b.wall }} h</td></tr>{% endfor %}
+    </tbody></table>
+    {% else %}<p>Nothing to image for the rest of this night.</p>{% endif %}
+    {% for s in tonight.skipped %}<div class="small text-body-secondary">{{ s.name }}: {{ s.why }}</div>{% endfor %}
+  </div></div>
+  {% endif %}
+
+  {% if nights %}
+  <div class="card mb-3"><div class="card-header">Next two weeks, if every night is clear</div><div class="card-body">
+    <table class="table table-sm"><thead><tr><th>Night</th><th>Moon</th><th>Plan</th></tr></thead><tbody>
+      {% for n in nights %}<tr><td class="text-nowrap">{{ n.label }}</td><td>{{ n.moon }}%</td><td>{% for b in n.blocks %}{{ b.name }} ({{ b.wall }} h){% if not loop.last %}, {% endif %}{% else %}Nothing to image{% endfor %}</td></tr>{% endfor %}
+    </tbody></table>
+  </div></div>
+  {% endif %}
+
+  <div class="card mb-3"><div class="card-header">Add targets</div><div class="card-body">
+    <form method="post" action="{{ root_path }}{{ page_root }}/import" class="row g-2 align-items-end mb-3">
+      <div class="col-auto"><label class="form-label" for="import-source">Import from</label>
+        <select id="import-source" name="source" class="form-select">
+          <option value="scope">Plan loaded on the Seestar</option>
+          {% for name in import_schedules %}<option value="{{ name }}">{{ name }}</option>{% endfor %}
+        </select></div>
+      <div class="col-auto"><label class="form-label" for="import-goal">Hours wanted for each new target</label>
+        <input id="import-goal" name="goal_hours" class="form-control" value="10"></div>
+      <div class="col-auto"><button class="btn btn-primary" type="submit">Import</button></div>
+      <div class="col-12 form-text">Sky Atlas framing comes across with the plan. A target already listed keeps its goal and progress, and only its coordinates and framing update.</div>
+    </form>
+    <form method="post" action="{{ root_path }}{{ page_root }}/add" class="row g-2 align-items-end">
+      <div class="col-auto"><label class="form-label" for="add-name">Name</label><input id="add-name" name="name" class="form-control" required></div>
+      <div class="col-auto"><label class="form-label" for="add-ra">RA (J2000)</label><input id="add-ra" name="ra" class="form-control" placeholder="5.5881 or 5h35m17s" required></div>
+      <div class="col-auto"><label class="form-label" for="add-dec">Dec (J2000)</label><input id="add-dec" name="dec" class="form-control" placeholder="-5.39 or -5d23m" required></div>
+      <div class="col-auto"><label class="form-label" for="add-goal">Hours wanted</label><input id="add-goal" name="goal_hours" class="form-control" value="10"></div>
+      <div class="col-auto form-check ms-2 mb-2"><input id="add-lp" class="form-check-input" type="checkbox" name="lp_filter" checked><label class="form-check-label" for="add-lp">LP filter</label></div>
+      <div class="col-auto"><button class="btn btn-outline-primary" type="submit">Add</button></div>
+    </form>
+  </div></div>
+{% endblock %}

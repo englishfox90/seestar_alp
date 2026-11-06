@@ -33,6 +33,8 @@ def _form(req) -> dict:
 def _schedule_rows():
     rows = []
     for name in schedule_tools.list_schedules():
+        if name == schedule_tools.PLAN_FILE:
+            continue  # written by the planner; choose "Target list" instead
         items, errors, warnings = schedule_tools.load(schedule_tools.resolve(name))
         rows.append(
             {
@@ -57,6 +59,9 @@ class RoofPage:
             resp,
             "roof.html",
             schedules=_schedule_rows(),
+            target_list=schedule_tools.TARGET_LIST,
+            target_list_label=schedule_tools.TARGET_LIST_LABEL,
+            targets_url=f"/{telescope_id}/targets",
             settings=settings,
             status=get_automation().status(),
             page_root=f"/{telescope_id}/roof",
@@ -81,6 +86,8 @@ class RoofBadge:
 
 
 class _Action:
+    redirect_to = "roof"
+
     @classmethod
     def on_post(cls, req, resp, telescope_id=1):
         _require_same_origin(req)
@@ -88,18 +95,18 @@ class _Action:
         front = _front()
         if message:
             front.flash(resp, message)
-        front.redirect(f"/{telescope_id}/roof")
+        front.redirect(f"/{telescope_id}/{cls.redirect_to}")
 
 
 class RoofSelect(_Action):
     @staticmethod
     def act(req):
         name = _form(req).get("schedule", "")
-        if name and not schedule_tools.resolve(name):
+        if name and name != schedule_tools.TARGET_LIST and not schedule_tools.resolve(name):
             raise falcon.HTTPBadRequest(description="unknown schedule")
         roof_config.save("schedule", name)
         get_automation().request("schedule_changed")
-        return f"Roof schedule set to {name or 'none'}."
+        return f"Roof automation will use {schedule_tools.label(name) or 'nothing'}."
 
 
 class RoofEnable(_Action):
@@ -136,9 +143,8 @@ class RoofCapture(_Action):
         device = telescope.seestar_dev.get(roof_config.load().device_num)
         if device is None or not device.is_connected:
             return "Capture failed: the scope is not connected."
-        result = device.send_message_param_sync({"method": "get_view_plan"}).get("result")
-        plan = result.get("plan", result) if isinstance(result, dict) else None
-        if not plan or not plan.get("list"):
+        plan = schedule_tools.loaded_plan(device)
+        if not plan:
             return "Capture failed: no plan is loaded on the scope."
         if f"{name}.json" in schedule_tools.list_schedules():
             return f"Capture failed: {name}.json already exists."
@@ -170,6 +176,8 @@ class DefaultDeviceMiddleware:
 
 def install(app):
     """Add the routes and start the automation thread."""
+    from roof import queue_web  # it builds on this module's page helpers
+
     app.add_middleware(DefaultDeviceMiddleware(app._router))
     pages = {
         "roof": RoofPage,
@@ -180,6 +188,7 @@ def install(app):
         "roof/stop": RoofStop,
         "roof/capture": RoofCapture,
         **dashboard.PAGES,
+        **queue_web.PAGES,
     }
     for path, resource in pages.items():
         app.add_route(f"/{path}", resource())

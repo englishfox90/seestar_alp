@@ -17,6 +17,8 @@ and stops + parks when it isn't. Page: `http://localhost:5432/roof`.
 | Schedule finishes | Parks and waits for the next night |
 | Stop + Park button, or scheduler stopped elsewhere | Holds until Start or the next night |
 | Start button | Ignores the roof until it next reads safe, but still requires dark and a high enough target |
+| Target list selected | Each start plans the rest of the night from the list instead of resuming, and the plan ends at any gap of 30 min or more; it parks, then replans when the next target is due |
+| Plan from the target list ends early | Under half its planned time means a target failed: alarm, and done until Start or the next night. At most 8 runs a night |
 | Different schedule selected | Applies at the next start; clears the resume point and the "finished tonight" state |
 | Session started elsewhere, roof safe | Left alone |
 
@@ -78,8 +80,8 @@ git fetch upstream && git merge upstream/main
 .venv/bin/python -m pytest tests/test_roof.py -q
 ```
 
-Upstream files touched: one hook in `FrontMain.start` (`front/app.py`) and one
-line for the badge in `front/templates/nav.html`. Everything else is new files.
+Upstream files touched: one hook in `FrontMain.start` (`front/app.py`), and in
+`front/templates/nav.html` one line for the badge and one menu entry for Target List. Everything else is new files.
 
 ## Files
 
@@ -88,3 +90,6 @@ line for the badge in `front/templates/nav.html`. Everything else is new files.
 - `sentinel.py`, `sun.py`: the two gates
 - `schedule_tools.py`: listing, validation, app-plan conversion
 - `web.py`: page, buttons and badge
+- `queue.py`, `queue_web.py`: the target list and its page, `/targets`
+- `planner.py`: picks targets for a night (`python -m roof.planner --nights 7`)
+- `sessions.py`: what was actually stacked, kept in `roof_sessions.json`
