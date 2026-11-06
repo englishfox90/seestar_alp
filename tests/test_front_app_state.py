@@ -2,6 +2,7 @@ import json
 import os
 import re
 import shutil
+from pathlib import Path
 import pytest
 import falcon
 import front.app as front_app
@@ -127,7 +128,8 @@ def test_flash_and_get_messages_roundtrip():
 
 
 def test_nav_keeps_every_page_reachable():
-    html = _render_nav("")
+    # Each section lists its own pages, so walk one page of each.
+    html = "".join(_render_nav(path) for path in ("dashboard", "targets", "live", "settings"))
     for route in (
         "", "dashboard", "targets", "live", "roof", "startup", "command",
         "guestmode", "goto", "image", "mosaic", "framed_mosaic", "planning",
@@ -136,23 +138,38 @@ def test_nav_keeps_every_page_reachable():
         assert f'href="/1/{route}"' in html, route
 
 
-def test_scope_and_status_stay_outside_the_collapsed_menu():
+def test_scope_and_status_stay_in_the_top_bar():
     html = _render_nav("")
-    collapse = html.index('id="navbarSupportedContent"')
-    assert html.index('class="dropdown app-scope"') < collapse
-    assert html.index('class="app-status no-htmx-fx"') < collapse
+    top_bar = html[html.index('class="ssc-topbar"'):html.index("</header>")]
+    assert 'class="ssc-menu ssc-scope"' in top_bar
+    assert 'id="ssc-status"' in top_bar and 'hx-get="/roof/badge"' in top_bar
 
 
-def test_red_mode_is_reachable_from_the_menu():
-    assert "sscTheme.toggleRed()" in _render_nav("")
+def test_nav_needs_no_bootstrap_javascript():
+    html = _render_nav("")
+    assert "data-bs-toggle" not in html and "navbar" not in html and "dropdown" not in html
+
+
+def test_red_mode_is_reachable_from_the_scope_menu():
+    html = _render_nav("")
+    menu = html[html.index('class="ssc-menu ssc-scope"'):html.index("</details>")]
+    assert "data-red-toggle" in menu and "Red night mode" in menu
+    assert "sscTheme.toggleRed()" in Path(front_app.__file__).with_name("public").joinpath("ssc/shell.js").read_text()
+
+
+def test_the_dark_mode_switch_is_gone():
+    assert "toggleuitheme" not in _render_nav("")
+    assert "Dark Mode" not in _render_nav("")
 
 
 def test_phone_tab_bar_matches_the_top_level_nav():
     html = _render_nav("")
-    tabbar = html[html.index('class="app-tabbar"'):]
-    for route in ("dashboard", "targets", "live", "roof"):
-        assert f'href="/1/{route}"' in tabbar, route
-    assert 'data-bs-target="#navbarSupportedContent"' in tabbar
+    tabbar = html[html.index('class="ssc-tabbar"'):]
+    tabbar = tabbar[:tabbar.index("</nav>")]
+    assert re.findall(r'class="ssc-tab" href="([^"]+)"', tabbar) == [
+        "/1/dashboard", "/1/targets", "/1/live", "/1/settings",
+    ]
+    assert "More" not in tabbar
 
 
 def test_nav_shows_federation_option_on_home():

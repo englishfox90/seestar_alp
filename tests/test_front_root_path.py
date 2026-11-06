@@ -52,6 +52,8 @@ def test_normalize_root_path(value, expected):
 
 
 class _Req:
+    relative_uri = "/1/"
+
     def __init__(self, header=None):
         self._header = header
 

@@ -1,17 +1,21 @@
-{# The shell's nav, without Bootstrap. Links come from nav_links.html, as legacy nav.html's do. #}
+{# The nav for every page, old and new: legacy nav.html includes this too. Native details and no Bootstrap. #}
 {% import 'ssc/nav_links.html' as links with context %}
 {% import 'ssc/ui.html' as ui %}
-{% macro more_list() %}
-  <ul class="ssc-menu__list">
-    {% for link in links.more %}<li><a class="ssc-menu__item" href="{{ link.href }}">{{ link.label }}</a></li>{% endfor %}
-    <li><button class="ssc-menu__item" type="button" data-red-toggle>Red night mode</button></li>
-    <li><button class="ssc-menu__item" type="button" data-dark-toggle>Dark mode</button></li>
-  </ul>
-{% endmacro %}
+{# Tonight's glyph is in ui.html. The others are drawn on the same 24 grid until Phosphor is vendored. #}
+{% macro section_icon(name) -%}
+{% if name == "tonight" %}{{ ui.icon("tonight") }}{% else -%}
+<svg class="ssc-icon" aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+{%- if name == "plan" %}<path d="M9.5 6.5H20M9.5 12H20M9.5 17.5H20M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01"/>
+{%- elif name == "scope" %}<path d="m3.5 12.5 14-6.5 2 4.5-14 6.5-2-4.5Z"/><path d="m12 13.5-3.5 7M12 13.5l3.5 7"/>
+{%- elif name == "system" %}<path d="M4 7.5h9M17.5 7.5H20M4 16.5h2.5M11 16.5h9"/><circle cx="15.25" cy="7.5" r="2.25"/><circle cx="8.75" cy="16.5" r="2.25"/>
+{%- endif %}</svg>
+{%- endif %}
+{%- endmacro %}
+{% macro section_current(section) %}{% if links.current_section and links.current_section.key == section.key %} aria-current="true"{% endif %}{% endmacro %}
 <header class="ssc-topbar">
   <div class="ssc-topbar__inner">
     <details class="ssc-menu ssc-scope">
-      <summary class="ssc-menu__summary">{{ telescope["name"]|e }}{{ ui.icon("down", 16) }}</summary>
+      <summary class="ssc-menu__summary"><span class="ssc-scope__name">{{ telescope["name"]|e }}</span>{{ ui.icon("down", 16) }}</summary>
       <ul class="ssc-menu__list ssc-menu__panel">
         {% for tel in telescopes %}
         <li><a class="ssc-menu__item" href="{{ root_path }}/{{ tel["device_num"] }}/{{ partial_path }}">{{ tel["name"]|e }} ({{ tel["ip_address"]|e }})</a></li>
@@ -21,29 +25,24 @@
         {% else %}
         <li><a class="ssc-menu__item" href="{{ root_path }}/0/">Seestar Federation</a></li>
         {% endif %}
+        <li><button class="ssc-menu__item" type="button" data-red-toggle aria-pressed="false">Red night mode</button></li>
       </ul>
     </details>
     <nav class="ssc-widenav" aria-label="Main">
-      {% for link in links.primary %}
-      <a class="ssc-widenav__item" href="{{ link.href }}"{% if link.href == current_href %} aria-current="page"{% endif %}>{{ link.label }}</a>
+      {% for section in links.sections %}
+      <a class="ssc-widenav__item" href="{{ section.pages[0].href }}"{{ section_current(section) }}>{{ section.label }}</a>
       {% endfor %}
-      <details class="ssc-menu">
-        <summary class="ssc-widenav__item ssc-menu__summary">More{{ ui.icon("down", 16) }}</summary>
-        <div class="ssc-menu__panel">{{ more_list() }}</div>
-      </details>
     </nav>
-    <a class="ssc-topbar__status" id="ssc-status" href="{{ root }}/roof">{% block roof_status %}{% for line in roof_lines %}{{ ui.status(line.tone, line.text) }}{% endfor %}{% endblock %}</a>
+    {% if roof_lines is defined %}
+    <a class="ssc-topbar__status" id="ssc-status" href="{{ root }}/roof">{% for line in roof_lines %}{{ ui.status(line.tone, line.text) }}{% endfor %}</a>
+    {% else %}
+    <a class="ssc-topbar__status no-htmx-fx" id="ssc-status" href="{{ root }}/roof" hx-get="{{ root_path }}/roof/badge" hx-trigger="load, every 10s" hx-swap="innerHTML"></a>
+    {% endif %}
   </div>
 </header>
 <nav class="ssc-tabbar" aria-label="Main">
-  {% for link in links.primary %}
-  <a class="ssc-tab" href="{{ link.href }}"{% if link.href == current_href %} aria-current="page"{% endif %}>{{ ui.icon(link.icon) }}{{ link.label }}</a>
+  {% for section in links.sections %}
+  <a class="ssc-tab" href="{{ section.pages[0].href }}"{{ section_current(section) }}>{{ section_icon(section.icon) }}{{ section.label }}</a>
   {% endfor %}
-  <button class="ssc-tab" type="button" data-open-sheet="ssc-more">{{ ui.icon("more") }}More</button>
 </nav>
-<dialog class="ssc-sheet" id="ssc-more" aria-label="More">
-  <div class="ssc-sheet__body">
-    <div class="ssc-sheet__head"><h2 class="ssc-sheet__title">More</h2><button class="ssc-button" data-kind="plain" type="button" data-close-sheet>Close</button></div>
-    {{ more_list() }}
-  </div>
-</dialog>
+{% include 'ssc/subnav.html' %}

@@ -514,11 +514,12 @@ class _NoPage:
         raise falcon.HTTPFound(location)
 
 
-def test_nav_lists_the_page_at_the_top_level():
-    from pathlib import Path
+def test_nav_lists_the_page_first_under_plan():
+    import front.app as front_app
 
-    nav = (Path(__file__).parent.parent / "front/templates/nav.html").read_text()
-    assert '{{ root }}/targets">Targets<' in nav[: nav.index(">More<")]
+    html = front_app.fetch_template("ssc/nav.html").render(root="/1", telescope={}, partial_path="targets")
+    assert '<a class="ssc-widenav__item" href="/1/targets" aria-current="true">Plan</a>' in html
+    assert 'href="/1/targets" aria-current="page">Targets</a>' in html
 
 
 # ---- writing the night's plan ----------------------------------------------

@@ -394,7 +394,7 @@ def test_page_polls_its_state_and_only_posts_stop(client, monkeypatch):
 
 def test_nav_calls_the_dashboard_route_tonight():
     html = front_app.fetch_template("nav.html").render(root="/1", telescope={})
-    assert '<a class="nav-link" href="/1/dashboard">Tonight</a>' in html
+    assert '<a class="ssc-widenav__item" href="/1/dashboard">Tonight</a>' in html
     assert "Dashboard" not in html
 
 

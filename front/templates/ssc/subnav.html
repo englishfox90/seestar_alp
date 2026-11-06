@@ -1,0 +1,12 @@
+{# The current section's pages, on every page old and new. It scrolls inside itself on a phone.
+   A section with one page has nothing to choose, which also leaves Tonight's hero its full height. #}
+{% import 'ssc/nav_links.html' as links with context %}
+{% if links.current_section and links.current_section.pages|length > 1 %}
+<nav class="ssc-subnav" aria-label="{{ links.current_section.label }} pages">
+  <div class="ssc-subnav__inner" data-subnav>
+    {% for page in links.current_section.pages %}
+    <a class="ssc-subnav__item" href="{{ page.href }}"{% if links.current_page and page.href == links.current_page.href %} aria-current="page"{% endif %}>{{ page.label }}</a>
+    {% endfor %}
+  </div>
+</nav>
+{% endif %}

@@ -309,6 +309,12 @@ def _template_context(req, context):
     return out
 
 
+def _partial_path(req):
+    segments = req.relative_uri.lstrip("/").split("/", 1)
+    partial_path = segments[1] if len(segments) > 1 else segments[0]
+    return partial_path.split("?", 1)[0].split("#", 1)[0].strip("/")
+
+
 def _get_context_real(telescope_id, req):
     # probably a better way of doing this...
     telescopes = get_telescopes()
@@ -316,9 +322,7 @@ def _get_context_real(telescope_id, req):
     imager_root = get_imager_root(telescope_id, req)
     online = check_api_state(telescope_id)
     client_master = get_client_master(telescope_id)
-    segments = req.relative_uri.lstrip("/").split("/", 1)
-    partial_path = segments[1] if len(segments) > 1 else segments[0]
-    partial_path = partial_path.split("?", 1)[0].split("#", 1)[0].strip("/")
+    partial_path = _partial_path(req)
     experimental = Config.experimental
     confirm = Config.confirm
     uitheme = Config.uitheme
@@ -409,7 +413,9 @@ def get_context(telescope_id, req):
         ):
             _last_context_get_time[telescope_id] = time.time()
             _context_cached[telescope_id] = _get_context_real(telescope_id, req)
-        return _context_cached[telescope_id]
+        # The nav's section and scope links follow this request's path, not that of
+        # whichever request (often a poll) filled the cache. Callers get their own copy.
+        return {**_context_cached[telescope_id], "partial_path": _partial_path(req)}
 
 
 def get_flash_cookie(req, resp):
@@ -2110,6 +2116,29 @@ def do_support_bundle(req, telescope_id=1):
 def redirect(location):
     raise HTTPFound(location)
     # raise HTTPTemporaryRedirect(location)
+
+
+class SectionRedirect:
+    """A short URL for a nav section, sent on to the section's first page."""
+
+    def __init__(self, page):
+        self.page = page
+
+    def on_get(self, req, resp, telescope_id=None):
+        device = "" if telescope_id is None else f"/{telescope_id}"
+        redirect(f"{device}/{self.page}")
+
+
+def install_section_redirects(app):
+    """/plan, /scope and /system, with and without a device number.
+
+    /{id}/system is not here: it is the existing System page, and a second add_route
+    on a path replaces the first in Falcon.
+    """
+    for section, page in (("plan", "targets"), ("scope", "live"), ("system", "settings")):
+        app.add_route(f"/{section}", SectionRedirect(page))
+        if section != "system":
+            app.add_route(f"/{{telescope_id:int}}/{section}", SectionRedirect(page))
 
 
 class RootPathMiddleware:
@@ -6038,6 +6067,7 @@ class FrontMain:
         app.add_route("/config", ConfigResource())
         app.add_route("/config.json", ConfigJsonResource())
         app.add_route("/pa_refine", BlindPolarAlignResource())
+        install_section_redirects(app)
 
         try:
             self.httpd = make_server(

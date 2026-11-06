@@ -1,0 +1,211 @@
+/* The nav on every page. Imported into the shell's components layer, and linked unlayered
+   after Bootstrap on base.html, so it restates what Bootstrap's reset would otherwise change.
+   Tab bar on phones, nav in the top bar from 768px. Rules: front/DESIGN.md sections 4 to 6. */
+.ssc-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 1030;
+    background: var(--ssc-bar);
+    backdrop-filter: var(--ssc-bar-filter);
+    -webkit-backdrop-filter: var(--ssc-bar-filter);
+    border-bottom: 1px solid var(--ssc-separator);
+    padding-top: env(safe-area-inset-top);
+}
+
+.ssc-topbar__inner {
+    display: flex;
+    align-items: center;
+    gap: var(--ssc-space-4);
+    min-height: var(--ssc-bar-height);
+    max-width: var(--ssc-max-width);
+    margin: 0 auto;
+    padding: 0 var(--ssc-gutter);
+}
+
+/* Roof status. Tonight renders ui.status lines here, and other pages poll /roof/badge. */
+.ssc-topbar__status,
+.ssc-topbar__status:hover {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: var(--ssc-space-1) var(--ssc-space-4);
+    min-height: var(--ssc-touch);
+    margin-left: auto;
+    color: var(--ssc-text-1);
+    text-decoration: none;
+}
+.ssc-topbar__status .badge {
+    font-size: var(--ssc-text-footnote);
+    font-weight: var(--ssc-weight-strong);
+    white-space: nowrap;
+}
+.ssc-topbar__status .text-bg-success { color: var(--ssc-green); }
+.ssc-topbar__status .text-bg-warning { color: var(--ssc-orange); }
+.ssc-topbar__status .text-bg-danger { color: var(--ssc-red); }
+
+/* The scope menu */
+.ssc-menu { position: relative; min-width: 0; }
+.ssc-menu__summary {
+    display: flex;
+    align-items: center;
+    gap: var(--ssc-space-2);
+    min-height: var(--ssc-touch);
+    font-weight: var(--ssc-weight-strong);
+    cursor: pointer;
+    list-style: none;
+    white-space: nowrap;
+}
+.ssc-menu__summary::-webkit-details-marker { display: none; }
+.ssc-scope .ssc-menu__summary { max-width: 45vw; overflow: hidden; color: var(--ssc-text-1); }
+.ssc-scope__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ssc-scope .ssc-icon { flex: none; }
+.ssc-menu__list { margin: 0; padding: 0; list-style: none; }
+.ssc-menu__panel {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 30;
+    min-width: 240px;
+    max-width: calc(100vw - var(--ssc-gutter) - var(--ssc-gutter));
+    max-height: 70vh;
+    overflow: auto;
+    background: var(--ssc-raised);
+    border: 1px solid var(--ssc-separator);
+    border-radius: var(--ssc-radius-control);
+}
+.ssc-menu__item,
+.ssc-menu__item:hover {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: var(--ssc-touch);
+    padding: var(--ssc-space-3) var(--ssc-inset);
+    background: none;
+    border: 0;
+    border-bottom: 1px solid var(--ssc-separator);
+    color: var(--ssc-text-1);
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+.ssc-menu__list > li:last-child > .ssc-menu__item { border-bottom: 0; }
+/* Without colour: a word, because Red has no hues. */
+.ssc-menu__item[aria-pressed="true"] { font-weight: var(--ssc-weight-strong); }
+.ssc-menu__item[aria-pressed="true"]::after { content: "On"; margin-left: auto; }
+
+/* The four destinations */
+.ssc-widenav { display: none; }
+.ssc-widenav__item,
+.ssc-widenav__item:hover {
+    display: flex;
+    align-items: center;
+    min-height: var(--ssc-touch);
+    padding: 0 var(--ssc-space-4);
+    color: var(--ssc-text-1);
+    font-weight: var(--ssc-weight-regular);
+    text-decoration: none;
+}
+.ssc-widenav__item[aria-current] { font-weight: var(--ssc-weight-strong); }
+
+.ssc-tabbar {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 1030;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    background: var(--ssc-bar);
+    backdrop-filter: var(--ssc-bar-filter);
+    -webkit-backdrop-filter: var(--ssc-bar-filter);
+    border-top: 1px solid var(--ssc-separator);
+    padding-bottom: env(safe-area-inset-bottom);
+}
+.ssc-tab,
+.ssc-tab:hover {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--ssc-space-1);
+    min-height: var(--ssc-tabbar-height);
+    color: var(--ssc-text-2);
+    font-size: var(--ssc-text-caption);
+    line-height: 1.33;
+    text-decoration: none;
+}
+.ssc-tab[aria-current] { color: var(--ssc-accent); font-weight: var(--ssc-weight-strong); }
+
+/* A section's pages. The first label's text starts on the page edge, and the 44px hit area
+   reaches past it into the gutter. Weight and an underline mark the current page, so it reads in Red. */
+.ssc-subnav { border-bottom: 1px solid var(--ssc-separator); }
+.ssc-subnav__inner {
+    display: flex;
+    max-width: var(--ssc-max-width);
+    margin: 0 auto;
+    padding: 0 calc(var(--ssc-gutter) - var(--ssc-space-4));
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.ssc-subnav__inner::-webkit-scrollbar { display: none; }
+.ssc-subnav__item,
+.ssc-subnav__item:hover {
+    flex: none;
+    display: flex;
+    align-items: center;
+    min-height: var(--ssc-touch);
+    padding: 0 var(--ssc-space-4);
+    border-bottom: 2px solid transparent;
+    color: var(--ssc-text-2);
+    font-size: var(--ssc-text-body);
+    white-space: nowrap;
+    text-decoration: none;
+}
+.ssc-subnav__item[aria-current] {
+    border-bottom-color: var(--ssc-text-1);
+    color: var(--ssc-text-1);
+    font-weight: var(--ssc-weight-strong);
+}
+
+/* The four-way theme control, for base.html and the shell. */
+.ssc-appearance__cells {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--ssc-space-1);
+    padding: var(--ssc-space-1);
+    border-radius: var(--ssc-radius-control);
+    background: var(--ssc-fill-1);
+}
+.ssc-appearance__cell {
+    min-height: var(--ssc-control-height);
+    padding: 0 var(--ssc-space-2);
+    border: 0;
+    border-radius: var(--ssc-radius-control);
+    background: none;
+    color: var(--ssc-text-1);
+    font: inherit;
+    cursor: pointer;
+}
+.ssc-appearance__cell[aria-pressed="true"] {
+    background: var(--ssc-fill-2);
+    font-weight: var(--ssc-weight-strong);
+}
+.ssc-appearance__help {
+    margin: var(--ssc-space-2) 0 0;
+    color: var(--ssc-text-2);
+    font-size: var(--ssc-text-footnote);
+}
+
+/* Fine pointers get the 36px height, but a hit area stays usable on touch. */
+@media (pointer: coarse) {
+    .ssc-appearance__cell { min-height: var(--ssc-touch); }
+}
+
+@media (min-width: 768px) {
+    .ssc-widenav {
+        display: flex;
+        align-items: center;
+        gap: var(--ssc-space-2);
+    }
+    .ssc-tabbar { display: none; }
+}

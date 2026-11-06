@@ -558,24 +558,27 @@ def test_new_nav_reaches_exactly_what_the_legacy_nav_does():
 
 
 @pytest.mark.parametrize(
-    "route",
-    ["", "dashboard", "targets", "live", "roof", "startup", "command", "guestmode", "goto", "image",
-     "mosaic", "framed_mosaic", "planning", "schedule", "settings", "config", "stats", "platform-rpi", "support"],
+    "route,partial_path",
+    [("dashboard", "dashboard")]
+    + [(r, "targets") for r in ("targets", "roof", "schedule", "framed_mosaic", "planning", "mosaic")]
+    + [(r, "live") for r in ("live", "goto", "image", "startup", "")]
+    + [(r, "settings") for r in ("settings", "config", "command", "stats", "guestmode", "support", "platform-rpi", "system")],
 )
-def test_every_route_is_reachable_from_the_new_nav(route):
-    assert f'href="/1/{route}"' in _ssc_nav()
+def test_every_route_is_reachable_from_the_new_nav(route, partial_path):
+    assert f'href="/1/{route}"' in _ssc_nav(partial_path=partial_path)
 
 
 def test_conditional_routes_follow_the_same_rules():
-    html = _ssc_nav(experimental=False, platform="mac")
-    assert "/1/planning" not in html and "/1/platform-rpi" not in html
+    for partial_path in ("targets", "settings"):
+        html = _ssc_nav(experimental=False, platform="mac", partial_path=partial_path)
+        assert "/1/planning" not in html and "/1/platform-rpi" not in html
 
 
 def test_new_nav_has_the_switcher_federation_red_and_labels():
     html = _ssc_nav()
     assert "Seestar Federation" in html and 'href="/0/dashboard"' in html
     assert "data-red-toggle" in html and "Red night mode" in html
-    assert "data-dark-toggle" in html
+    assert "data-dark-toggle" not in html
     assert 'id="ssc-status"' in html and 'href="/1/roof"' in html
     assert re.search(r"</svg>Tonight</a>", html)
     assert ">Tonight</a>" in html

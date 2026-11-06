@@ -1,22 +1,44 @@
-{# The destinations, shared by the legacy nav.html and the shell's nav.html. #}
-{% set primary = [
-    {"label": "Tonight", "href": root ~ "/dashboard", "icon": "tonight"},
-    {"label": "Targets", "href": root ~ "/targets", "icon": "targets"},
-    {"label": "Live", "href": root ~ "/live", "icon": "live"},
-    {"label": "Roof", "href": root ~ "/roof", "icon": "roof"},
+{# The four destinations and their pages, shared by the top bar, the tab bar and the sub-navigation.
+   Legacy nav.html and the shell both render through ssc/nav.html, so there is one list.
+
+   Each page's "match" holds the first path segments it owns, so a page's sub-paths
+   (schedule/image, live/star) highlight it. A device number is already gone from partial_path.
+
+   Left out on purpose: /console has a route but no template, so it only returns an error,
+   and /pa_refine alone is a bare fragment with no nav. Polar align lives on Prepare. #}
+{% set sections = [
+    {"key": "tonight", "label": "Tonight", "icon": "tonight", "pages": [
+        {"label": "Tonight", "href": root ~ "/dashboard", "match": ["dashboard"]},
+    ]},
+    {"key": "plan", "label": "Plan", "icon": "plan", "pages": [
+        {"label": "Targets", "href": root ~ "/targets", "match": ["targets"]},
+        {"label": "Automation", "href": root ~ "/roof", "match": ["roof"]},
+        {"label": "Sequences", "href": root ~ "/schedule", "match": ["schedule"]},
+        {"label": "Frame", "href": root ~ "/framed_mosaic", "match": ["framed_mosaic"]},
+    ] + ([{"label": "Planning", "href": root ~ "/planning", "match": ["planning"]}] if experimental else []) + [
+        {"label": "Mosaic", "href": root ~ "/mosaic", "match": ["mosaic"]},
+    ]},
+    {"key": "scope", "label": "Scope", "icon": "scope", "pages": [
+        {"label": "Live", "href": root ~ "/live", "match": ["live"]},
+        {"label": "Goto", "href": root ~ "/goto", "match": ["goto"]},
+        {"label": "Image", "href": root ~ "/image", "match": ["image"]},
+        {"label": "Prepare", "href": root ~ "/startup", "match": ["startup", "pa_refine"]},
+        {"label": "Polar align", "href": root ~ "/startup#paRefineAccordion", "match": []},
+        {"label": "Device", "href": root ~ "/", "match": [""]},
+    ]},
+    {"key": "system", "label": "System", "icon": "system", "pages": [
+        {"label": "Settings", "href": root ~ "/settings", "match": ["settings"]},
+        {"label": "Config", "href": root ~ "/config", "match": ["config"]},
+        {"label": "Commands", "href": root ~ "/command", "match": ["command"]},
+        {"label": "Stats", "href": root ~ "/stats", "match": ["stats"]},
+        {"label": "Guest mode", "href": root ~ "/guestmode", "match": ["guestmode"]},
+        {"label": "Support", "href": root ~ "/support", "match": ["support"]},
+    ] + ([{"label": "Platform", "href": root ~ "/platform-rpi", "match": ["platform-rpi"]}] if platform == "raspberry_pi" else []) + [
+        {"label": "System", "href": root ~ "/system", "match": ["system"]},
+    ]},
 ] %}
-{% set more = [{"label": "Home", "href": root ~ "/"},
-    {"label": "Startup", "href": root ~ "/startup"},
-    {"label": "Commands", "href": root ~ "/command"},
-    {"label": "Guest Mode", "href": root ~ "/guestmode"},
-    {"label": "Goto", "href": root ~ "/goto"},
-    {"label": "Image", "href": root ~ "/image"},
-    {"label": "Mosaic", "href": root ~ "/mosaic"},
-    {"label": "Framed Mosaic", "href": root ~ "/framed_mosaic"}]
-    + ([{"label": "Planning", "href": root ~ "/planning"}] if experimental else [])
-    + [{"label": "Schedule", "href": root ~ "/schedule"},
-    {"label": "Settings", "href": root ~ "/settings"},
-    {"label": "SSC Config", "href": root ~ "/config"},
-    {"label": "Stats", "href": root ~ "/stats"}]
-    + ([{"label": "Platform", "href": root ~ "/platform-rpi"}] if platform == "raspberry_pi" else [])
-    + [{"label": "Support", "href": root ~ "/support"}] %}
+{% set first_segment = ((partial_path or "")|string).split("/")[0] %}
+{% set found = namespace(section=none, page=none) %}
+{% for section in sections %}{% for page in section.pages %}{% if first_segment in page.match %}{% set found.section = section %}{% set found.page = page %}{% endif %}{% endfor %}{% endfor %}
+{% set current_section = found.section %}
+{% set current_page = found.page %}

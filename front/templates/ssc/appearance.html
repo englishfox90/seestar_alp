@@ -1,0 +1,11 @@
+{# Theme for this device only, kept by theme.js in the browser. It never calls the server's
+   toggleuitheme. Buttons with no name, so it is safe inside a form and adds nothing to a save.
+   shell.js wires it up and marks the current mode. It loads on base.html and the shell. #}
+<div class="ssc-appearance">
+  <div class="ssc-appearance__cells" role="group" aria-label="Appearance on this device">
+    {% for option in [{"mode": "auto", "label": "Auto"}, {"mode": "day", "label": "Day"}, {"mode": "night", "label": "Night"}, {"mode": "red", "label": "Red"}] %}
+    <button class="ssc-appearance__cell" type="button" data-theme-mode="{{ option.mode }}" aria-pressed="false">{{ option.label }}</button>
+    {% endfor %}
+  </div>
+  <p class="ssc-appearance__help">This device only. Auto is Day until the sun is 6° below the horizon, then Night.</p>
+</div>

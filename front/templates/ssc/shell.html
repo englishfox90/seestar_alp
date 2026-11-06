@@ -13,7 +13,6 @@
   <script src="{{ root_path }}/public/htmx.min.js"></script>
 </head>
 <body>
-{% set current_href = root ~ "/" ~ partial_path %}
 {% include 'ssc/nav.html' %}
 {% block content %}{% endblock %}
 <script src="{{ root_path }}/public/ssc/shell.js"></script>
