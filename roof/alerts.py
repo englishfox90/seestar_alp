@@ -9,7 +9,8 @@ slow or dead network must not hold it up. Messages wait on a bounded queue and
 are posted from their own thread, oldest dropped first.
 
 The webhook is a secret, and support bundles include config.toml, so it lives in
-its own file (see WEBHOOK_FILE) rather than in the [roof] section.
+its own file (see WEBHOOK_FILE) rather than in the [roof] section. It is never
+sent back to a browser: the page only shows that one is saved.
 """
 
 import argparse
@@ -25,6 +26,7 @@ from datetime import datetime, timezone
 
 import requests
 
+from device.config import Config
 from roof import focus
 
 WEBHOOK_FILE = "discord_webhook.txt"
@@ -39,13 +41,34 @@ WAIT_ALERT_S = 1800  # how long into the dark before saying imaging hasn't start
 LOST_CONTACT_S = 120
 REPEAT_ALARM_S = 900
 
+# What the Automation page's switches control. Alarms and lost contact aren't here:
+# they always post, because they're how you hear that something needs you.
+KINDS = {
+    "session": ("Session started and ended", "With the reason, and frames per target"),
+    "autofocus_passed": ("Autofocus passed", ""),
+    "autofocus_failed": ("Autofocus failed", "Includes a run with no usable focus curve"),
+    "stacking": ("Stacking started", "When each target's first frame is stacked"),
+    "switching": ("Switching target", "With the last target's frames"),
+    "parked": ("Arm parked", ""),
+    "night": ("Night status", "Not imaging yet, no imaging tonight, and the night summary"),
+}
+ALWAYS = "always"
+
 _COLOURS = {"info": 0x0EA5E9, "success": 0x22C55E, "warning": 0xF59E0B, "error": 0xEF4444}
 _WEBHOOK_PATH = re.compile(r"/api/webhooks/\d+/[^\s/)'\"]+", re.I)
+_WEBHOOK_URL = re.compile(
+    r"https://(?:ptb\.|canary\.)?discord(?:app)?\.com/api/webhooks/\d+/[\w-]+"
+)
+_last_delivery = None
 
 
 def redact(text) -> str:
     """Remove the webhook from text bound for a log: its token is a live secret."""
     return _WEBHOOK_PATH.sub("/api/webhooks/[REDACTED]", str(text))
+
+
+def webhook_path() -> str:
+    return os.path.join(os.path.dirname(Config.path_to_dat), WEBHOOK_FILE)
 
 
 def read_webhook(path: str) -> str:
@@ -54,6 +77,57 @@ def read_webhook(path: str) -> str:
             return f.read().strip()
     except OSError:
         return ""
+
+
+def parse_webhook(text: str) -> str:
+    """The webhook in what was pasted, or "".
+
+    Discord's page also offers the webhook as JSON, so that works too. Only a real
+    Discord address is accepted, because the server posts to whatever is saved.
+    """
+    found = _WEBHOOK_URL.search(text or "")
+    return found.group(0) if found else ""
+
+
+def write_webhook(path: str, url: str) -> None:
+    tmp = f"{path}.tmp"
+    fd = os.open(tmp, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(url + "\n")
+    os.replace(tmp, path)
+
+
+def remove_webhook(path: str) -> None:
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
+
+
+def send_test(url: str) -> tuple[bool, str]:
+    """One try, so a person pressing the button isn't left waiting."""
+    body = payload("Test alert", "Seestar ALP can reach this channel.", "info", time.time())
+    return deliver(url, body, tries=1)
+
+
+def panel(settings) -> dict:
+    """What the Automation page shows. Never includes the webhook itself."""
+    url = read_webhook(webhook_path())
+    return {
+        "enabled": settings.discord_enabled,
+        "saved": bool(url),
+        "ends_with": url.split("/api/webhooks/")[-1].split("/")[0][-4:] if url else "",
+        "kinds": [
+            {
+                "key": key,
+                "label": label,
+                "help": help_text,
+                "on": key not in settings.discord_muted,
+            }
+            for key, (label, help_text) in KINDS.items()
+        ],
+        "last": _last_delivery,
+    }
 
 
 def payload(title: str, text: str, level: str, when: float) -> dict:
@@ -72,11 +146,13 @@ def payload(title: str, text: str, level: str, when: float) -> dict:
     }
 
 
-def deliver(url, body, post=requests.post, sleep=time.sleep, logger=None) -> tuple[bool, str]:
+def deliver(
+    url, body, post=requests.post, sleep=time.sleep, logger=None, tries=len(BACKOFF_S)
+) -> tuple[bool, str]:
     """Post one message, waiting out rate limits. Returns (sent, what happened)."""
     logger = logger or logging.getLogger("roof")
     status = "not attempted"
-    for attempt, backoff in enumerate(BACKOFF_S):
+    for attempt, backoff in enumerate(BACKOFF_S[:tries]):
         try:
             reply = post(url, json=body, timeout=POST_TIMEOUT_S)
         except requests.RequestException as e:
@@ -91,7 +167,7 @@ def deliver(url, body, post=requests.post, sleep=time.sleep, logger=None) -> tup
                 backoff = min(float(reply.json()["retry_after"]), MAX_RETRY_AFTER_S)
             except (ValueError, KeyError, TypeError):
                 pass
-        if attempt < len(BACKOFF_S) - 1:
+        if attempt < tries - 1:
             logger.info("Discord alert not sent (%s); retrying in %gs", status, backoff)
             sleep(backoff)
     return False, status
@@ -137,8 +213,15 @@ class DiscordSender:
                 sent, status = deliver(url, body, self._post, self._sleep, self._logger)
             except Exception as e:
                 sent, status = False, redact(e)
+            title = body["embeds"][0]["title"]
+            global _last_delivery
+            _last_delivery = {
+                "title": title,
+                "sent": sent,
+                "status": status,
+                "at": datetime.fromtimestamp(self._clock()).strftime("%H:%M"),
+            }
             if not sent:
-                title = body["embeds"][0]["title"]
                 self._logger.warning("Discord alert dropped (%s): %s", status, title)
 
 
@@ -208,8 +291,9 @@ _ENDINGS = {
 class NightAlerts:
     """Turns the automation's ticks and decisions into messages."""
 
-    def __init__(self, sender, state_path=None, clock=time.time, logger=None):
+    def __init__(self, sender, state_path=None, clock=time.time, logger=None, muted=None):
         self._sender = sender
+        self._muted = muted or (lambda: ())
         self._state_path = state_path
         self._clock = clock
         self._logger = logger or logging.getLogger("roof")
@@ -248,7 +332,7 @@ class NightAlerts:
             if len(names) > 1:
                 lines.append("Then: " + ", ".join(names[1:]))
             title = "Imaging session resumed" if resumed else "Imaging session started"
-            self._send(title, "\n".join(lines), "success")
+            self._send(title, "\n".join(lines), "success", "session")
 
     def session_adopted(self, night):
         with self._lock:
@@ -261,6 +345,7 @@ class NightAlerts:
             self._send(
                 "Imaging session started elsewhere",
                 "A schedule not started by the automation is running; watching it.",
+                kind="session",
             )
 
     def session_ended(self, reason, more_tonight=False):
@@ -281,7 +366,7 @@ class NightAlerts:
                 next_step = "The target list may have more for tonight."
             if next_step:
                 lines.append(next_step)
-            self._send(title, "\n".join(lines), level)
+            self._send(title, "\n".join(lines), level, "session")
 
     def session_forgotten(self):
         with self._lock:
@@ -293,10 +378,10 @@ class NightAlerts:
             if self._current is not None and self._current.name == name:
                 self._current.skip_reason = why
             else:
-                self._send(f"Skipping {name}", why, "warning")
+                self._send(f"Skipping {name}", why, "warning", "switching")
 
     def parked(self):
-        self._send("Arm parked", "The firmware reports the mount closed.")
+        self._send("Arm parked", "The firmware reports the mount closed.", kind="parked")
 
     def alarm(self, message):
         with self._lock:
@@ -334,7 +419,8 @@ class NightAlerts:
                 title, level, doubt = f"Autofocus passed{where}", "success", ""
             if current:
                 current.focus_doubt = doubt
-            self._send(title, summary, level)
+            kind = "autofocus_failed" if doubt else "autofocus_passed"
+            self._send(title, summary, level, kind)
 
     # ---- what each tick shows --------------------------------------------------
 
@@ -408,7 +494,7 @@ class NightAlerts:
         else:
             level = "warning"
             lines.append(f"{previous.name} stacked nothing: its slew or stack probably failed.")
-        self._send(f"Switching target: {name}", "\n".join(lines), level)
+        self._send(f"Switching target: {name}", "\n".join(lines), level, "switching")
 
     def _announce_stacking(self, target, state):
         details = []
@@ -423,7 +509,7 @@ class NightAlerts:
         if target.focus_doubt:
             text += f"\nStacking anyway: {target.focus_doubt}, so focus isn't confirmed."
             level = "warning"
-        self._send(f"Stacking {target.name}", text, level)
+        self._send(f"Stacking {target.name}", text, level, "stacking")
 
     def _close_target(self):
         target, self._current = self._current, None
@@ -455,7 +541,7 @@ class NightAlerts:
         ):
             night["waiting_sent"] = True
             self._save()
-            self._send("Not imaging yet", self._why(note))
+            self._send("Not imaging yet", self._why(note), kind="night")
         if self._was_dark is True and not dark:
             self._close_the_night()
         self._was_dark = dark
@@ -473,18 +559,20 @@ class NightAlerts:
             ]
             total = sum(t["seconds"] for t in night["targets"].values())
             lines.append(f"Total: {_duration(total)}")
-            self._send("Night summary", "\n".join(lines), "success")
+            self._send("Night summary", "\n".join(lines), "success", "night")
         elif night["sessions"]:
             self._send(
                 "No imaging tonight",
                 "A session started, but nothing was stacked before dawn.",
                 "warning",
+                "night",
             )
         else:
             self._send(
                 "No imaging tonight",
                 self._why(self._last_note) if self._last_note else "It never started.",
                 "warning",
+                "night",
             )
 
     @staticmethod
@@ -500,7 +588,9 @@ class NightAlerts:
 
     # ---- plumbing ---------------------------------------------------------------
 
-    def _send(self, title, text, level="info"):
+    def _send(self, title, text, level="info", kind=ALWAYS):
+        if kind in self._muted():
+            return
         prefix = "[DRY RUN] " if self._dry_run else ""
         self._sender.send(prefix + title, text, level)
 
@@ -529,12 +619,10 @@ class NightAlerts:
 
 def main() -> int:
     """Post a test message: python -m roof.alerts --test"""
-    from device.config import Config
-
     parser = argparse.ArgumentParser(description=main.__doc__)
     parser.add_argument("--test", action="store_true", help="post a test message and report")
     args = parser.parse_args()
-    path = os.path.join(os.path.dirname(Config.path_to_dat), WEBHOOK_FILE)
+    path = webhook_path()
     url = read_webhook(path)
     if not url:
         print(f"No webhook in {path}")
@@ -542,8 +630,7 @@ def main() -> int:
     if not args.test:
         parser.print_help()
         return 0
-    body = payload("Test alert", "Seestar ALP can reach this channel.", "info", time.time())
-    sent, status = deliver(url, body)
+    sent, status = send_test(url)
     print(f"{'Sent' if sent else 'Not sent'}: {status}")
     return 0 if sent else 1
 

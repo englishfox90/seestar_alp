@@ -1,7 +1,7 @@
 """Settings for roof automation: the [roof] section of config.toml.
 
 Read fresh every tick, so a hand edit takes effect without a restart. The web
-page only ever writes ``enabled`` and ``schedule``; ``dry_run`` is file-only, and
+page only ever writes the keys in WRITABLE_KEYS; ``dry_run`` is file-only, and
 only a literal ``dry_run = false`` arms the automation.
 """
 
@@ -12,7 +12,7 @@ import tomlkit
 from device.config import Config
 
 SECTION = "roof"
-WRITABLE_KEYS = {"enabled", "schedule"}
+WRITABLE_KEYS = {"enabled", "schedule", "discord_enabled", "discord_muted"}
 
 
 @dataclass(frozen=True)
@@ -36,6 +36,7 @@ class Settings:
     pier_image_url: str = "http://127.0.0.1:8085/latest"
     pier_status_url: str = "http://127.0.0.1:8085/status"
     discord_enabled: bool = False
+    discord_muted: tuple = ()  # alert kinds switched off; see roof.alerts.KINDS
     lat: float = 0.0
     lon: float = 0.0
 
@@ -49,6 +50,10 @@ def _number(key, default, cast=float):
         return cast(_unwrap(Config.get_toml(SECTION, key, default)))
     except (TypeError, ValueError):
         return default
+
+
+def _string_list(value) -> tuple:
+    return tuple(str(v) for v in value) if isinstance(value, (list, tuple)) else ()
 
 
 def load() -> Settings:
@@ -73,6 +78,7 @@ def load() -> Settings:
         pier_image_url=str(get("pier_image_url", Settings.pier_image_url)),
         pier_status_url=str(get("pier_status_url", Settings.pier_status_url)),
         discord_enabled=get("discord_enabled", False) is True,
+        discord_muted=_string_list(get("discord_muted", [])),
         lat=float(_unwrap(Config.get_toml("seestar_initialization", "lat", 0)) or 0),
         lon=float(_unwrap(Config.get_toml("seestar_initialization", "long", 0)) or 0),
     )
