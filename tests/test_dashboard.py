@@ -291,6 +291,52 @@ def test_last_image_survives_the_end_of_the_session(store):
     assert again["target"] == "IC 1805" and again["stacked"] == 7
 
 
+def test_a_stale_request_does_not_label_a_later_image(store):
+    """A browser asked during SH2-157, left, and came back after IC 1805 had replaced it."""
+    images, clock = store
+    imager = FakeImager(_view(41, target_name="SH2-157"))
+    images.latest(imager, fetch=True)
+    clock.now += dashboard.PENDING_MAX_AGE_S + 1
+    imager.device.view_state = _view(247, target_name="IC 1805")
+    imager.receive()
+    image = images.latest(imager)
+    assert image["target"] == "IC 1805" and image["stacked"] == 247
+
+
+def test_capture_time_is_when_the_image_arrived_not_when_it_was_seen(store):
+    images, clock = store
+    imager = FakeImager(_view(7))
+    images.latest(imager, fetch=True)
+    imager.receive()
+    imager.comm.received_at = lambda: 500.0
+    clock.now += 3600
+    assert images.latest(imager)["captured_at"] == 500.0
+
+
+def test_a_stale_request_with_no_stacking_view_leaves_the_image_unnamed(store):
+    images, clock = store
+    imager = FakeImager(_view(41, target_name="SH2-157"))
+    images.latest(imager, fetch=True)
+    clock.now += dashboard.PENDING_MAX_AGE_S + 1
+    imager.device.view_state = {"state": "idle", "target_name": "SH2-157"}
+    imager.receive()
+    image = images.latest(imager)
+    assert image["target"] is None and image["stacked"] is None
+    assert dashboard.download_name(image).startswith("seestar_")
+
+
+def test_a_request_does_not_label_an_image_that_arrived_before_it(store):
+    images, _ = store
+    imager = FakeImager(_view(7, target_name="IC 1805"))
+    imager.comm.received_at = lambda: 10.0
+    imager.receive()
+    images.latest(imager, fetch=True)
+    imager.device.view_state = {"state": "idle"}
+    imager.comm.frame += 1
+    image = images.latest(imager)
+    assert image["target"] is None
+
+
 def test_caption_comes_from_the_request_not_the_next_target(store):
     images, _ = store
     imager = FakeImager(_view(7))

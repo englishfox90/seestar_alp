@@ -3,7 +3,7 @@ import zipfile
 from datetime import datetime
 from enum import Enum
 from io import BytesIO
-from time import monotonic, sleep
+from time import monotonic, sleep, time
 from typing import Optional, Tuple, List
 
 import cv2
@@ -30,6 +30,7 @@ class SeestarImagerProtocol(SeestarBinaryProtocol):
         self.streaming_thread = None
         self.exposure_mode: Optional[ExposureModes] = None
         self._received_frame = 0
+        self._received_at = None
         self.raw_img = None
         self.raw_img_size: Tuple[Optional[int], Optional[int]] = [None, None]
         self.latest_image = None
@@ -124,6 +125,11 @@ class SeestarImagerProtocol(SeestarBinaryProtocol):
         with self.lock:
             return self.latest_image, self.raw_img_size[0], self.raw_img_size[1]
 
+    def received_at(self) -> float | None:
+        """When the newest frame arrived, in Unix time."""
+        with self.lock:
+            return self._received_at
+
     def received_frame(self) -> int:
         with self.lock:
             return self._received_frame
@@ -211,7 +217,9 @@ class SeestarImagerProtocol(SeestarBinaryProtocol):
                 else:
                     return
 
-                self._received_frame += 1
+                with self.lock:
+                    self._received_frame += 1
+                    self._received_at = time()
                 if self.raw_img is not None:
                     self.logger.debug(f"read image size={len(self.raw_img)}")
                 # todo : run on message listeners here!
@@ -252,6 +260,7 @@ class SeestarImagerProtocol(SeestarBinaryProtocol):
                             self.raw_img = np.copy(image)
                             self.latest_image = self.raw_img
                             self._received_frame += 1
+                            self._received_at = time()
                             empty_images = 0  # Reset counter...
 
                             if self._received_frame % 100 == 0:
