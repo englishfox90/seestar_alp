@@ -1,11 +1,12 @@
-{% if status.loop_stale %}
-  <span class="badge text-bg-danger">Roof: loop stopped</span>
-{% elif status.alarm %}
-  <span class="badge text-bg-danger">Roof: alarm</span>
-{% elif status.safe %}
-  <span class="badge text-bg-success">Roof: safe</span>
-{% else %}
-  <span class="badge text-bg-danger">Roof: unsafe</span>
-{% endif %}
-{% if not status.loop_stale and not status.connected %}<span class="badge text-bg-warning">scope offline</span>{% endif %}
-{% if status.dry_run %}<span class="badge text-bg-warning">dry run</span>{% endif %}
+{# The nav bar's status, fetched by both base.html and the shell. A dot or icon and a word.
+   base.html does not load components.css, so the legacy bar's rules travel with the badge. #}
+{% import 'partials/roof_parts.html' as parts %}
+<style>
+  .app-status { flex-wrap: wrap; justify-content: flex-end; gap: var(--ssc-space-1) var(--ssc-space-4); color: var(--ssc-text-1); }
+  .app-status .ssc-status { display: inline-flex; align-items: center; gap: var(--ssc-space-2); font-size: var(--ssc-text-footnote); font-weight: var(--ssc-weight-strong); white-space: nowrap; }
+  .app-status .ssc-status__dot { width: 8px; height: 8px; border-radius: var(--ssc-radius-full); background: currentColor; }
+  .app-status .ssc-status[data-tone="ok"] { color: var(--ssc-green); }
+  .app-status .ssc-status[data-tone="attention"] { color: var(--ssc-orange); }
+  .app-status .ssc-status[data-tone="danger"] { color: var(--ssc-red); }
+</style>
+{{ parts.roof_lines(roof_lines) }}

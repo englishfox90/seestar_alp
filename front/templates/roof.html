@@ -1,78 +1,98 @@
-{% extends 'base.html' %}
+{% extends 'ssc/shell.html' %}
+{% import 'ssc/ui.html' as ui %}
+{% import 'ssc/form.html' as form %}
+{% import 'partials/roof_parts.html' as parts %}
 
-{% block title %}Roof{% endblock %}
-
-{% block header %}
-  <div class="page-hero">
-    <div>
-      <h1 class="page-title">Roof Automation</h1>
-      <p class="page-subtitle">Controls and live status for the roof-gated imaging session</p>
-    </div>
-  </div>
-{% endblock %}
+{% block title %}Automation{% endblock %}
 
 {% block content %}
-  <style>
-    .roof-actions .btn { min-height: var(--ssc-control-height); }
-    .roof-log { max-height: 20rem; overflow-y: auto; }
-    @media (max-width: 575.98px) {
-      .roof-actions form:last-child { flex-basis: 100%; }
-      .roof-actions form:last-child .btn { width: 100%; }
-    }
-  </style>
+<main class="ssc-page plan-page plan-column" id="automation">
+  <h1 class="ssc-title">Automation</h1>
+
+  {% for message in ((flashed_messages or []) + (messages or []))|unique %}{{ ui.notice("attention" if "failed" in message|lower else "neutral", message) }}{% endfor %}
+  <div id="plan-auth" class="plan-stack no-htmx-fx" hx-get="{{ root }}/tonight/auth" hx-trigger="every 15s [!document.hidden]" hx-sync="this:drop" hx-swap="innerHTML">{% if needs_auth_warning %}{% include 'ssc/auth_notice.html' %}{% endif %}</div>
+
   {% if settings.dry_run %}
-    <div class="alert alert-warning"><strong>Dry run.</strong> Everything below only logs what it would do; no commands reach the scope. To arm it, set <code>dry_run = false</code> under <code>[roof]</code> in config.toml.</div>
+  <p class="ssc-notice plan-mode" id="roof-mode" data-tone="attention">{{ ui.icon("warning", 20) }}<span><strong>Dry run.</strong> Everything below only logs what it would do; no commands reach the scope. To go live, set <code>dry_run = false</code> under <code>[roof]</code> in config.toml.</span></p>
   {% else %}
-    <div class="alert alert-primary"><strong>Live.</strong> Automation and these buttons command the scope.</div>
+  <p class="ssc-notice plan-mode" id="roof-mode" data-tone="neutral">{{ ui.icon("info", 20) }}<span><strong>Live.</strong> Automation and these buttons command the scope.</span></p>
   {% endif %}
 
-  <div class="card mb-3"><h2 class="card-header mb-0">Controls</h2><div class="card-body">
-    <form method="post" action="{{ root_path }}{{ page_root }}/select" class="row g-3 align-items-center mb-3">
-      <div class="col-auto"><label for="roof-schedule" class="col-form-label">Image from</label></div>
-      <div class="col-auto">
-        <select id="roof-schedule" name="schedule" class="form-select">
-          <option value="">None</option>
-          <option value="{{ target_list }}" {% if settings.schedule == target_list %}selected{% endif %}>{{ target_list_label }}</option>
-          {% for row in schedules %}
-            <option value="{{ row.name }}" {% if row.name == settings.schedule %}selected{% endif %}{% if row.errors %} disabled{% endif %}>
-              {{ row.name }} ({{ row.targets|length }} targets){% if row.errors %}: rejected{% endif %}
-            </option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-auto"><button class="btn btn-primary" type="submit">Save</button></div>
-      <div class="col-12 form-text">A change applies at the next start. A running session keeps going until the roof or dawn stops it.{% if settings.schedule == target_list %} Each start plans afresh from the <a href="{{ root_path }}{{ targets_url }}">target list</a>.{% endif %}</div>
-    </form>
-    {% for row in schedules %}
-      {% if row.name == settings.schedule %}
-        <p class="small mb-2">{{ row.targets|join(", ") }}</p>
-      {% endif %}
-      {% for problem in row.errors + row.warnings %}
-        <div class="small text-warning">{{ row.name }}: {{ problem }}</div>
-      {% endfor %}
-    {% endfor %}
-
-    <div class="d-flex flex-wrap gap-2 mt-3 roof-actions">
-      <form method="post" action="{{ root_path }}{{ page_root }}/enable">
-        <input type="hidden" name="enabled" value="{{ 'false' if settings.enabled else 'true' }}">
-        <button class="btn {{ 'btn-outline-secondary' if settings.enabled else 'btn-success' }}" type="submit">{{ "Disable automation" if settings.enabled else "Enable automation" }}</button>
-      </form>
-      <form method="post" action="{{ root_path }}{{ page_root }}/start" onsubmit="return confirm('Start imaging now? This ignores the roof status.');">
-        <button class="btn btn-primary" type="submit">Start</button>
-      </form>
-      <form method="post" action="{{ root_path }}{{ page_root }}/stop">
-        <button class="btn btn-danger" type="submit">Stop &amp; park</button>
-      </form>
-    </div>
-
-    <form method="post" action="{{ root_path }}{{ page_root }}/capture" class="row g-3 align-items-center mt-3">
-      <div class="col-auto"><label for="roof-capture" class="col-form-label">Capture the plan loaded on the scope as</label></div>
-      <div class="col-auto"><input id="roof-capture" name="name" class="form-control" placeholder="Plan name" required></div>
-      <div class="col-auto"><button class="btn btn-outline-primary" type="submit">Capture</button></div>
-    </form>
-  </div></div>
-
-  <div id="roof-status" class="no-htmx-fx" hx-get="{{ root_path }}{{ page_root }}/status" hx-trigger="every 5s" hx-swap="innerHTML">
+  <div id="roof-status" class="plan-stack no-htmx-fx" hx-get="{{ root_path }}{{ page_root }}/status" hx-trigger="every 5s [!document.hidden]" hx-sync="this:drop" hx-swap="innerHTML">
     {% include 'partials/roof_status.html' %}
   </div>
+
+  <section class="plan-section">
+    <h2 class="ssc-section">Session</h2>
+    <div class="plan-panel">
+      <form class="plan-inline" method="post" action="{{ root_path }}{{ page_root }}/enable">
+        <input type="hidden" name="enabled" value="{{ 'false' if settings.enabled else 'true' }}">
+        <p class="plan-inline__text">Automation is {{ "on" if settings.enabled else "off" }}</p>
+        {{ ui.button("Disable automation" if settings.enabled else "Enable automation", "secondary", "submit") }}
+      </form>
+      <button class="ssc-button ssc-stop" type="button" data-open-sheet="roof-stop-sheet">Stop &amp; park</button>
+      <div class="plan-override-block">
+        <p class="ssc-notice" data-tone="attention">{{ ui.icon("warning", 20) }}<span><strong>Start ignores the roof status.</strong> If the roof reads unsafe, the scope still opens.</span></p>
+        <button class="ssc-button plan-override" type="button" data-open-sheet="roof-start-sheet">{{ ui.icon("warning", 20) }}Start</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="plan-section">
+    <h2 class="ssc-section">Image source</h2>
+    <form class="plan-panel" method="post" action="{{ root_path }}{{ page_root }}/select">
+      <div class="ssc-field">
+        <label class="ssc-field__label" for="roof-schedule">Image from</label>
+        {# Written out because a rejected schedule is shown but can't be chosen, and picker() has no disabled option. #}
+        <select class="ssc-input" id="roof-schedule" name="schedule">
+          <option value="">None</option>
+          <option value="{{ target_list|e }}"{% if settings.schedule == target_list %} selected{% endif %}>{{ target_list_label|e }}</option>
+          {% for row in schedules %}
+          <option value="{{ row.name|e }}"{% if row.name == settings.schedule %} selected{% endif %}{% if row.errors %} disabled{% endif %}>{{ row.name|e }} ({{ row.targets|length }} targets){% if row.errors %}: rejected{% endif %}</option>
+          {% endfor %}
+        </select>
+        <p class="ssc-field__help">A change applies at the next start. A running session keeps going until the roof or dawn stops it.{% if settings.schedule == target_list %} Each start plans afresh from the <a href="{{ root_path }}{{ targets_url }}">target list</a>.{% endif %}</p>
+      </div>
+      {% for row in schedules %}
+        {% if row.name == settings.schedule %}<p class="ssc-footnote">{{ row.targets|join(", ")|e }}</p>{% endif %}
+        {% for problem in row.errors + row.warnings %}<p class="plan-warning">{{ ui.icon("warning", 16) }}<span>{{ row.name|e }}: {{ problem|e }}</span></p>{% endfor %}
+      {% endfor %}
+      <div class="plan-actions">{{ ui.button("Save", "primary", "submit") }}</div>
+    </form>
+  </section>
+
+  <section class="plan-section">
+    <h2 class="ssc-section">Capture plan</h2>
+    <form class="plan-panel" method="post" action="{{ root_path }}{{ page_root }}/capture">
+      <div class="plan-field-action">
+        {{ form.field("Capture the plan loaded on the scope as", "roof-capture", "name", attrs='placeholder="Plan name" required') }}
+        {{ ui.button("Capture", "secondary", "submit") }}
+      </div>
+    </form>
+  </section>
+
+  <div id="roof-targets" class="plan-stack no-htmx-fx">{{ parts.targets(status)|trim }}</div>
+
+  <section class="plan-section">
+    <h2 class="ssc-section">Log</h2>
+    <div class="plan-panel"><pre class="plan-log" id="roof-log" tabindex="0">{{ parts.log_lines(status) }}</pre></div>
+  </section>
+</main>
+
+{% call ui.sheet("roof-stop-sheet", "Stop & park?") %}
+  <p class="ssc-sheet__text">The scope stops imaging and closes its arm. Automation then holds until Start or the next night.{% if settings.dry_run %} This is a dry run, so the scope will not move.{% endif %}</p>
+  <form method="post" action="{{ root_path }}{{ page_root }}/stop">
+    <button class="ssc-button ssc-stop" data-solid="1" type="submit">Stop &amp; park</button>
+  </form>
+  <button class="ssc-button" data-kind="secondary" data-tall="1" type="button" data-close-sheet autofocus>Keep imaging</button>
+{% endcall %}
+
+{% call ui.sheet("roof-start-sheet", "Start imaging now?") %}
+  <p class="ssc-notice plan-sheet-warning" data-tone="attention">{{ ui.icon("warning", 24) }}<strong>This ignores the roof status.</strong></p>
+  <p class="ssc-sheet__text">If the roof reads unsafe or is closed, the scope still opens its arm and starts imaging. It will not park for the roof until the roof next reads safe.{% if settings.dry_run %} This is a dry run, so the scope will not move.{% endif %}</p>
+  <form method="post" action="{{ root_path }}{{ page_root }}/start">
+    <button class="ssc-button plan-override" data-tall="1" type="submit">{{ ui.icon("warning", 20) }}Start, ignoring the roof</button>
+  </form>
+  <button class="ssc-button" data-kind="secondary" data-tall="1" type="button" data-close-sheet autofocus>Don't start</button>
+{% endcall %}
 {% endblock %}

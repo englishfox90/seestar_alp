@@ -15,7 +15,7 @@ from roof import config as roof_config
 from roof import planner, schedule_tools
 from roof import queue as target_queue
 from roof.automation import session_log
-from roof.web import _Action, _form, _front
+from roof.web import _Action, _form, _front, shell_context
 
 FORECAST_NIGHTS = 14
 
@@ -164,6 +164,7 @@ class QueuePage:
             sky_model=_scope_model(front, telescope_id),
             page_root=f"/{telescope_id}/targets",
             roof_url=f"/{telescope_id}/roof",
+            **shell_context(context),
             **_context(),
             **context,
         )

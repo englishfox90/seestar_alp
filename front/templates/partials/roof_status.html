@@ -1,67 +1,47 @@
-{% if status.loop_stale %}
-<div class="alert alert-danger">The automation loop has stopped reporting. Nothing will park the scope automatically until this clears.</div>
-{% endif %}
-{% if status.alarm %}<div class="alert alert-danger">{{ status.alarm }}</div>{% endif %}
-{% if status.override_roof %}
-<div class="alert alert-danger">Manual start is ignoring the roof. It will not park for the roof until the roof next reads safe.</div>
-{% endif %}
-{% if status.foreign %}
-<div class="alert alert-info">A session started elsewhere is running. Automation will leave it alone, and will still park if the roof reads unsafe.</div>
-{% endif %}
-<div class="card mb-3"><div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
-  <h2 class="mb-0">{{ status.headline or "Starting up" }}</h2>
-  <div class="small text-body-secondary">
-    Service {% if status.loop_stale %}<span class="badge text-bg-danger">Not responding</span>{% else %}<span class="badge text-bg-success">Running</span>{% endif %}
-    {% if status.uptime_s is defined %}&nbsp;up {{ (status.uptime_s // 3600)|int }}h {{ ((status.uptime_s % 3600) // 60)|int }}m{% endif %}
-    {% if status.loop_age_s is not none %}, checked {{ status.loop_age_s|int }}s ago{% endif %}
-  </div>
-</div></div>
-<div class="row g-3 mb-3">
-  <div class="col-md-4"><div class="card h-100"><h2 class="card-header mb-0">Roof</h2><div class="card-body">
-    <p class="mb-2">{% if status.safe %}<span class="badge text-bg-success">Safe</span>{% else %}<span class="badge text-bg-danger">Unsafe</span>{% endif %}</p>
-    <div class="small text-body-secondary">{{ status.safety_detail }}</div>
-  </div></div></div>
-  <div class="col-md-4"><div class="card h-100"><h2 class="card-header mb-0">Sky</h2><div class="card-body">
-    <p class="mb-2">{% if status.dark %}<span class="badge text-bg-success">Dark</span>{% else %}<span class="badge text-bg-secondary">Not dark</span>{% endif %}</p>
-    <div class="small text-body-secondary">Sun {% if status.sun_deg is none %}unknown (no site lat/long){% else %}{{ "%.1f"|format(status.sun_deg) }}&deg;{% endif %}, limit {{ status.sun_max_deg }}&deg;</div>
-  </div></div></div>
-  <div class="col-md-4"><div class="card h-100"><h2 class="card-header mb-0">Scope{% if status.scope_name %}: {{ status.scope_name }}{% endif %}</h2><div class="card-body">
-    {% if not status.connected %}
-      <p class="mb-2"><span class="badge text-bg-danger">Not connected</span></p>
-    {% else %}
-      <p class="mb-2">{% if status.parked is none %}<span class="badge text-bg-warning">Unknown</span>{% elif status.parked %}<span class="badge text-bg-secondary">Parked</span>{% else %}<span class="badge text-bg-secondary">Arm open</span>{% endif %}</p>
-      <div class="small text-body-secondary">
-        Scheduler: {{ status.sched_state }}{% if status.target_index %}, target {{ status.target_index }} of {{ status.target_total }}{% elif status.target_total is not defined and status.item_number %}, item {{ status.item_number }} of {{ status.item_count }}{% endif %}<br>
-        Target: {{ status.target or "none" }}<br>
-        Tracking: {{ status.tracking }}{% if status.mosaic_scale is defined and status.mosaic_scale is not none %}<br>
-        Framing now: {% if status.mosaic_scale > 1.0 %}mosaic {{ status.mosaic_scale }}x{% else %}single frame{% endif %}{% endif %}
-      </div>
+{# Polled every 5 s into #roof-status. Sheets and forms stay outside it. Only active danger
+   gets a band: a closed roof with the scope parked is the normal state by day. #}
+{% import 'ssc/ui.html' as ui %}
+{% import 'partials/roof_parts.html' as parts %}
+{% if status.loop_stale %}{{ ui.band({"headline": "Automation loop stopped", "line": "The automation loop has stopped reporting. Nothing will park the scope automatically until this clears."}, "#roof-log") }}{% endif %}
+{% if status.alarm %}{{ ui.band({"headline": status.alarm}, "#roof-log") }}{% endif %}
+{% if status.override_roof %}{{ ui.band({"headline": "Manual start is ignoring the roof", "line": "It will not park for the roof until the roof next reads safe."}, "#roof-log") }}
+{% elif status.connected and status.safe is false and status.parked is false %}{{ ui.band({"headline": "Roof unsafe, scope not parked", "line": status.safety_detail}, "#roof-log") }}{% endif %}
+{% if status.foreign %}{{ ui.notice("neutral", "A session started elsewhere is running. Automation will leave it alone, and will still park if the roof reads unsafe.") }}{% endif %}
+<p class="plan-sentence">{{ (status.headline or "Starting up")|e }}</p>
+<div class="plan-rows">
+  {% set roof_tone = "ok" if status.safe else ("neutral" if status.parked is true else ("danger" if status.parked is false else "attention")) %}
+  {% call parts.status_row("Roof", roof_tone, "Safe" if status.safe else "Unsafe") %}<span class="ssc-row__sub">{{ status.safety_detail|e }}</span>{% endcall %}
+  {% call parts.status_row("Sky", "neutral", "Dark" if status.dark else "Not dark") %}<span class="ssc-row__sub">Sun {% if status.sun_deg is none %}unknown (no site lat/long){% else %}{{ "%.1f"|format(status.sun_deg) }}&deg;{% endif %}, limit {{ status.sun_max_deg|e }}&deg;</span>{% endcall %}
+  {% if not status.connected %}{% set scope_tone, scope_word = "attention", "Not connected" %}
+  {% elif status.parked is none %}{% set scope_tone, scope_word = "attention", "Unknown" %}
+  {% elif status.parked %}{% set scope_tone, scope_word = "neutral", "Parked" %}
+  {% else %}{% set scope_tone, scope_word = "neutral", "Arm open" %}{% endif %}
+  {% call parts.status_row("Scope" ~ (": " ~ status.scope_name if status.scope_name else ""), scope_tone, scope_word) %}
+    {% if status.connected %}
+    <span class="ssc-row__sub">Scheduler: {{ status.sched_state|e }}{% if status.target_index %}, target {{ status.target_index|e }} of {{ status.target_total|e }}{% elif status.target_total is not defined and status.item_number %}, item {{ status.item_number|e }} of {{ status.item_count|e }}{% endif %}</span>
+    <span class="ssc-row__sub">Target: {{ (status.target or "none")|e }}</span>
+    <span class="ssc-row__sub">Tracking: {{ status.tracking|e }}</span>
+    {% if status.mosaic_scale is defined and status.mosaic_scale is not none %}<span class="ssc-row__sub">Framing now: {% if status.mosaic_scale > 1.0 %}mosaic {{ status.mosaic_scale|e }}x{% else %}single frame{% endif %}</span>{% endif %}
     {% endif %}
-  </div></div></div>
+  {% endcall %}
+  {% call parts.status_row("Automation", "neutral", "Enabled" if status.enabled else "Disabled") %}
+    <span class="ssc-row__sub">{{ status.phase|e }}{% if status.note %} ({{ status.note|e }}){% endif %}</span>
+    {% if status.held %}<span class="ssc-row__sub">Held until Start or the next night.</span>{% endif %}
+    {% if status.completed %}<span class="ssc-row__sub">Schedule finished tonight.</span>{% endif %}
+    {% if status.resume_item %}<span class="ssc-row__sub">Will resume at item {{ status.resume_item|e }} tonight.</span>{% endif %}
+  {% endcall %}
+  {% if status.dew_enabled %}
+  {% call parts.status_row("Dew heater", "neutral", ("On at " ~ status.dew_power ~ "%") if status.heater_on else ("Not set yet" if status.heater_on is none else "Off")) %}
+    <span class="ssc-row__sub">{% if status.dew_margin_c is none %}No weather data, so it stays on while imaging.{% else %}{{ "%.1f"|format(status.dew_temp_c) }}&deg;C, dew point {{ "%.1f"|format(status.dew_point_c) }}&deg;C, margin {{ "%.1f"|format(status.dew_margin_c) }}&deg;C; turns on at {{ status.dew_on_margin_c|e }}&deg;C ({{ status.dew_source|e }}).{% endif %}</span>
+  {% endcall %}
+  {% endif %}
+  {% call parts.status_row("Service", "danger" if status.loop_stale else "ok", "Not responding" if status.loop_stale else "Running") %}
+    <span class="ssc-row__sub">{% if status.uptime_s is defined %}Up {{ (status.uptime_s // 3600)|int }} h {{ ((status.uptime_s % 3600) // 60)|int }} min{% endif %}{% if status.loop_age_s is not none %}{% if status.uptime_s is defined %}, checked{% else %}Checked{% endif %} {{ status.loop_age_s|int }} s ago{% endif %}</span>
+  {% endcall %}
 </div>
-<p class="mb-1"><strong>Automation:</strong> {{ "enabled" if status.enabled else "disabled" }}, {{ status.phase }}{% if status.note %} ({{ status.note }}){% endif %}</p>
-<p class="small text-body-secondary mb-3">
-  {% if status.held %}Held until Start or the next night. {% endif %}
-  {% if status.completed %}Schedule finished tonight. {% endif %}
-  {% if status.resume_item %}Will resume at item {{ status.resume_item }} tonight. {% endif %}
-</p>
-{% if status.dew_enabled %}
-<p class="small mb-3"><strong>Dew heater:</strong>
-  {% if status.heater_on %}on at {{ status.dew_power }}%{% elif status.heater_on is none %}not set yet{% else %}off{% endif %}.
-  {% if status.dew_margin_c is none %}No weather data, so it stays on while imaging.
-  {% else %}{{ "%.1f"|format(status.dew_temp_c) }}&deg;C, dew point {{ "%.1f"|format(status.dew_point_c) }}&deg;C, margin {{ "%.1f"|format(status.dew_margin_c) }}&deg;C; turns on at {{ status.dew_on_margin_c }}&deg;C ({{ status.dew_source }}).{% endif %}
-</p>
+{# Only the polled reply carries these. They update regions outside this one, below the controls. #}
+{% if polled %}
+<div id="roof-targets" hx-swap-oob="innerHTML">{{ parts.targets(status)|trim }}</div>
+<pre id="roof-log" hx-swap-oob="innerHTML">{{ parts.log_lines(status) }}</pre>
+<span id="ssc-status" hx-swap-oob="innerHTML">{{ parts.roof_lines(roof_lines) }}</span>
 {% endif %}
-{% if status.targets %}
-<div class="card mb-3"><h2 class="card-header mb-0">Targets{% if status.min_target_alt_deg %} (minimum {{ status.min_target_alt_deg }}&deg;){% endif %}</h2><div class="card-body">
-  <table class="table table-sm mb-0"><tbody>
-    {% for t in status.targets %}
-      <tr><td>{{ t.name }}</td><td>{{ t.kind }}</td><td>{% if t.altitude is none %}unknown{% else %}{{ "%.1f"|format(t.altitude) }}&deg;{% endif %}</td><td>{% if t.ok %}<span class="badge text-bg-success">OK</span>{% else %}<span class="badge text-bg-secondary">Too low</span>{% endif %}</td></tr>
-    {% endfor %}
-  </tbody></table>
-</div></div>
-{% endif %}
-<div class="card"><h2 class="card-header mb-0">Log</h2><div class="card-body">
-  <pre class="small mb-0 roof-log">{% for line in status.log|reverse %}{{ line }}
-{% endfor %}</pre>
-</div></div>

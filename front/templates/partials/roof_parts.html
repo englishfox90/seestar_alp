@@ -1,0 +1,36 @@
+{# The Automation page's status pieces, shared by roof.html and the polled roof_status.html.
+   Text is escaped here, because this template environment does not autoescape. #}
+{% import 'ssc/ui.html' as ui %}
+
+{# A row of the status panel: label and details at left, status at right. #}
+{% macro status_row(label, tone, word) -%}
+<div class="ssc-row">
+  <span class="ssc-row__label">{{ label|e }}{{ caller() }}</span>
+  <span class="ssc-row__value">{{ ui.status(tone, word) }}</span>
+</div>
+{%- endmacro %}
+
+{% macro targets(status) -%}
+{% if status.targets %}
+<section class="plan-section">
+  <h2 class="ssc-section">Targets{% if status.min_target_alt_deg %} (minimum {{ status.min_target_alt_deg|e }}&deg;){% endif %}</h2>
+  <div class="plan-rows">
+    {% for t in status.targets %}
+    <div class="ssc-row">
+      <span class="ssc-row__label">{{ t.name|e }}<span class="ssc-row__sub">{{ t.kind|e }}</span></span>
+      <span class="ssc-row__value">{% if t.altitude is none %}unknown{% else %}{{ "%.1f"|format(t.altitude) }}&deg;{% endif %}, {{ "OK" if t.ok else "too low" }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{%- endmacro %}
+
+{% macro log_lines(status) -%}
+{% for line in status.log|reverse %}{{ line|e }}
+{% else %}Nothing logged yet.{% endfor %}
+{%- endmacro %}
+
+{% macro roof_lines(lines) -%}
+{% for line in lines %}{{ ui.status(line.tone, line.text) }}{% endfor %}
+{%- endmacro %}

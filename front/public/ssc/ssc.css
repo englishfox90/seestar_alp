@@ -6,4 +6,5 @@
 @import url("components.css") layer(components);
 @import url("forms.css") layer(components);
 @import url("pages.css") layer(pages);
+@import url("plan.css") layer(pages);
 @import url("red-floor.css");

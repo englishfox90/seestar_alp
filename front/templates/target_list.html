@@ -1,143 +1,156 @@
-{% extends 'base.html' %}
+{% extends 'ssc/shell.html' %}
+{% import 'ssc/ui.html' as ui %}
+{% import 'ssc/form.html' as form %}
 
-{% block title %}Target list{% endblock %}
+{% block title %}Targets{% endblock %}
 
-{% block header %}
-  <div class="page-hero">
-    <div>
-      <h1 class="page-title">Target list</h1>
-      <p class="page-subtitle">Plan what to image and track progress toward each goal</p>
-    </div>
-  </div>
-{% endblock %}
+{% macro warning(text) -%}
+<p class="plan-warning">{{ ui.icon("warning", 16) }}<span>{{ text|e }}</span></p>
+{%- endmacro %}
 
 {% block content %}
-  <style>
-    .target-num { width: 5rem; }
-    .target-progress { min-width: 11rem; }
-    .target-add-check { display: flex; align-items: center; gap: var(--ssc-space-3); min-height: var(--ssc-control-height); padding: 0; margin: 0; }
-    .target-add-check .form-check-input { margin: 0; float: none; }
-    .target-on-hit { display: inline-flex; align-items: center; justify-content: center; margin: 0; }
-    .target-on-hit .form-check-input { margin: 0; float: none; }
-    .target-hint { flex-basis: 100%; }
-    @media (max-width: 767.98px) {
-      .target-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-      .target-table, .target-table tbody { display: block; }
-      .target-table tr { display: grid; grid-template-columns: var(--ssc-control-height) minmax(0, 1fr); column-gap: var(--ssc-space-3); align-items: center; padding: var(--ssc-space-4) 0; border-bottom: 1px solid var(--ssc-separator); }
-      .target-table tr:last-child { border-bottom: 0; }
-      .target-table td { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ssc-space-2) var(--ssc-space-3); grid-column: 1 / -1; min-height: var(--ssc-control-height); padding: var(--ssc-space-2) 0; border: 0; text-align: right; }
-      .target-table td[data-label]::before { content: attr(data-label); color: var(--ssc-text-2); font-size: var(--ssc-text-footnote); text-align: left; }
-      .target-table td.target-on { grid-column: 1; padding: 0; justify-content: center; }
-      .target-table td.target-on .target-on-hit { width: var(--ssc-control-height); height: var(--ssc-control-height); }
-      .target-table td.target-on .form-check-input { width: 1.5rem; height: 1.5rem; }
-      .target-table td.target-name { display: block; grid-column: 2; min-width: 0; padding: 0; text-align: left; font-weight: var(--ssc-weight-strong); }
-      .target-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .target-table td.target-name .small { font-weight: var(--ssc-weight-regular); }
-      .target-table td.target-progress { display: block; min-width: 0; text-align: left; }
-      .target-table .target-num, .target-table .form-select { width: 8rem; min-height: var(--ssc-control-height); text-align: right; }
-      .target-hint { text-align: right; }
-      .target-table td.target-actions { gap: var(--ssc-space-3); flex-wrap: nowrap; }
-      .target-table td.target-actions > * { flex: 1 1 0; min-width: 0; }
-      .target-table td.target-actions .btn { width: 100%; min-height: var(--ssc-control-height); }
-    }
-  </style>
-  {% if not site_known %}
-    <div class="alert alert-warning">Set the site latitude and longitude before planning.</div>
-  {% endif %}
+{% set priority_options = [] %}
+{% for p in priorities %}{% set _ = priority_options.append({"value": p, "label": p|capitalize}) %}{% endfor %}
+<main class="ssc-page plan-page" id="targets">
+  <h1 class="ssc-title">Targets</h1>
 
-  <div class="card mb-3"><h2 class="card-header mb-0">Targets</h2><div class="card-body">
+  {% for message in ((flashed_messages or []) + (messages or []))|unique %}{{ ui.notice("attention" if "failed" in message|lower or ", but " in message else "neutral", message) }}{% endfor %}
+  <div id="plan-auth" class="plan-stack no-htmx-fx" hx-get="{{ root }}/tonight/auth" hx-trigger="every 15s [!document.hidden]" hx-sync="this:drop" hx-swap="innerHTML">{% if needs_auth_warning %}{% include 'ssc/auth_notice.html' %}{% endif %}</div>
+  {# This page has no status poll of its own, and the top bar's roof status must not go stale. #}
+  <div hidden hx-get="{{ root_path }}/roof/badge" hx-trigger="every 10s [!document.hidden]" hx-target="#ssc-status" hx-sync="this:drop" hx-swap="innerHTML"></div>
+
+  {% if not site_known %}{{ ui.notice("attention", "Set the site latitude and longitude before planning.") }}{% endif %}
+
+  <section class="plan-section" aria-label="Target list">
     {% if not rows %}
-      <p class="mb-0">Nothing listed yet. Import a plan below, or add a target by hand.</p>
+    <div class="plan-panel"><p>Nothing listed yet. Import a plan below, or add a target by hand.</p></div>
     {% else %}
-    <div class="table-responsive"><table class="table table-sm align-middle target-table">
-      <thead><tr>
-        <th>On</th><th>Target</th><th>Framing</th><th>Progress</th>
-        <th>Goal (h)</th><th>Shortest run (h)</th><th>Earlier data (h)</th><th>Priority</th><th>Forecast done</th><th></th>
-      </tr></thead>
-      <tbody>
+    <div class="plan-rows plan-targets">
+      <div class="plan-targets__head" aria-hidden="true">
+        <span>Target</span><span class="plan-targets__progress-head">Progress</span><span>Priority</span><span>Forecast done</span><span></span>
+      </div>
       {% for row in rows %}
-        {% set t = row.target %}
-        <tr>
-          <td class="target-on"><label class="target-on-hit"><input form="target-{{ t.id }}" type="checkbox" class="form-check-input" name="enabled" aria-label="Plan {{ t.name }}" {% if t.enabled %}checked{% endif %}></label></td>
-          <td class="target-name"><span class="target-title">{{ t.name }}</span><div class="small text-body-secondary">{{ "LP filter" if t.lp_filter else "No filter" }}, {{ t.exposure_s | round(1) }} s, gain {{ t.gain }}</div></td>
-          <td data-label="Framing">{{ row.framing }}</td>
-          <td class="target-progress">
-            <div class="progress" role="progressbar" aria-label="{{ t.name }} progress" aria-valuenow="{{ row.percent }}" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" style="width: {{ row.percent }}%"></div></div>
-            <div class="small">{{ row.have }} of {{ t.goal_hours }} h in {{ row.sessions }} {{ "run" if row.sessions == 1 else "runs" }}{% if row.rate %}, {{ row.rate }}% of time stacked{% endif %}</div>
-            {% if row.partial %}<div class="small text-warning">{{ row.partial }} h more from framed runs too short to count</div>{% endif %}
-          </td>
-          <td data-label="Goal (h)"><input form="target-{{ t.id }}" class="form-control form-control-sm target-num" name="goal_hours" value="{{ t.goal_hours }}" aria-label="{{ t.name }} goal hours"></td>
-          <td data-label="Shortest run (h)"><input form="target-{{ t.id }}" class="form-control form-control-sm target-num" name="min_session_hours" value="{{ t.min_session_hours }}" aria-label="{{ t.name }} shortest run">
-            {% if row.short %}<div class="small text-warning target-hint">Under the scope's {{ row.estimate }} h estimate</div>
-            {% elif row.estimate %}<div class="small text-body-secondary target-hint">Scope estimate {{ row.estimate }} h</div>
-            {% elif t.framed %}<div class="small text-body-secondary target-hint">No scope estimate until this size has run</div>{% endif %}
-          </td>
-          <td data-label="Earlier data (h)"><input form="target-{{ t.id }}" class="form-control form-control-sm target-num" name="prior_hours" value="{{ t.prior_hours }}" aria-label="{{ t.name }} earlier data"></td>
-          <td data-label="Priority"><select form="target-{{ t.id }}" class="form-select form-select-sm" name="priority" aria-label="{{ t.name }} priority">
-            {% for p in priorities %}<option value="{{ p }}" {% if p == t.priority %}selected{% endif %}>{{ p | capitalize }}</option>{% endfor %}
-          </select></td>
-          <td data-label="Forecast done">{{ row.finish or "Beyond 2 weeks" }}</td>
-          <td class="text-nowrap target-actions">
-            {% if sky_targets is defined %}<button class="btn btn-sm btn-outline-primary" type="button" data-sky-show="{{ t.id }}">Show</button>{% endif %}
-            <form id="target-{{ t.id }}" method="post" action="{{ root_path }}{{ page_root }}/update" class="d-inline">
-              <input type="hidden" name="id" value="{{ t.id }}">
-              <button class="btn btn-sm btn-primary" type="submit">Save</button>
-            </form>
-            <form method="post" action="{{ root_path }}{{ page_root }}/remove" class="d-inline" onsubmit="return confirm('Remove {{ t.name | e }} from the list? Its recorded sessions are kept.');">
-              <input type="hidden" name="id" value="{{ t.id }}">
-              <button class="btn btn-sm btn-outline-danger" type="submit">Remove</button>
-            </form>
-          </td>
-        </tr>
+      {% set t = row.target %}
+      <details class="plan-target" id="target-row-{{ t.id }}"{% if not t.enabled %} data-off="1"{% endif %}>
+        <summary class="plan-target__summary">
+          <span class="plan-target__name"><span class="plan-target__title">{{ t.name|e }}</span>{% if not t.enabled %} <span class="ssc-row__tag">Off</span>{% endif %}
+            <span class="ssc-row__sub plan-target__facts">{{ row.framing|e }}, {{ "LP filter" if t.lp_filter else "No filter" }}, {{ t.exposure_s|round(1) }} s, gain {{ t.gain|e }}</span>
+          </span>
+          <span class="plan-target__bar">{{ ui.bar(row.percent) }}</span>
+          <span class="plan-target__have">{{ row.have }} of {{ "%g"|format(t.goal_hours) }} h</span>
+          <span class="plan-target__priority">{{ t.priority|capitalize|e }}</span>
+          <span class="plan-target__forecast"><span class="plan-target__forecast-word">Done </span>{{ (row.finish or "Beyond 2 weeks")|e }}</span>
+          <span class="plan-target__chevron">{{ ui.icon("down", 16) }}</span>
+        </summary>
+        <form id="target-{{ t.id }}" class="plan-target__detail" method="post" action="{{ root_path }}{{ page_root }}/update">
+          <input type="hidden" name="id" value="{{ t.id }}">
+          <div class="plan-target__notes">
+            <p class="ssc-footnote plan-target__facts-detail">{{ row.framing|e }}, {{ "LP filter" if t.lp_filter else "No filter" }}, {{ t.exposure_s|round(1) }} s, gain {{ t.gain|e }}</p>
+            <p class="ssc-footnote">{{ row.have }} of {{ "%g"|format(t.goal_hours) }} h in {{ row.sessions }} {{ "run" if row.sessions == 1 else "runs" }}{% if row.rate %}, {{ row.rate }}% of time stacked{% endif %}</p>
+            {% if row.partial %}{{ warning(row.partial ~ " h more from framed runs too short to count") }}{% endif %}
+          </div>
+          {{ form.toggle("Include in the plan", "target-on-" ~ t.id, "enabled", checked=t.enabled) }}
+          <div class="plan-target__fields">
+            {{ form.field("Goal (h)", "target-goal-" ~ t.id, "goal_hours", value=t.goal_hours, attrs='inputmode="decimal"') }}
+            {{ form.field("Earlier data (h)", "target-prior-" ~ t.id, "prior_hours", value=t.prior_hours, attrs='inputmode="decimal"') }}
+            <div class="plan-stack plan-stack--tight plan-target__min">
+              {{ form.field("Shortest run (h)", "target-min-" ~ t.id, "min_session_hours", value=t.min_session_hours, attrs='inputmode="decimal"', help=("Scope estimate " ~ row.estimate ~ " h" if row.estimate and not row.short else ("No scope estimate until this size has run" if t.framed and not row.short else ""))) }}
+              {% if row.short %}{{ warning("Under the scope's " ~ row.estimate ~ " h estimate") }}{% endif %}
+            </div>
+            {{ form.segmented("Priority", "priority", priority_options, selected=t.priority) }}
+          </div>
+          <div class="plan-actions plan-actions--row">
+            {{ ui.button("Save", "primary", "submit") }}
+            {% if sky_targets is defined %}{{ ui.button("Show", "secondary", "button", 'data-sky-show="' ~ t.id ~ '"') }}{% endif %}
+            {{ ui.button("Remove", "secondary", "button", 'data-open-sheet="target-remove-' ~ t.id ~ '"') }}
+          </div>
+        </form>
+      </details>
       {% endfor %}
-      </tbody>
-    </table></div>
-    <div class="form-text">Progress counts frames actually stacked. A framed run only counts once it reaches its shortest run, because a shorter one leaves uneven coverage.</div>
+    </div>
+    <p class="ssc-footnote">Progress counts frames actually stacked. A framed run only counts once it reaches its shortest run, because a shorter one leaves uneven coverage.</p>
     {% endif %}
-  </div></div>
+  </section>
 
   {% if sky_targets is defined %}{% include 'partials/target_sky.html' %}{% endif %}
 
-  {% if tonight %}
-  <div class="card mb-3"><h2 class="card-header mb-0">{{ tonight.label }}, if it started now</h2><div class="card-body">
-    <p class="small mb-3">{% if tonight.dark %}Dark {{ tonight.dark }}, moon {{ tonight.moon }}%.{% else %}No astronomical darkness.{% endif %}
-      {% if uses_list %}Roof automation is using this list, and plans afresh at each start.{% else %}This is only a preview. Roof automation is set to {{ roof_source or "nothing" }}; choose Target list on the <a href="{{ root_path }}{{ roof_url }}">Roof page</a> to run from here.{% endif %}</p>
-    {% if tonight.blocks %}
-    <div class="table-responsive"><table class="table table-sm"><thead><tr><th>From</th><th>To</th><th>Target</th><th>Framing</th><th>Expected stacked</th></tr></thead><tbody>
-      {% for b in tonight.blocks %}<tr><td>{{ b.start }}</td><td>{{ b.end }}</td><td>{{ b.name }}</td><td>{{ b.framing }}</td><td>{{ b.expected }} h of {{ b.wall }} h</td></tr>{% endfor %}
-    </tbody></table></div>
-    {% else %}<p>Nothing to image for the rest of this night.</p>{% endif %}
-    {% for s in tonight.skipped %}<div class="small text-body-secondary">{{ s.name }}: {{ s.why }}</div>{% endfor %}
-  </div></div>
-  {% endif %}
+  <div class="plan-columns">
+    <section class="plan-section">
+      <h2 class="ssc-section">Import a plan</h2>
+      <form class="plan-panel" method="post" action="{{ root_path }}{{ page_root }}/import">
+        {% set import_options = [{"value": "scope", "label": "Plan loaded on the Seestar"}] %}
+        {% for name in import_schedules %}{% set _ = import_options.append({"value": name, "label": name}) %}{% endfor %}
+        <div class="plan-fields">
+          {{ form.picker("Import from", "import-source", "source", import_options, selected="scope") }}
+          {{ form.field("Hours wanted for each new target", "import-goal", "goal_hours", value="10", attrs='inputmode="decimal"') }}
+        </div>
+        <p class="ssc-footnote">Sky Atlas framing comes across with the plan. A target already listed keeps its goal and progress, and only its coordinates and framing update.</p>
+        <div class="plan-actions plan-actions--end">{{ ui.button("Import", "secondary", "submit") }}</div>
+      </form>
+    </section>
+    <section class="plan-section">
+      <h2 class="ssc-section">Add a target</h2>
+      <form class="plan-panel" method="post" action="{{ root_path }}{{ page_root }}/add">
+        {{ form.field("Name", "add-name", "name", attrs="required") }}
+        <div class="plan-fields">
+          {{ form.field("RA (J2000)", "add-ra", "ra", attrs='placeholder="5.5881 or 5h35m17s" required') }}
+          {{ form.field("Dec (J2000)", "add-dec", "dec", attrs='placeholder="-5.39 or -5d23m" required') }}
+          {{ form.field("Hours wanted", "add-goal", "goal_hours", value="10", attrs='inputmode="decimal"') }}
+        </div>
+        {{ form.toggle("LP filter", "add-lp", "lp_filter", checked=true) }}
+        <div class="plan-actions plan-actions--end">{{ ui.button("Add", "secondary", "submit") }}</div>
+      </form>
+    </section>
+  </div>
 
-  {% if nights %}
-  <div class="card mb-3"><h2 class="card-header mb-0">Next two weeks, if every night is clear</h2><div class="card-body">
-    <table class="table table-sm"><thead><tr><th>Night</th><th>Moon</th><th>Plan</th></tr></thead><tbody>
-      {% for n in nights %}<tr><td class="text-nowrap">{{ n.label }}</td><td>{{ n.moon }}%</td><td>{% for b in n.blocks %}{{ b.name }} ({{ b.wall }} h){% if not loop.last %}, {% endif %}{% else %}Nothing to image{% endfor %}</td></tr>{% endfor %}
-    </tbody></table>
-  </div></div>
+  {% if tonight or nights %}
+  <div class="plan-columns">
+    {% if tonight %}
+    <section class="plan-section">
+      <h2 class="ssc-section">{{ tonight.label|e }}, if it started now</h2>
+      <div class="plan-panel">
+        <p class="ssc-footnote">{% if tonight.dark %}Dark {{ tonight.dark|e }}, moon {{ tonight.moon }}%.{% else %}No astronomical darkness.{% endif %}
+          {% if uses_list %}Roof automation is using this list, and plans afresh at each start.{% else %}This is only a preview. Roof automation is set to {{ (roof_source or "nothing")|e }}; choose Target list on the <a href="{{ root_path }}{{ roof_url }}">Automation page</a> to run from here.{% endif %}</p>
+        {% if tonight.blocks %}
+        <div class="plan-subrows">
+          {% for b in tonight.blocks %}
+          <div class="ssc-row">
+            <span class="ssc-row__label">{{ b.name|e }}<span class="ssc-row__sub">{{ b.start|e }} to {{ b.end|e }}, {{ b.framing|e }}</span></span>
+            <span class="ssc-row__value">{{ b.expected }} h of {{ b.wall }} h</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}<p>Nothing to image for the rest of this night.</p>{% endif %}
+        {% for s in tonight.skipped %}<p class="ssc-footnote">{{ s.name|e }}: {{ s.why|e }}</p>{% endfor %}
+      </div>
+    </section>
+    {% endif %}
+    {% if nights %}
+    <section class="plan-section">
+      <h2 class="ssc-section">Next two weeks, if every night is clear</h2>
+      <div class="plan-rows">
+        {% for n in nights %}
+        <div class="ssc-row">
+          <span class="ssc-row__label">{{ n.label|e }}<span class="ssc-row__sub">{% for b in n.blocks %}{{ b.name|e }} ({{ b.wall }} h){% if not loop.last %}, {% endif %}{% else %}Nothing to image{% endfor %}</span></span>
+          <span class="ssc-row__value">Moon {{ n.moon }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+  </div>
   {% endif %}
+</main>
 
-  <div class="card mb-3"><h2 class="card-header mb-0">Add targets</h2><div class="card-body">
-    <form method="post" action="{{ root_path }}{{ page_root }}/import" class="row g-3 align-items-end mb-3">
-      <div class="col-auto"><label class="form-label" for="import-source">Import from</label>
-        <select id="import-source" name="source" class="form-select">
-          <option value="scope">Plan loaded on the Seestar</option>
-          {% for name in import_schedules %}<option value="{{ name }}">{{ name }}</option>{% endfor %}
-        </select></div>
-      <div class="col-auto"><label class="form-label" for="import-goal">Hours wanted for each new target</label>
-        <input id="import-goal" name="goal_hours" class="form-control" value="10"></div>
-      <div class="col-auto"><button class="btn btn-primary" type="submit">Import</button></div>
-      <div class="col-12 form-text">Sky Atlas framing comes across with the plan. A target already listed keeps its goal and progress, and only its coordinates and framing update.</div>
-    </form>
-    <form method="post" action="{{ root_path }}{{ page_root }}/add" class="row g-3 align-items-end">
-      <div class="col-auto"><label class="form-label" for="add-name">Name</label><input id="add-name" name="name" class="form-control" required></div>
-      <div class="col-auto"><label class="form-label" for="add-ra">RA (J2000)</label><input id="add-ra" name="ra" class="form-control" placeholder="5.5881 or 5h35m17s" required></div>
-      <div class="col-auto"><label class="form-label" for="add-dec">Dec (J2000)</label><input id="add-dec" name="dec" class="form-control" placeholder="-5.39 or -5d23m" required></div>
-      <div class="col-auto"><label class="form-label" for="add-goal">Hours wanted</label><input id="add-goal" name="goal_hours" class="form-control" value="10"></div>
-      <div class="col-auto"><div class="form-check target-add-check"><input id="add-lp" class="form-check-input" type="checkbox" name="lp_filter" checked><label class="form-check-label" for="add-lp">LP filter</label></div></div>
-      <div class="col-auto"><button class="btn btn-outline-primary" type="submit">Add</button></div>
-    </form>
-  </div></div>
+{% for row in rows %}
+{% set t = row.target %}
+{% call ui.sheet("target-remove-" ~ t.id, "Remove " ~ t.name ~ " from the list?") %}
+  <p class="ssc-sheet__text">Its recorded sessions are kept.</p>
+  <form method="post" action="{{ root_path }}{{ page_root }}/remove">
+    <input type="hidden" name="id" value="{{ t.id }}">
+    <button class="ssc-button plan-remove" data-tall="1" type="submit">Remove target</button>
+  </form>
+  <button class="ssc-button" data-kind="secondary" data-tall="1" type="button" data-close-sheet autofocus>Keep target</button>
+{% endcall %}
+{% endfor %}
 {% endblock %}

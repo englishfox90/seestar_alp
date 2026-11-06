@@ -1,59 +1,57 @@
-<style>
-  #target-sky-view { height: 600px; width: 100%; }
-  .target-sky-goal { width: 6rem; }
-</style>
-<div id="target-sky" class="card mb-3" data-model="{{ sky_model }}" data-simbad="{{ root_path }}/simbad">
-  <div class="card-header d-flex justify-content-between align-items-center gap-2">
-    <h2 id="target-sky-heading" class="mb-0">All targets</h2>
-    <button id="target-sky-all" class="btn btn-sm btn-outline-primary" type="button">Show all</button>
+{# The sky view. Every id here is used by target_sky.js. The forms post to the page's normal routes. #}
+{% import 'ssc/form.html' as form %}
+{% import 'ssc/ui.html' as ui %}
+<section id="target-sky" class="plan-section plan-sky" data-model="{{ sky_model|e }}" data-simbad="{{ root_path }}/simbad">
+  <div class="plan-section__head">
+    <h2 id="target-sky-heading" class="ssc-section">All targets</h2>
+    <button id="target-sky-all" class="ssc-button" data-kind="plain" type="button">Show all</button>
   </div>
-  <div class="card-body">
-    <div class="row g-3 align-items-end mb-3">
-      <div class="col">
-        <label class="form-label" for="target-sky-search">Find an object</label>
-        <input id="target-sky-search" class="form-control" placeholder="NGC 7000, or 20 59 17 +44 31 44" autocomplete="off">
-      </div>
-      <div class="col-auto"><button id="target-sky-find" class="btn btn-primary" type="button">Find</button></div>
+  <div class="plan-panel">
+    <div class="plan-field-action">
+      {{ form.field("Find an object", "target-sky-search", "", attrs='placeholder="NGC 7000, or 20 59 17 +44 31 44" autocomplete="off"') }}
+      <button id="target-sky-find" class="ssc-button" data-kind="secondary" type="button">Find</button>
     </div>
-    <p id="target-sky-status" class="small text-warning mb-2" role="status"></p>
-    <div id="target-sky-view"></div>
+    <p id="target-sky-status" class="plan-sky__status" role="status"></p>
+    <div id="target-sky-view" class="plan-sky__view"></div>
 
-    <div id="target-sky-frame-controls" class="mt-3" hidden>
-      <div class="row g-3 align-items-end">
-        <div class="col-sm">
-          <label class="form-label" for="target-sky-scale">Scale <span id="target-sky-scale-value"></span></label>
-          <input id="target-sky-scale" class="form-range" type="range" min="1" max="4" step="0.1" value="1">
+    <div id="target-sky-frame-controls" class="plan-stack" hidden>
+      <div class="plan-sky__sliders">
+        <div class="ssc-field">
+          <label class="ssc-field__label" for="target-sky-scale">Scale <span id="target-sky-scale-value"></span></label>
+          <input id="target-sky-scale" class="plan-range" type="range" min="1" max="4" step="0.1" value="1">
         </div>
-        <div class="col-sm">
-          <label class="form-label" for="target-sky-angle">Angle <span id="target-sky-angle-value"></span></label>
-          <input id="target-sky-angle" class="form-range" type="range" min="-90" max="90" step="1" value="0">
+        <div class="ssc-field">
+          <label class="ssc-field__label" for="target-sky-angle">Angle <span id="target-sky-angle-value"></span></label>
+          <input id="target-sky-angle" class="plan-range" type="range" min="-90" max="90" step="1" value="0">
         </div>
-        <div class="col-sm-auto"><button id="target-sky-center" class="btn btn-outline-primary" type="button">Move frame to view center</button></div>
+        <button id="target-sky-center" class="ssc-button" data-kind="secondary" type="button">Move frame to view center</button>
       </div>
 
-      <form id="target-sky-add" method="post" action="{{ root_path }}{{ page_root }}/add" class="row g-3 align-items-end mt-3" hidden>
+      <form id="target-sky-add" class="plan-stack" method="post" action="{{ root_path }}{{ page_root }}/add" hidden>
         <input type="hidden" id="target-sky-add-ra" name="ra">
         <input type="hidden" id="target-sky-add-dec" name="dec">
         <input type="hidden" id="target-sky-add-scale" name="mosaic_scale">
         <input type="hidden" id="target-sky-add-angle" name="mosaic_angle">
-        <div class="col"><label class="form-label" for="target-sky-add-name">Name</label><input id="target-sky-add-name" name="name" class="form-control" required></div>
-        <div class="col-auto"><label class="form-label" for="target-sky-add-goal">Hours wanted</label><input id="target-sky-add-goal" name="goal_hours" class="form-control target-sky-goal" value="10"></div>
-        <div class="col-auto"><div class="form-check target-add-check"><input id="target-sky-add-lp" class="form-check-input" type="checkbox" name="lp_filter" checked><label class="form-check-label" for="target-sky-add-lp">LP filter</label></div></div>
-        <div class="col-auto"><button class="btn btn-primary" type="submit">Add to target list</button></div>
+        <div class="plan-fields">
+          {{ form.field("Name", "target-sky-add-name", "name", attrs="required") }}
+          {{ form.field("Hours wanted", "target-sky-add-goal", "goal_hours", value="10", attrs='inputmode="decimal"') }}
+        </div>
+        {{ form.toggle("LP filter", "target-sky-add-lp", "lp_filter", checked=true) }}
+        <div class="plan-actions">{{ ui.button("Add to target list", "primary", "submit") }}</div>
       </form>
 
-      <form id="target-sky-save" method="post" action="{{ root_path }}{{ page_root }}/framing" class="mt-3" hidden>
+      <form id="target-sky-save" method="post" action="{{ root_path }}{{ page_root }}/framing" hidden>
         <input type="hidden" id="target-sky-save-id" name="id">
         <input type="hidden" id="target-sky-save-ra" name="ra">
         <input type="hidden" id="target-sky-save-dec" name="dec">
         <input type="hidden" id="target-sky-save-scale" name="mosaic_scale">
         <input type="hidden" id="target-sky-save-angle" name="mosaic_angle">
-        <button class="btn btn-primary" type="submit">Save framing</button>
+        <div class="plan-actions">{{ ui.button("Save framing", "primary", "submit") }}</div>
       </form>
     </div>
-    <div class="form-text mt-2">Click a target's marker to adjust it. A framing change applies from the next start, and its progress so far is kept.</div>
+    <p class="ssc-footnote">Click a target's marker to adjust it. A framing change applies from the next start, and its progress so far is kept.</p>
   </div>
-</div>
+</section>
 <script type="application/json" id="target-sky-data">{{ sky_targets | tojson }}</script>
 <script src="{{ root_path }}/public/seestar_models.js"></script>
 <script src="{{ root_path }}/public/aladin_loader.js"></script>
