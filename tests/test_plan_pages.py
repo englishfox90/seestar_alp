@@ -577,3 +577,13 @@ def test_targets_page_has_the_reach_controls(rig):
     assert html.index("public/sky_reach.js") < html.index("public/target_sky.js")
     for element in ("target-sky-reach-note", "target-sky-pick-reach", "target-sky-frame-reach"):
         assert f'id="{element}"' in html
+
+
+def test_markers_and_shading_both_hear_the_view_move():
+    """Aladin keeps one listener per event, so sharing must be set up before either registers."""
+    from pathlib import Path
+
+    script = (Path(__file__).parent.parent / "front/public/target_sky.js").read_text()
+    share = script.index("shareViewEvents();")
+    assert share < script.index("setUpReach();", share)
+    assert share < script.index("window.SkyObjects.start(aladin", share)

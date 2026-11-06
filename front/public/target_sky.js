@@ -499,6 +499,20 @@
     }
   }
 
+  // Aladin keeps one listener per event, so a second on() silently replaces the first.
+  // The markers and the shading both need to hear the view move.
+  function shareViewEvents() {
+    const register = aladin.on.bind(aladin);
+    const listeners = {};
+    aladin.on = function (name, listener) {
+      if (!listeners[name]) {
+        listeners[name] = [];
+        register(name, (...args) => listeners[name].forEach((heard) => heard(...args)));
+      }
+      listeners[name].push(listener);
+    };
+  }
+
   function start() {
     aladin = window.A.aladin("#target-sky-view", {
       survey: window.ALADIN_SURVEY,
@@ -507,6 +521,7 @@
       showGotoControl: false,
       showReticle: true,
     });
+    shareViewEvents();
     setUpReach();
     frames = window.A.graphicOverlay({ color: colors().other, lineWidth: 1 });
     aladin.addOverlay(frames);
