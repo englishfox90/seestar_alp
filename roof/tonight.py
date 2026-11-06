@@ -349,7 +349,7 @@ def _action(key, status, here, stop_requested_at, clock, now):
             "since": clock(stop_requested_at) if pending else None,
         }
     if key == "held":
-        return {"kind": "link", "label": "Open the Roof page", "route": "roof"}
+        return {"kind": "link", "label": "Open Automation", "route": "roof"}
     if key == "idle":
         if not status.get("schedule"):
             return {"kind": "link", "label": "Choose a schedule", "route": "roof"}

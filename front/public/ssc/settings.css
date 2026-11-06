@@ -1,9 +1,9 @@
 /* Settings. One grouped column; spec: front/DESIGN.md section 6. */
 
 .s-page { padding-top: var(--ssc-space-5); }
-.s-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--ssc-space-4); max-width: 640px; margin: 0 auto var(--ssc-space-5); }
+.s-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--ssc-space-4); max-width: 640px; margin: 0 var(--ssc-space-5); }
 .s-firmware { margin: 0; }
-.s-column { display: flex; flex-direction: column; gap: var(--ssc-space-5); max-width: 640px; margin: 0 auto; }
+.s-column { display: flex; flex-direction: column; gap: var(--ssc-space-5); max-width: 640px; margin: 0; }
 .s-form { display: flex; flex-direction: column; gap: var(--ssc-space-5); }
 .s-saved { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--ssc-space-3); }
 .s-version { margin: 0; text-align: center; }

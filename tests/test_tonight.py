@@ -145,7 +145,7 @@ def test_held_after_dawn():
 
 def test_held_links_to_the_roof_page_and_no_start_anywhere():
     action = state({**PARKED, "held": True})["action"]
-    assert action == {"kind": "link", "label": "Open the Roof page", "route": "roof"}
+    assert action == {"kind": "link", "label": "Open Automation", "route": "roof"}
 
 
 # ---- alarms outrank everything ------------------------------------------------------
