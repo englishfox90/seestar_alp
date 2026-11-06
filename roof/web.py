@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 
 import falcon
 
+from roof import alerts as roof_alerts
 from roof import config as roof_config
 from roof import dashboard, focus, schedule_tools, tonight
 from roof.automation import get_automation
@@ -74,6 +75,7 @@ class RoofPage:
             target_list_label=schedule_tools.TARGET_LIST_LABEL,
             targets_url=f"/{telescope_id}/targets",
             settings=settings,
+            alerts=roof_alerts.panel(settings),
             status=status,
             polled=False,
             page_root=f"/{telescope_id}/roof",
@@ -203,6 +205,58 @@ class RoofCapture(_Action):
         return f"Captured {len(plan['list'])} targets as {name}.json."
 
 
+class AlertsEnable(_Action):
+    @staticmethod
+    def act(req):
+        enabled = _form(req).get("enabled") == "true"
+        if enabled and not roof_alerts.read_webhook(roof_alerts.webhook_path()):
+            return "Save failed: add a Discord webhook first."
+        roof_config.save("discord_enabled", enabled)
+        return f"Discord alerts {'on' if enabled else 'off'}."
+
+
+class AlertsWebhook(_Action):
+    @staticmethod
+    def act(req):
+        url = roof_alerts.parse_webhook(_form(req).get("webhook", ""))
+        if not url:
+            return "Save failed: that isn't a Discord webhook URL."
+        try:
+            roof_alerts.write_webhook(roof_alerts.webhook_path(), url)
+        except OSError:
+            return "Save failed: could not write the webhook file."
+        return "Webhook saved. Send a test to check it."
+
+
+class AlertsWebhookRemove(_Action):
+    @staticmethod
+    def act(req):
+        try:
+            roof_alerts.remove_webhook(roof_alerts.webhook_path())
+        except OSError:
+            return "Remove failed: could not delete the webhook file."
+        return "Webhook removed. Nothing will post until you add another."
+
+
+class AlertsTest(_Action):
+    @staticmethod
+    def act(req):
+        url = roof_alerts.read_webhook(roof_alerts.webhook_path())
+        if not url:
+            return "Test failed: no webhook saved."
+        sent, status = roof_alerts.send_test(url)
+        return "Test alert sent. Check the channel." if sent else f"Test failed: {status}"
+
+
+class AlertsEvents(_Action):
+    @staticmethod
+    def act(req):
+        form = _form(req)
+        muted = [kind for kind in roof_alerts.KINDS if f"event_{kind}" not in form]
+        roof_config.save("discord_muted", muted)
+        return "Alert choices saved."
+
+
 class DefaultDeviceMiddleware:
     """Send page URLs with no device number to the configured scope.
 
@@ -237,6 +291,11 @@ def install(app):
         "roof/start": RoofStart,
         "roof/stop": RoofStop,
         "roof/capture": RoofCapture,
+        "roof/alerts/enable": AlertsEnable,
+        "roof/alerts/webhook": AlertsWebhook,
+        "roof/alerts/webhook/remove": AlertsWebhookRemove,
+        "roof/alerts/test": AlertsTest,
+        "roof/alerts/events": AlertsEvents,
         **dashboard.PAGES,
         **tonight.PAGES,
         **queue_web.PAGES,

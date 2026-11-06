@@ -52,7 +52,8 @@ dew_sentinel_url = "http://127.0.0.1:8085/status"
 poll_s = 10
 start_settle_s = 120
 stop_grace_s = 30
-discord_enabled = false # post the night's imaging events to Discord
+discord_enabled = false # post the night's imaging events to Discord; also the page's toggle
+discord_muted = []      # alert kinds switched off; also the page's switches
 ```
 
 Changes to this section apply on the next tick, with no restart.
@@ -75,11 +76,16 @@ PFR Sentinel already posts: the roof opening and closing, weather and all-sky im
 | Lost / back in contact | No reply from the scope for 2 min during a session |
 | Seestar alarm | Anything the automation raises as an alarm, such as a park it can't confirm |
 
-To turn it on, put the webhook URL in `device/discord_webhook.txt`, set
-`discord_enabled = true`, then check it with `.venv/bin/python -m roof.alerts --test`.
-Support bundles include config.toml, so the URL has its own git-ignored file. Both apply
-without a restart. Posting never holds up the automation loop, and a message that
-still can't be sent after three tries is logged and dropped.
+Set it up under **Discord alerts** on the Automation page: paste the webhook, send a test,
+turn alerts on, and choose which kinds post. Alarms and lost contact always post. Changes
+apply without a restart. The page also shows whether the last alert got through, since
+the last restart.
+
+The choices are `discord_enabled` and `discord_muted` under `[roof]` in config.toml. The
+webhook goes in `device/discord_webhook.txt`, because support bundles include config.toml,
+and the page never shows it again after saving. `.venv/bin/python -m roof.alerts --test`
+posts a test from the command line. Posting never holds up the automation loop, and a
+message that still can't be sent after three tries is logged and dropped.
 
 ## Service
 
@@ -120,6 +126,6 @@ Upstream files touched: one hook in `FrontMain.start` (`front/app.py`), and in
 - `planner.py`: picks targets for a night (`python -m roof.planner --nights 7`)
 - `dashboard.py`: `/dashboard`, including tonight's plan and goal progress from the list
 - `sessions.py`: what was actually stacked, kept in `roof_sessions.json`
-- `alerts.py`: Discord alerts, tracking kept in `roof_alerts.json`
+- `alerts.py`: Discord alerts, tracking kept in `roof_alerts.json`; its controls are in `web.py`
 - `night_history.py`: when the roof read safe or unsafe, kept in `roof_night_history.json`
 - `night_web.py`: read-only roof history, morning summary and inline image routes

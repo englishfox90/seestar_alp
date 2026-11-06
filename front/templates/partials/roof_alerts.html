@@ -1,0 +1,47 @@
+{# Discord alerts on the Automation page. The webhook is a secret, so it is never rendered. #}
+{% import 'ssc/ui.html' as ui %}
+{% import 'ssc/form.html' as form %}
+<section class="plan-section" id="roof-alerts">
+  <h2 class="ssc-section">Discord alerts</h2>
+  <div class="plan-panel">
+    <form class="plan-inline" method="post" action="{{ root_path }}{{ page_root }}/alerts/enable">
+      <input type="hidden" name="enabled" value="{{ 'false' if alerts.enabled else 'true' }}">
+      <p class="plan-inline__text">{% if not alerts.saved %}Nothing posts until a webhook is saved{% elif alerts.enabled %}Alerts are on{% else %}Alerts are off{% endif %}</p>
+      {% if alerts.saved or alerts.enabled %}{{ ui.button("Turn alerts off" if alerts.enabled else "Turn alerts on", "secondary", "submit") }}{% endif %}
+    </form>
+    {% if alerts.last %}
+      {% if alerts.last.sent %}
+      <p class="ssc-footnote">Last alert at {{ alerts.last.at|e }}: {{ alerts.last.title|e }}</p>
+      {% else %}
+      <p class="plan-warning">{{ ui.icon("warning", 16) }}<span>Last alert didn't post at {{ alerts.last.at|e }}: {{ alerts.last.title|e }} ({{ alerts.last.status|e }})</span></p>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  <form class="plan-panel" method="post" action="{{ root_path }}{{ page_root }}/alerts/webhook">
+    {{ form.field("Replace webhook" if alerts.saved else "Webhook URL", "roof-alerts-webhook", "webhook", type="password",
+        help="In Discord: channel settings, Integrations, Webhooks, Copy Webhook URL.",
+        attrs='required autocomplete="new-password" spellcheck="false" placeholder="' ~ ('Saved, ID ending ' ~ alerts.ends_with if alerts.saved else 'https://discord.com/api/webhooks/...') ~ '"') }}
+    <div class="plan-actions">{{ ui.button("Save webhook", "secondary" if alerts.saved else "primary", "submit") }}</div>
+  </form>
+  {% if alerts.saved %}
+  <div class="plan-panel">
+    <form class="plan-inline" method="post" action="{{ root_path }}{{ page_root }}/alerts/test">
+      <p class="plan-inline__text">Post a test message to the channel</p>
+      {{ ui.button("Send test", "secondary", "submit") }}
+    </form>
+    <form class="plan-inline" method="post" action="{{ root_path }}{{ page_root }}/alerts/webhook/remove">
+      <p class="plan-inline__text">Forget this webhook</p>
+      {{ ui.button("Remove", "secondary", "submit") }}
+    </form>
+  </div>
+  {% endif %}
+
+  <form class="plan-panel" method="post" action="{{ root_path }}{{ page_root }}/alerts/events">
+    {% for kind in alerts.kinds %}
+    {{ form.toggle(kind.label, "roof-alert-" ~ kind.key, "event_" ~ kind.key, checked=kind.on, help=kind.help) }}
+    {% endfor %}
+    <p class="ssc-footnote">Alarms and lost contact with the scope always post. Roof open and close stay with PFR Sentinel.</p>
+    <div class="plan-actions">{{ ui.button("Save choices", "secondary", "submit") }}</div>
+  </form>
+</section>

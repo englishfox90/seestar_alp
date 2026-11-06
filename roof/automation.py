@@ -1109,15 +1109,15 @@ def get_automation() -> RoofAutomation:
         targets = TargetQueue(os.path.join(base, "roof_targets.json"))
         global _target_queue
         _target_queue = targets
-        webhook = os.path.join(base, roof_alerts.WEBHOOK_FILE)
         alerts = roof_alerts.NightAlerts(
             roof_alerts.DiscordSender(
-                lambda: roof_alerts.read_webhook(webhook)
+                lambda: roof_alerts.read_webhook(roof_alerts.webhook_path())
                 if roof_config.load().discord_enabled
                 else ""
             ),
             state_path=os.path.join(base, "roof_alerts.json"),
             logger=logger,
+            muted=lambda: roof_config.load().discord_muted,
         )
         focus.focus_log(roof_config.load().device_num).on_finish = alerts.autofocus
         _instance = RoofAutomation(

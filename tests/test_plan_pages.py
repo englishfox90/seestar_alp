@@ -446,3 +446,125 @@ def test_held_outranks_a_waiting_headline_so_it_matches_tonight(rig):
     html = _get(rig, "/1/roof")
     assert "Held until Start or the next night" in html
     assert "roof must read safe" not in html.split("plan-sentence", 1)[1][:80]
+
+
+# ---- Discord alerts on Automation ------------------------------------------------------------
+
+HOOK = "https://discord.com/api/webhooks/1568293035819802855/s3cret-token"
+
+
+@pytest.fixture
+def alerts_rig(rig, monkeypatch, tmp_path):
+    from roof import alerts as roof_alerts
+
+    path = tmp_path / "hook.txt"
+    rig.saved = {}
+    rig.tests = []
+    rig.hook_path = path
+    rig.alerts = roof_alerts
+    monkeypatch.setattr(roof_alerts, "webhook_path", lambda: str(path))
+    monkeypatch.setattr(roof_alerts, "_last_delivery", None)
+    monkeypatch.setattr(roof_web.roof_config, "save", rig.saved.__setitem__)
+
+    def send_test(url):
+        rig.tests.append(url)
+        return True, "HTTP 204"
+
+    monkeypatch.setattr(roof_alerts, "send_test", send_test)
+    return rig
+
+
+def _post_alert(rig, route, body=""):
+    return rig.client.simulate_post(f"/1/roof/alerts/{route}", headers=FORM, body=body)
+
+
+def test_alerts_panel_without_a_webhook_asks_for_one(alerts_rig):
+    html = _get(alerts_rig, "/1/roof")
+    assert "Nothing posts until a webhook is saved" in html
+    assert 'name="webhook"' in html and 'type="password"' in html
+    assert "required" in _form(html, "/1/roof/alerts/webhook")["fields"]["webhook"]
+    assert 'action="/1/roof/alerts/test"' not in html, "nothing to test yet"
+    assert "Turn alerts on" not in html, "can't be turned on yet"
+
+
+def test_saving_a_webhook_never_sends_it_back_to_the_browser(alerts_rig):
+    result = _post_alert(alerts_rig, "webhook", urlencode({"webhook": HOOK}))
+    assert result.status_code == 302
+    assert alerts_rig.alerts.read_webhook(str(alerts_rig.hook_path)) == HOOK
+    assert "s3cret-token" not in str(result.headers)
+    html = _get(alerts_rig, "/1/roof")
+    assert "s3cret-token" not in html and "1568293035819802855" not in html
+    assert "ID ending 2855" in html
+    assert _form(html, "/1/roof/alerts/test")["fields"] == {}
+    assert "Turn alerts on" in html
+
+
+def test_a_bad_webhook_is_refused_and_keeps_the_saved_one(alerts_rig):
+    alerts_rig.alerts.write_webhook(str(alerts_rig.hook_path), HOOK)
+    _post_alert(alerts_rig, "webhook", urlencode({"webhook": "https://evil.example/api/webhooks/1/a"}))
+    assert alerts_rig.alerts.read_webhook(str(alerts_rig.hook_path)) == HOOK
+
+
+def test_alerts_cannot_be_turned_on_without_a_webhook(alerts_rig):
+    _post_alert(alerts_rig, "enable", "enabled=true")
+    assert alerts_rig.saved == {}
+
+
+def test_alerts_turn_on_and_off(alerts_rig):
+    alerts_rig.alerts.write_webhook(str(alerts_rig.hook_path), HOOK)
+    _post_alert(alerts_rig, "enable", "enabled=true")
+    assert alerts_rig.saved == {"discord_enabled": True}
+    alerts_rig.settings = replace(alerts_rig.settings, discord_enabled=True)
+    html = _get(alerts_rig, "/1/roof")
+    assert "Alerts are on" in html and "Turn alerts off" in html
+    assert _form(html, "/1/roof/alerts/enable")["fields"]["enabled"]["value"] == "false"
+    _post_alert(alerts_rig, "enable", "enabled=false")
+    assert alerts_rig.saved == {"discord_enabled": False}
+
+
+def test_alert_switches_show_and_save_what_is_muted(alerts_rig):
+    alerts_rig.settings = replace(alerts_rig.settings, discord_muted=("autofocus_passed",))
+    html = _get(alerts_rig, "/1/roof")
+    assert re.search(r'name="event_autofocus_failed"[^>]* checked', html)
+    assert not re.search(r'name="event_autofocus_passed"[^>]* checked', html)
+    assert "Alarms and lost contact with the scope always post" in html
+    kinds = set(alerts_rig.alerts.KINDS) - {"stacking", "parked"}
+    _post_alert(alerts_rig, "events", "&".join(f"event_{k}=on" for k in kinds))
+    assert set(alerts_rig.saved["discord_muted"]) == {"stacking", "parked"}
+
+
+def test_alert_test_button_posts_only_to_the_saved_webhook(alerts_rig):
+    _post_alert(alerts_rig, "test")
+    assert alerts_rig.tests == []
+    alerts_rig.alerts.write_webhook(str(alerts_rig.hook_path), HOOK)
+    _post_alert(alerts_rig, "test", urlencode({"webhook": "https://evil.example/x"}))
+    assert alerts_rig.tests == [HOOK]
+
+
+def test_webhook_can_be_removed(alerts_rig):
+    alerts_rig.alerts.write_webhook(str(alerts_rig.hook_path), HOOK)
+    _post_alert(alerts_rig, "webhook/remove")
+    assert not alerts_rig.hook_path.exists()
+    assert "Nothing posts until a webhook is saved" in _get(alerts_rig, "/1/roof")
+
+
+def test_a_failed_post_shows_on_the_page(alerts_rig, monkeypatch):
+    monkeypatch.setattr(
+        alerts_rig.alerts,
+        "_last_delivery",
+        {"title": "Arm parked", "sent": False, "status": "HTTP 404", "at": "07:12"},
+    )
+    html = _get(alerts_rig, "/1/roof")
+    assert "Last alert didn't post at 07:12: Arm parked (HTTP 404)" in html
+
+
+@pytest.mark.parametrize("route", ["enable", "webhook", "webhook/remove", "test", "events"])
+def test_alert_routes_refuse_other_sites(alerts_rig, route):
+    alerts_rig.alerts.write_webhook(str(alerts_rig.hook_path), HOOK)
+    result = alerts_rig.client.simulate_post(
+        f"/1/roof/alerts/{route}",
+        headers={**FORM, "Origin": "http://evil.example", "Host": "localhost:5432"},
+        body="enabled=false",
+    )
+    assert result.status_code == 403
+    assert alerts_rig.hook_path.exists() and not alerts_rig.saved and not alerts_rig.tests

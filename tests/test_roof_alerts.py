@@ -501,3 +501,97 @@ def test_state_file_is_plain_json_with_no_webhook(rig):
     rig.settle_and_start()
     doc = json.loads(open(rig.state_path + ".alerts").read())
     assert doc["sessions"] == 1 and "webhook" not in json.dumps(doc)
+
+
+# ---- which alerts post -----------------------------------------------------------
+
+
+def test_muted_kinds_stay_quiet_but_alarms_always_post(tmp_path):
+    sender = RecordingSender()
+    alerts = NightAlerts(sender, muted=lambda: tuple(roof_alerts.KINDS))
+    alerts.parked()
+    alerts.session_started("Plan", ["A"], 1, False, "n")
+    alerts.alarm("PARK NOT CONFIRMED")
+    assert sender.titles() == ["Seestar alarm"]
+
+
+def test_muting_passes_but_not_failures_is_possible(rig):
+    rig.alerts._muted = lambda: ("autofocus_passed",)
+    log = focus.FocusLog()
+    log.on_finish = rig.alerts.autofocus
+    rig.settle_and_start()
+    _focus_events(log, {"state": "complete"})
+    _focus_events(log, {"state": "fail", "error": "no star"})
+    titles = [t for t in rig.sender.titles() if t.startswith("Autofocus")]
+    assert [t.split(" on ")[0] for t in titles] == ["Autofocus failed"]
+
+
+# ---- saving the webhook ----------------------------------------------------------
+
+
+def test_only_a_real_discord_webhook_is_accepted():
+    assert roof_alerts.parse_webhook(f"  {URL}\n") == URL
+    canary = "https://canary.discord.com/api/webhooks/1/abc-_D"
+    assert roof_alerts.parse_webhook(canary) == canary
+    for bad in (
+        "",
+        "http://discord.com/api/webhooks/1/abc",
+        "https://evil.example/api/webhooks/1/abc",
+        "https://discord.com.evil.example/api/webhooks/1/abc",
+        "https://discord.com/api/webhooks/abc/def",
+    ):
+        assert roof_alerts.parse_webhook(bad) == "", bad
+
+
+def test_pasting_discords_webhook_json_works():
+    pasted = json.dumps({"id": "123456", "name": "Seestar", "token": "x", "url": URL}, indent=1)
+    assert roof_alerts.parse_webhook(pasted) == URL
+
+
+def test_the_webhook_file_is_private(tmp_path):
+    path = tmp_path / "hook.txt"
+    roof_alerts.write_webhook(str(path), URL)
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert roof_alerts.read_webhook(str(path)) == URL
+    roof_alerts.remove_webhook(str(path))
+    roof_alerts.remove_webhook(str(path))  # already gone is fine
+    assert roof_alerts.read_webhook(str(path)) == ""
+
+
+def test_one_try_when_a_person_is_waiting():
+    calls, waits = [], []
+
+    def post(*a, **k):
+        calls.append(a)
+        raise requests.ConnectionError("down")
+
+    sent, _ = deliver(URL, {}, post=post, sleep=waits.append, tries=1)
+    assert not sent and len(calls) == 1 and waits == []
+
+
+def test_delivery_result_is_kept_for_the_page(monkeypatch):
+    monkeypatch.setattr(roof_alerts, "_last_delivery", None)
+    sender = DiscordSender(lambda: URL, post=lambda *a, **k: _reply(404), sleep=lambda s: None)
+    sender._queue.append((URL, roof_alerts.payload("Arm parked", "x", "info", 0)))
+    sender.drain()
+    assert roof_alerts._last_delivery["title"] == "Arm parked"
+    assert roof_alerts._last_delivery["sent"] is False
+    assert roof_alerts._last_delivery["status"] == "HTTP 404"
+
+
+def test_page_settings_round_trip_through_real_toml(monkeypatch):
+    import tomlkit
+
+    from device.config import Config
+    from roof import config as roof_config
+
+    monkeypatch.setattr(Config, "_dict", tomlkit.document())
+    monkeypatch.setattr(Config, "save_toml", lambda *a, **k: None)
+    assert roof_config.load().discord_muted == ()
+    roof_config.save("discord_enabled", True)
+    roof_config.save("discord_muted", ["parked", "stacking"])
+    loaded = roof_config.load()
+    assert loaded.discord_enabled is True
+    assert loaded.discord_muted == ("parked", "stacking")
+    roof_config.save("discord_muted", [])
+    assert roof_config.load().discord_muted == ()
