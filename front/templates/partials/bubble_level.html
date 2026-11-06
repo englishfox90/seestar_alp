@@ -1,4 +1,38 @@
 <style>
+    /* Dialog colours come from the theme, so it reads in Day, Night and Red. */
+    .ssc-level-dialog {
+        --bs-modal-width: 400px;
+    }
+
+    .ssc-level-content {
+        background: var(--ssc-raised);
+        color: var(--ssc-text-1);
+    }
+
+    .ssc-level-content .modal-header {
+        border-bottom-color: var(--ssc-separator);
+    }
+
+    .ssc-level-content .btn-close {
+        width: var(--ssc-touch);
+        height: var(--ssc-touch);
+        padding: 0;
+        margin: 0 0 0 auto;
+        background-size: 1rem;
+    }
+
+    .ssc-level-body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: var(--ssc-space-5);
+    }
+
+    .bubble-level-gap {
+        display: inline-block;
+        width: var(--ssc-space-6);
+    }
+
     #bubble_level {
         position: relative;
         width: 300px;
@@ -53,7 +87,7 @@
     }
 </style>
 
-<button type="button" class="btn btn-secondary float-end js-bubble-level-open">
+<button type="button" class="btn btn-secondary js-bubble-level-open">
     Show bubble level
 </button>
 
@@ -69,21 +103,20 @@
             `
             <div class="modal fade" id="bubbleLevelModal" tabindex="-1"
                  aria-labelledby="bubbleLevelModalLabel" aria-hidden="true">
-                <div class="modal-dialog modal-dialog-centered" role="document"
-                     style="max-width: 400px; width: 400px;">
-                    <div class="modal-content bg-dark text-white" style="height: 430px; overflow: visible;">
+                <div class="modal-dialog modal-dialog-centered ssc-level-dialog" role="document">
+                    <div class="modal-content ssc-level-content">
                         <div class="modal-header">
-                            <h5 class="modal-title" id="bubbleLevelModalLabel">Bubble Level</h5>
-                            <button type="button" class="btn-close btn-close-white"
+                            <h5 class="modal-title" id="bubbleLevelModalLabel">Bubble level</h5>
+                            <button type="button" class="btn-close"
                                     data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
-                        <div class="modal-body d-flex flex-column align-items-center justify-content-start p-3">
+                        <div class="modal-body ssc-level-body">
                             <div id="bubble_level">
                                 <div id="bubble_ball"></div>
                             </div>
                             <div class="bubble-level-readout">
                                 X: <span id="bubble_output_x" class="value">0.00</span>
-                                &nbsp; | &nbsp;
+                                <span class="bubble-level-gap"></span>
                                 Y: <span id="bubble_output_y" class="value">0.00</span>
                             </div>
                         </div>

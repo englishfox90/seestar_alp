@@ -1,7 +1,58 @@
+<style>
+	.startup-output {
+		margin-bottom: var(--ssc-space-5);
+	}
+	.startup-subtitle {
+		margin: 0 0 var(--ssc-space-3);
+		font-size: var(--ssc-text-body);
+		font-weight: var(--ssc-weight-strong);
+	}
+	.startup-output .alert {
+		margin: 0;
+		min-height: var(--ssc-touch);
+	}
+	.startup-check {
+		display: flex;
+		align-items: center;
+		gap: var(--ssc-space-3);
+		min-height: var(--ssc-touch);
+		padding-left: 0;
+		margin: 0;
+	}
+	.startup-check .form-check-input {
+		float: none;
+		flex: none;
+		margin: 0;
+		width: 1.5rem;
+		height: 1.5rem;
+	}
+	.startup-check .form-check-label {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		min-height: var(--ssc-touch);
+	}
+	.startup-help {
+		margin: var(--ssc-space-5) 0;
+		color: var(--ssc-text-2);
+	}
+	.startup-dec {
+		margin: var(--ssc-space-5) 0;
+	}
+	.startup-dec .btn,
+	.startup-actions .btn {
+		min-height: var(--ssc-stop-height);
+	}
+	.startup-actions {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--ssc-space-3);
+	}
+</style>
 
-	<div class="mb-3">
-		<h3 class="panel-title mb-2">Output</h3>
-		<div id="outputAlert" class="alert alert-secondary mb-0" role="alert">
+	<div class="startup-output">
+		<h3 class="startup-subtitle">Output</h3>
+		<div id="outputAlert" class="alert alert-secondary" role="alert">
 			{% if output %}
 				{{ output }}
 			{% else %}
@@ -28,30 +79,30 @@
     </div>
     <div class="row g-3">
         <div class="col-12 col-md-4">
-          <div class="form-check">
+          <div class="form-check startup-check">
             <input class="form-check-input" type="checkbox" id="polar_align" name="polar_align" checked>
             <label class="form-check-label" for="polar_align">Polar align</label>
           </div>
         </div>
         <div class="col-12 col-md-4">
-          <div class="form-check">
+          <div class="form-check startup-check">
 					  <input class="form-check-input" type="checkbox" id="auto_focus" name="auto_focus">
 					  <label class="form-check-label" for="auto_focus">Autofocus</label>
           </div>
       </div>
         <div class="col-12 col-md-4">
-          <div class="form-check">
+          <div class="form-check startup-check">
 				    <input class="form-check-input" type="checkbox" id="dark_frames" name="dark_frames">
 					  <label class="form-check-label" for="dark_frames">Dark frames</label>
           </div>
         </div>
     </div>
 
-    <p class="mt-3 mb-3">
+    <p class="startup-help">
       The lat/long and move arm values specified here will override the value(s) you have set in config.toml. Leaving this blank will not override your values specified in your config.toml. Specifying a lat/long value of 0 will attempt to determine your location based on IP Geolocation. <b>The machine you run seestar_alp on must have internet service for this to work!</b>
     </p>
 
-    <div class="mt-3 mb-3">
+    <div class="startup-dec">
       {% include 'partials/dec_offset.html' %}
       <button type="button" class="btn btn-secondary js-dec-offset-open"
               data-bs-toggle="modal" data-bs-target="#decOffsetModal"
@@ -60,7 +111,7 @@
       </button>
     </div>
 
-    <div class="action-row d-flex flex-wrap">
+    <div class="action-row startup-actions">
       <button type="submit" name="action" value="start" class="btn btn-primary">Start</button>
       <button type="submit" name="action" value="stop"  class="btn btn-danger">Stop</button>
     </div>

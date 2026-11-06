@@ -1,103 +1,38 @@
-<div>
+<dl class="live-status">
     {% if state.target_name %}
-        <div class="row border-bottom py-1 text-start">
-            <div class="col text-body-secondary">Target name</div>
-            <div class="col">{{ state.target_name }}</div>
-        </div>
+        <div class="live-status-row"><dt>Target</dt><dd>{{ state.target_name }}</dd></div>
     {% endif %}
-    <div class="row border-bottom py-1 text-start">
-        <div class="col text-body-secondary">State</div>
-        <div class="col">{{ state.state }}</div>
-    </div>
-    <div class="row border-bottom py-1 text-start">
-        <div class="col text-body-secondary">Mode</div>
-        <div class="col">{{ state.mode }}</div>
-    </div>
-    <div class="row border-bottom py-1 text-start">
-        <div class="col text-body-secondary">Stage</div>
-        <div class="col">{{ state.stage }}</div>
-    </div>
-    {#    {% if state.stage != "Stack" %}#}
+    <div class="live-status-row"><dt>State</dt><dd>{{ state.state }}</dd></div>
+    <div class="live-status-row"><dt>Mode</dt><dd>{{ state.mode }}</dd></div>
+    <div class="live-status-row"><dt>Stage</dt><dd>{{ state.stage }}</dd></div>
     {% if state.substage %}
-        <div class="row border-bottom py-1 text-start">
-            <div class="col text-body-secondary">Substage</div>
-            <div class="col">{{ state.substage }}</div>
-        </div>
+        <div class="live-status-row"><dt>Substage</dt><dd>{{ state.substage }}</dd></div>
     {% endif %}
     {% if state.substage_count %}
-        <div class="row border-bottom py-1 text-start">
-            <div class="col text-body-secondary">Substage count</div>
-            <div class="col">{{ state.substage_count }}</div>
-        </div>
+        <div class="live-status-row"><dt>Substage count</dt><dd>{{ state.substage_count }}</dd></div>
     {% endif %}
     {% if state.substage_position %}
-        <div class="row border-bottom py-1 text-start">
-            <div class="col text-body-secondary">Position</div>
-            <div class="col">{{ state.substage_position }}</div>
-        </div>
+        <div class="live-status-row"><dt>Position</dt><dd>{{ state.substage_position }}</dd></div>
     {% endif %}
     {% if state.substage_percent %}
-        <div class="row border-bottom py-1 text-start">
-            <div class="col text-body-secondary">Percent</div>
-            <div class="col">{{ state.substage_percent }}</div>
-        </div>
+        <div class="live-status-row"><dt>Percent</dt><dd>{{ state.substage_percent }}</dd></div>
     {% endif %}
-    {#    <div class="row border-bottom py-1 text-start">#}
-    {#        <div class="col text-body-secondary">Substage elapsed</div>#}
-    {#        <div class="col">{{ state.substage_elapsed }}</div>#}
-    {#    </div>#}
-    {#  Make the below conditional.... #}
-{#    <div class="row border-bottom py-1 text-start">#}
-{#        <div class="col text-body-secondary">Elapsed time</div>#}
-{#        <div class="col">{{ state.lapse_ms }}</div>#}
-{#    </div>#}
-    {#    {% endif %}#}
-    <div class="row border-bottom py-1 text-start">
-        <div class="col text-body-secondary">RA</div>
-        <div class="col text-monospace">
-            {% if state.has_equ_coord %}
-                {{ state.ra | round(4) }}
-            {% else %}
-                --
-            {% endif %}
-        </div>
+    <div class="live-status-row">
+        <dt>RA</dt>
+        <dd>{% if state.has_equ_coord %}{{ state.ra | round(4) }}{% else %}--{% endif %}</dd>
     </div>
-    <div class="row border-bottom py-1 text-start">
-        <div class="col text-body-secondary">Dec</div>
-        <div class="col text-monospace">
-            {% if state.has_equ_coord %}
-                {{ state.dec | round(4) }}
-            {% else %}
-                --
-            {% endif %}
-        </div>
+    <div class="live-status-row">
+        <dt>Dec</dt>
+        <dd>{% if state.has_equ_coord %}{{ state.dec | round(4) }}{% else %}--{% endif %}</dd>
     </div>
-    <div class="row border-bottom py-1 text-start">
-        <div class="col text-body-secondary">SNR</div>
-        <div class="col">
-            {% if state.snr is not none %}
-                {{ state.snr | round(2) }}
-            {% else %}
-                Calculating...
-            {% endif %}
-        </div>
+    <div class="live-status-row">
+        <dt>SNR</dt>
+        <dd>{% if state.snr is not none %}{{ state.snr | round(2) }}{% else %}Calculating&hellip;{% endif %}</dd>
     </div>
     {% if state.stats %}
-        <div class="row border-bottom py-1 text-start">
-            <div class="col text-body-secondary">Integration time</div>
-            <div class="col text-monospace">{{ state.stats["integration_time"] }}</div>
-        </div>
-        <div class="row border-bottom py-1 text-start">
-            <div class="col text-body-secondary">Stacked frames</div>
-            <div class="col text-monospace">{{ state.stats["stacked_frame"] }}</div>
-        </div>
-        <div class="row border-bottom py-1 text-start">
-            <div class="col text-body-secondary">Dropped frames</div>
-            <div class="col text-monospace">{{ state.stats["dropped_frame"] }}</div>
-        </div>
-        <div class="row border-bottom py-1 text-start">
-            <div class="col text-body-secondary">Time on target</div>
-            <div class="col text-monospace">{{ state.stats["elapsed"] }}</div>
-        </div>
+        <div class="live-status-row"><dt>Integration time</dt><dd>{{ state.stats["integration_time"] }}</dd></div>
+        <div class="live-status-row"><dt>Stacked frames</dt><dd>{{ state.stats["stacked_frame"] }}</dd></div>
+        <div class="live-status-row"><dt>Dropped frames</dt><dd>{{ state.stats["dropped_frame"] }}</dd></div>
+        <div class="live-status-row"><dt>Time on target</dt><dd>{{ state.stats["elapsed"] }}</dd></div>
     {% endif %}
-</div>
+</dl>
