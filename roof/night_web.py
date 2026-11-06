@@ -10,8 +10,8 @@ import time
 import falcon
 
 from roof import config as roof_config
-from roof import dashboard
-from roof.automation import night_history, session_log, target_queue
+from roof import dashboard, site_status
+from roof.automation import get_automation, night_history, session_log, target_queue
 from roof.sessions import _PANEL_SUFFIX, FULL_SESSION_FRACTION, base_name
 from roof.sun import night_key
 
@@ -122,6 +122,19 @@ class DashboardNight:
         resp.text = json.dumps(night_data(time.time()))
 
 
+class DashboardSite:
+    """Starfront's public status, for a person to read. Decides nothing."""
+
+    @staticmethod
+    def on_get(req, resp, telescope_id=1):
+        data = site_status.site_data(
+            roof_config.load(), get_automation().status().get("safe"), dashboard.site_clock
+        )
+        resp.content_type = "application/json"
+        resp.set_header("Cache-Control", "no-store")
+        resp.text = json.dumps(data)
+
+
 class DashboardImageView:
     """The full-size stack for a viewer: image.jpg?full=true without the download."""
 
@@ -137,5 +150,6 @@ class DashboardImageView:
 
 PAGES = {
     "dashboard/night.json": DashboardNight,
+    "dashboard/site.json": DashboardSite,
     "dashboard/image-view.jpg": DashboardImageView,
 }

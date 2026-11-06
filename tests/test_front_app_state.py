@@ -1110,7 +1110,7 @@ def test_home_content_endpoint_returns_non_empty_html(monkeypatch):
 
     front_app.HomeContentResource.on_get(req, resp, telescope_id=1)
 
-    assert "Welcome to the Simple Seestar" in resp.text
+    assert "Welcome to the Simple Seestar" not in resp.text
     assert "Seestar Alpha" in resp.text
 
 

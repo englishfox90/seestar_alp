@@ -184,9 +184,19 @@
       {% block live_content %}{% endblock %}
     </div>
 
+    {# Asks here, not with the browser's own dialog, which can flash light in Red. #}
+    <dialog id="live-confirm" class="live-confirm" aria-labelledby="live-confirm-text">
+      <p id="live-confirm-text"></p>
+      <div class="live-confirm__actions">
+        <button type="button" class="btn btn-secondary" id="live-confirm-no">Keep going</button>
+        <button type="button" class="btn btn-danger" id="live-confirm-yes">Stop imaging</button>
+      </div>
+    </dialog>
+    <script src="{{ root_path }}/public/ssc/live_confirm.js"></script>
+
     <div class="live-quickbar" role="group" aria-label="Quick actions">
       <button class="btn btn-outline-danger" hx-delete="{{ root }}/live/mode" hx-swap="none"
-              hx-confirm="Stop current imaging or schedule item?">Stop</button>
+              hx-confirm="Stop imaging now? The arm stays open. If automation is running, it holds until Start or the next night, and still parks if the roof reads unsafe.">Stop imaging</button>
       <button class="btn btn-outline-secondary" hx-post="{{ root }}/live/record" hx-swap="none">Record</button>
       <button class="btn btn-outline-secondary" hx-post="{{ root }}/command" hx-swap="none"
               hx-vals='{"command": "start_auto_focus"}'>Auto focus</button>

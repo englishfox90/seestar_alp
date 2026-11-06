@@ -16,7 +16,7 @@ import falcon
 import pydash
 
 from roof import config as roof_config
-from roof import dashboard, focus, night_web, planner, schedule_tools
+from roof import dashboard, focus, night_web, planner, schedule_tools, site_status
 from roof.sessions import base_name
 from roof.sun import night_key
 
@@ -588,7 +588,11 @@ def night_line(window, blocks=(), now=None, clock=_plain_clock, roof=None) -> di
 def _earned_text(seconds):
     if seconds <= 0:
         return None
-    return f"{seconds:.0f} s" if seconds < 60 else dashboard._duration(seconds)
+    if seconds < 60:
+        return f"{seconds:.0f} s"
+    if seconds < 360:
+        return f"{seconds / 60:.0f} min"
+    return f"{seconds / 3600:.1f} h"  # the same hours as the goal beside it
 
 
 def stack_summary(status, rows=(), goal=None) -> dict:
@@ -822,6 +826,7 @@ def build(telescope_id) -> dict:
         "state": state,
         "status": status,
         "roof_lines": roof_status(status),
+        "site": site_status.links(settings) if settings.site_building else None,
         "line": night_line(plan["window"], plan["blocks"], now, clock, _roof_record(plan, settings, now)),
         "plan": plan,
         "steps": dashboard.tracker_steps(status, events)["steps"] if state["steps"] else [],

@@ -179,3 +179,6 @@
 /* Support: the rows are links, and nothing else on them says so. */
 .s-page .ssc-link-row .ssc-row__label { color: var(--ssc-accent); }
 .s-page .ssc-link-row .ssc-row__sub { color: var(--ssc-text-2); }
+
+#actionTab .nav-link { background: none; color: var(--ssc-text-2); }
+#actionTab .nav-link.active { background: var(--ssc-fill-2); color: var(--ssc-text-1); font-weight: var(--ssc-weight-strong); }

@@ -11,7 +11,7 @@
 <p class="plan-sentence">{% if status.held %}Held until Start or the next night{% else %}{{ (status.headline or "Starting up")|e }}{% endif %}</p>
 <div class="plan-rows">
   {% set roof_tone = "ok" if status.safe else ("neutral" if status.parked is true else ("danger" if status.parked is false else "attention")) %}
-  {% call parts.status_row("Roof", roof_tone, "Safe" if status.safe else "Unsafe") %}<span class="ssc-row__sub">{{ status.safety_detail|e }}</span>{% endcall %}
+  {% call parts.status_row("Roof", roof_tone, "Safe" if status.safe else "Unsafe") %}{% if status.safety_detail and status.safety_detail|lower not in ("safe", "unsafe") %}<span class="ssc-row__sub">{{ status.safety_detail|e }}</span>{% endif %}{% endcall %}
   {% call parts.status_row("Sky", "neutral", "Dark" if status.dark else "Not dark") %}<span class="ssc-row__sub">Sun {% if status.sun_deg is none %}unknown (no site lat/long){% else %}{{ "%.1f"|format(status.sun_deg) }}&deg;{% endif %}, limit {{ status.sun_max_deg|e }}&deg;</span>{% endcall %}
   {% if not status.connected %}{% set scope_tone, scope_word = "attention", "Not connected" %}
   {% elif status.parked is none %}{% set scope_tone, scope_word = "attention", "Unknown" %}
@@ -19,9 +19,9 @@
   {% else %}{% set scope_tone, scope_word = "neutral", "Arm open" %}{% endif %}
   {% call parts.status_row("Scope" ~ (": " ~ status.scope_name if status.scope_name else ""), scope_tone, scope_word) %}
     {% if status.connected %}
-    <span class="ssc-row__sub">Scheduler: {{ status.sched_state|e }}{% if status.target_index %}, target {{ status.target_index|e }} of {{ status.target_total|e }}{% elif status.target_total is not defined and status.item_number %}, item {{ status.item_number|e }} of {{ status.item_count|e }}{% endif %}</span>
+    <span class="ssc-row__sub">Schedule {{ status.sched_state|e }}{% if status.target_index %}, target {{ status.target_index|e }} of {{ status.target_total|e }}{% elif status.target_total is not defined and status.item_number %}, item {{ status.item_number|e }} of {{ status.item_count|e }}{% endif %}</span>
     <span class="ssc-row__sub">Target: {{ (status.target or "none")|e }}</span>
-    <span class="ssc-row__sub">Tracking: {{ status.tracking|e }}</span>
+    <span class="ssc-row__sub">{{ "Tracking" if status.tracking is sameas true or status.tracking == "True" else "Not tracking" }}</span>
     {% if status.mosaic_scale is defined and status.mosaic_scale is not none %}<span class="ssc-row__sub">Framing now: {% if status.mosaic_scale > 1.0 %}mosaic {{ status.mosaic_scale|e }}x{% else %}single frame{% endif %}</span>{% endif %}
     {% endif %}
   {% endcall %}

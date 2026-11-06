@@ -457,3 +457,15 @@ body.live-rotation-flat .live-main img#liveViewImg {
         margin-bottom: var(--ssc-gap);
     }
 }
+
+.live-confirm {
+    max-width: 480px;
+    padding: var(--ssc-inset);
+    border: 0;
+    border-radius: var(--ssc-radius-sheet);
+    background: var(--ssc-raised);
+    color: var(--ssc-text-1);
+}
+
+.live-confirm::backdrop { background: var(--ssc-canvas); opacity: 0.6; }
+.live-confirm__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--ssc-space-3); }

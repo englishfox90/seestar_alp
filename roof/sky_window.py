@@ -6,7 +6,7 @@ night's dark hours, so the page can work out any point of the sky without anothe
 
 import math
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import ephem
 
@@ -40,12 +40,27 @@ def _horizon_samples() -> list | None:
     return [round(profile.altitude_at(az) + margin, 1) for az in range(0, 360, 10)]
 
 
+def current_night(now: float, settings) -> str:
+    """The night being imaged, or the next one once this one's dark hours are over.
+
+    Nights change at local noon, which would leave a morning looking back at last night.
+    """
+    key = night_key(now, settings.lon)
+    end = night_times(key, settings.lat, settings.lon, settings.sun_max_deg)["dark_end"]
+    if end is not None and now > end:
+        key = (date.fromisoformat(key) + timedelta(days=1)).isoformat()
+    return key
+
+
 def sky_window(days: int, clock, now: float | None = None, settings=None) -> dict:
     """The dark hours of the night ``days`` from now. clock(ts) formats a site time."""
     settings = settings or roof_config.load()
     now = time.time() if now is None else now
     known = bool(settings.lat or settings.lon)
-    key = night_key(now + days * 86400, settings.lon)
+    if known:
+        key = (date.fromisoformat(current_night(now, settings)) + timedelta(days=days)).isoformat()
+    else:
+        key = night_key(now + days * 86400, settings.lon)
     reply = {
         "known": known,
         "night": key,

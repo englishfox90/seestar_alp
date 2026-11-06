@@ -22,6 +22,24 @@
 #t-bands { margin-top: var(--ssc-space-3); }
 #t-bands:empty { margin-top: 0; }
 
+.t-site { display: flex; flex-direction: column; gap: var(--ssc-space-3); }
+.t-site__chart { display: block; overflow-x: auto; }
+.t-site__chart[hidden] { display: none; }
+.t-site__chart img { display: block; max-width: 100%; }
+[data-theme="night"] .t-site__chart img { filter: brightness(0.8); }
+.t-site__links { display: flex; flex-wrap: wrap; gap: var(--ssc-space-2) var(--ssc-space-5); margin: 0; font-size: var(--ssc-text-footnote); }
+.t-site__news { display: block; margin: 0; }
+#t-site-news:empty { display: none; }
+
+/* Each image says when it's from, so a clock for the page only speaks up once it stops. */
+.t-updated[data-tone="neutral"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+}
+
 .t-updated {
     color: var(--ssc-text-2);
     font-size: var(--ssc-text-footnote);
@@ -137,10 +155,8 @@
     .t-image[data-role="thumb"] .t-swap { display: block; grid-column: 2; grid-row: 3; }
     .t-images[data-layout="thumbs"] .t-swap { display: none; }
 
-    /* The title is for screen readers here: the tab bar says where this is. The time of
-       the last update only needs saying once it has stopped updating. */
-    .t-head .ssc-title,
-    .t-updated[data-tone="neutral"] {
+    /* The title is for screen readers here: the tab bar says where this is. */
+    .t-head .ssc-title {
         position: absolute;
         width: 1px;
         height: 1px;
@@ -159,6 +175,9 @@
     .t-image[data-role="thumb"] { order: 7; }
     #t-plan { order: 8; }
     #t-details { order: 9; }
+    .t-site { order: 10; }
+    /* Far too small to read at this width, so it scrolls sideways instead. */
+    .t-site__chart img { width: 280%; max-width: none; }
     /* Only an image may touch the bar. */
     #t-focus, .t-images[data-layout="thumbs"] ~ .t-side #t-now > :first-child + * { padding-top: var(--ssc-space-5); }
 

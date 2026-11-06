@@ -10,7 +10,8 @@ import falcon.testing
 import pytest
 
 import front.app as front_app
-from roof import dashboard, night_history, planner, tonight, web as roof_web
+from roof import config as roof_config
+from roof import dashboard, night_history, night_web, planner, tonight, web as roof_web
 
 NOW = 1793938440.0
 WINDOW = {"sunset": NOW - 4 * 3600, "sunrise": NOW + 9 * 3600, "dark_start": NOW - 3 * 3600, "dark_end": NOW + 7 * 3600}
@@ -249,7 +250,7 @@ def test_stacking_metrics():
     stack = tonight.stack_summary(IMAGING, goal={"have": 3.4, "goal": 10.0, "partial": 0.4})
     metrics = state(IMAGING, stack=stack)["metrics"]
     assert [m["label"] for m in metrics] == ["Earned", "Kept", "Goal"]
-    assert metrics[0]["value"] == "2h 17m"
+    assert metrics[0]["value"] == "2.3 h"
     assert metrics[1]["value"] == "92%" and metrics[1]["hint"] == "412 of 449 frames"
     assert (metrics[2]["value"], metrics[2]["unit"]) == ("3.4", "of 10 h")
     assert "0.4 h not counted" in metrics[2]["hint"]
@@ -263,7 +264,7 @@ def test_metrics_show_a_dash_rather_than_a_guess():
 
 def test_earned_survives_a_gap_between_exposures():
     rows = [{"target": "ngc 6992", "exposure_s": 20.0}]
-    assert tonight.stack_summary({**IMAGING, "exposure_s": 0}, rows)["earned"] == "2h 17m"
+    assert tonight.stack_summary({**IMAGING, "exposure_s": 0}, rows)["earned"] == "2.3 h"
 
 
 @pytest.mark.parametrize("key_status", [DAY, {**IMAGING, "view_stage": "AutoGoto"}, {**PARKED, "held": True}])
@@ -707,7 +708,7 @@ def test_overlapping_blocks_do_not_both_get_a_label():
 
 
 def test_state_draws_the_record_it_is_given(client, monkeypatch, tmp_path):
-    settings = SimpleNamespace(lat=31.5, lon=LON, device_num=1, sun_max_deg=-18.0)
+    settings = SimpleNamespace(lat=31.5, lon=LON, device_num=1, sun_max_deg=-18.0, site_building=0)
     monkeypatch.setattr(tonight.roof_config, "load", lambda: settings)
     monkeypatch.setattr(tonight, "_now", lambda: NOW)
     monkeypatch.setattr(tonight, "_window_cache", {})
@@ -720,7 +721,7 @@ def test_state_draws_the_record_it_is_given(client, monkeypatch, tmp_path):
 
 
 def test_state_with_no_history_shows_the_night_so_far_as_unknown(client, monkeypatch):
-    settings = SimpleNamespace(lat=31.5, lon=LON, device_num=1, sun_max_deg=-18.0)
+    settings = SimpleNamespace(lat=31.5, lon=LON, device_num=1, sun_max_deg=-18.0, site_building=0)
     monkeypatch.setattr(tonight.roof_config, "load", lambda: settings)
     monkeypatch.setattr(tonight, "_now", lambda: NOW)
     monkeypatch.setattr(tonight, "_window_cache", {})
@@ -783,7 +784,7 @@ def test_an_unreadable_log_says_so_and_claims_no_hours():
 
 def test_a_short_run_is_not_rounded_to_nothing():
     row = state({**PARKED, "completed": True}, plan={"summary": {"targets": [{**OTHER, "hours": 0.02, "stacked": 4}], "total_hours": 0.02}})
-    assert row["morning"]["rows"][0]["hours"] == "1m"
+    assert row["morning"]["rows"][0]["hours"] == "1 min"
 
 
 def test_last_image_is_only_claimed_when_nothing_is_stacking():
@@ -883,3 +884,27 @@ def test_skipped_targets_collapse_behind_a_count():
         {"rows": [], "skipped": [{"name": "M 42", "why": "other targets scored higher"}]}, {}, {}
     )
     assert "1 not tonight" in html and "<details" in html
+
+
+def test_the_site_section_follows_the_building_setting(client, monkeypatch):
+    settings = {"now": roof_config.Settings(lat=31.5, lon=LON, device_num=1, site_building=19)}
+    monkeypatch.setattr(tonight.roof_config, "load", lambda: settings["now"])
+    monkeypatch.setattr(tonight, "_now", lambda: NOW)
+    monkeypatch.setattr(tonight, "_window_cache", {})
+    html = _get(client, "/1/dashboard")
+    assert 'id="t-site"' in html and "StrfrntObsTXcsk.gif" in html and "building-0019" in html
+    settings["now"] = roof_config.Settings(lat=31.5, lon=LON, device_num=1, site_building=0)
+    assert 'id="t-site"' not in _get(client, "/1/dashboard")
+
+
+def test_site_json_reports_without_touching_the_scope(client, monkeypatch):
+    settings = roof_config.Settings(lat=31.5, lon=LON, device_num=1, site_building=19)
+    monkeypatch.setattr(night_web.roof_config, "load", lambda: settings)
+    monkeypatch.setattr(night_web, "get_automation", lambda: SimpleNamespace(status=lambda: {"safe": True}))
+    monkeypatch.setattr(
+        night_web.site_status,
+        "site_data",
+        lambda s, safe, clock: {"safe_seen": safe, "building": None, "news": []},
+    )
+    reply = client.simulate_get("/1/dashboard/site.json")
+    assert reply.status_code == 200 and reply.json["safe_seen"] is True

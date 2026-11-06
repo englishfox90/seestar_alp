@@ -58,6 +58,25 @@
   </div>
 
   <section id="t-night" class="t-night no-htmx-fx" aria-label="Night Line">{{ ui.night_line(line) }}</section>
+
+  {% if site %}
+  <section class="t-site" id="t-site" aria-label="Forecast and site status">
+    <div id="t-site-news" class="t-stack"></div>
+    <h2 class="ssc-section">Forecast</h2>
+    <a class="t-site__chart" href="{{ site.chart_page }}" target="_blank" rel="noopener">
+      <img src="{{ site.chart_image }}" id="t-site-chart" loading="lazy" alt="Clear Sky chart: cloud cover, transparency and seeing by hour">
+    </a>
+    <p id="t-site-roof" class="ssc-footnote" role="status"></p>
+    <p id="t-site-warning" class="ssc-notice" data-tone="attention" role="status" hidden></p>
+    <p class="t-site__links">
+      <a href="{{ site.status }}" target="_blank" rel="noopener">Site status</a>
+      <a href="{{ site.allsky }}" target="_blank" rel="noopener">All-sky camera</a>
+      <a href="{{ site.satellite }}" target="_blank" rel="noopener">Satellite</a>
+      <a href="{{ site.radar }}" target="_blank" rel="noopener">Radar</a>
+      {% if site.camera %}<a href="{{ site.camera }}" target="_blank" rel="noopener">Building camera</a>{% endif %}
+    </p>
+  </section>
+  {% endif %}
 </main>
 
 {# Full-size image. Outside every polled region, and loaded only when opened. #}

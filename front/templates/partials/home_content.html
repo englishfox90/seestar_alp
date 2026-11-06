@@ -1,6 +1,9 @@
 {% macro render_stat_row(key, value) %}
+    {% set labels = {"Heater?": "Dew heater", "Balance Sensor (angle)": "Balance", "Compass Sensor (direction)": "Compass", "Temperature Sensor": "Temperature", "Battery %": "Battery", "Auto Power Off": "Auto power off", "Firmware Version": "Firmware", "Focal Position": "Focus position", "Mount Mode": "Mount mode", "Free Storage": "Free storage", "Charge Status": "Power", "Battery Temp": "Battery temperature", "Scheduler Status": "Schedule", "View State": "View state", "View Mode": "View mode", "View Stage": "View stage", "Target Name": "Target", "Successful Frames": "Stacked frames", "Failed Frames": "Dropped frames", "Wi-Fi Signal": "Wi-Fi", "Master client": "Controlling client"} %}
+    {% set units = {"Balance Sensor (angle)": "°", "Compass Sensor (direction)": "°", "Temperature Sensor": " °C", "Battery Temp": " °C"} %}
+    {% set words = {"cancel": "Stopped", "stopped": "Stopped", "working": "Working", "complete": "Finished", "none": "None", "ContinuousExposure": "Preview", "AutoGoto": "Moving", "AutoFocus": "Focusing", "Stack": "Stacking"} %}
     <div class="stat-row">
-        <div class="stat-key">{{ key }}</div>
+        <div class="stat-key">{{ labels.get(key, key) }}</div>
         {% if key == "Wi-Fi Signal" %}
             {% set wifi_dbm = value|replace('dBm', '')|replace('dbm', '')|trim|int %}
             {% set wifi_pct_raw = ((wifi_dbm + 90) * 100 / 40)|int %}
@@ -37,7 +40,7 @@
                 {% set tone = "text-success" %}
             {% endif %}
             <div class="stat-value {{ tone }}">
-                {{ value }}
+                {{ value }}%
                 <div class="metric-bar" style="--metric-value: {{ value|int if value|int < 100 else 100 }}%;"></div>
             </div>
         {% elif key == "SNR" %}
@@ -48,14 +51,16 @@
                 <div class="metric-bar" style="--metric-value: {{ (snr_pct if snr_pct < 100 else 100) if snr_pct > 0 else 0 }}%;"></div>
             </div>
         {% else %}
-            <div class="stat-value">{{ value }}</div>
+            <div class="stat-value">
+                {%- if value is none or value == "" %}&ndash;
+                {%- elif value is sameas true or value == "True" %}Yes
+                {%- elif value is sameas false or value == "False" %}No
+                {%- elif value is float %}{{ "%.1f"|format(value) }}{{ units.get(key, "") }}
+                {%- else %}{{ words.get(value, value) }}{{ units.get(key, "") }}{% endif -%}
+            </div>
         {% endif %}
     </div>
 {% endmacro %}
-
-<div class="panel-card panel-card-tight">
-    <p class="mb-0">Welcome to the Simple Seestar (Web) Controller.</p>
-</div>
 
 {% for telescope in telescopes %}
     <div class="panel-card">

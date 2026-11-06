@@ -426,6 +426,58 @@
   arrange();
   pollStack();
   pollPier();
+  async function pollSite() {
+    if (document.hidden || !document.getElementById("t-site")) return;
+    try {
+      const reply = await fetch(root + "/site.json", { cache: "no-store" });
+      if (!reply.ok) return;
+      showSite(await reply.json());
+    } catch (err) {
+      // It's a courtesy from another service. Whatever was showing stays.
+    }
+  }
+
+  function showSite(site) {
+    const parts = [];
+    if (site.building) {
+      const b = site.building;
+      const when = b.updated ? `, as of ${b.updated}` : "";
+      parts.push(`${b.name} roof ${b.open ? "open" : "closed"}${when}${b.stale ? " (may be out of date)" : ""}.`);
+    }
+    if (site.schedule) {
+      parts.push(`Scheduled ${site.schedule.open} to ${site.schedule.close}, weather permitting.`);
+    }
+    document.getElementById("t-site-roof").textContent = parts.join(" ");
+    const warning = document.getElementById("t-site-warning");
+    warning.hidden = !site.disagree;
+    warning.textContent = site.disagree ? "Sentinel reads the roof safe, but the building reports it closed." : "";
+    // Text from another service: only ever set as text.
+    const news = document.getElementById("t-site-news");
+    news.replaceChildren(
+      ...site.news.map(function (item) {
+        const notice = document.createElement("p");
+        notice.className = "ssc-notice t-site__news";
+        notice.dataset.tone = item.tone;
+        const title = document.createElement("strong");
+        title.textContent = item.title;
+        const body = document.createElement("span");
+        body.textContent = [item.body, item.when].filter(Boolean).join(" ");
+        notice.append(title, " ", body);
+        return notice;
+      })
+    );
+  }
+
+  const chart = document.getElementById("t-site-chart");
+  if (chart) {
+    chart.addEventListener("error", () => chart.closest("a").setAttribute("hidden", ""));
+    // The chart changes every few hours, and a browser would otherwise hold on to it.
+    setInterval(function () {
+      if (!document.hidden) chart.src = chart.src.replace(/&t=\d+/, "") + "&t=" + Date.now();
+    }, 900000);
+  }
+  pollSite();
+  setInterval(pollSite, 60000);
   setInterval(pollStack, 15000);
   setInterval(pollPier, 30000);
   setInterval(showFreshness, 5000);
@@ -433,6 +485,7 @@
     if (!document.hidden) {
       pollStack();
       pollPier();
+      pollSite();
       htmx.trigger("#t-now", "tonight-refresh");
     }
   });

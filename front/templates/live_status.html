@@ -2,9 +2,9 @@
     {% if state.target_name %}
         <div class="live-status-row"><dt>Target</dt><dd>{{ state.target_name }}</dd></div>
     {% endif %}
-    <div class="live-status-row"><dt>State</dt><dd>{{ state.state }}</dd></div>
-    <div class="live-status-row"><dt>Mode</dt><dd>{{ state.mode }}</dd></div>
-    <div class="live-status-row"><dt>Stage</dt><dd>{{ state.stage }}</dd></div>
+    <div class="live-status-row"><dt>State</dt><dd>{{ {"cancel": "Stopped", "working": "Working", "complete": "Finished", "fail": "Failed"}.get(state.state, state.state) }}</dd></div>
+    <div class="live-status-row"><dt>Mode</dt><dd>{{ {"none": "None"}.get(state.mode, state.mode|string|capitalize) }}</dd></div>
+    <div class="live-status-row"><dt>Stage</dt><dd>{{ {"ContinuousExposure": "Preview", "AutoGoto": "Moving", "AutoFocus": "Focusing", "Stack": "Stacking", "DarkLibrary": "Taking darks"}.get(state.stage, state.stage) }}</dd></div>
     {% if state.substage %}
         <div class="live-status-row"><dt>Substage</dt><dd>{{ state.substage }}</dd></div>
     {% endif %}
@@ -19,11 +19,11 @@
     {% endif %}
     <div class="live-status-row">
         <dt>RA</dt>
-        <dd>{% if state.has_equ_coord %}{{ state.ra | round(4) }}{% else %}--{% endif %}</dd>
+        <dd>{% if state.has_equ_coord %}{% set ra_m = (state.ra * 60)|round|int %}{{ (ra_m // 60) % 24 }}h {{ "%02d"|format(ra_m % 60) }}m{% else %}--{% endif %}</dd>
     </div>
     <div class="live-status-row">
         <dt>Dec</dt>
-        <dd>{% if state.has_equ_coord %}{{ state.dec | round(4) }}{% else %}--{% endif %}</dd>
+        <dd>{% if state.has_equ_coord %}{{ state.dec | round(1) }}&deg;{% else %}--{% endif %}</dd>
     </div>
     <div class="live-status-row">
         <dt>SNR</dt>

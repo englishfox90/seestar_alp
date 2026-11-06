@@ -58,6 +58,8 @@ The design language and framework for the whole web UI. The owner approved this 
 
 ## Decision log
 
+- **2026-11-06:** Tonight shows the Starfront Clear Sky chart, the building's roof state and scheduled hours, and any facility announcements. These are read from public feeds for a person to read, and nothing decides on them. Satellite, radar and cameras stay as links, because they are heavy or rarely needed.
+- **2026-11-06:** The page-level "Updated" time only shows when stale, at all widths. Earned uses hours like Goal. Each Stop names what it stops. Live asks in its own dialog so Red holds.
 - **2026-11-06:** Every System sub-page moves to the shell, overturning "Leave" for Support, Platform and System, because the owner saw them as dated next to Settings. Event status becomes one set of rows on every page, including those still on `base.html`, which load `ssc/rows.css` for them.
 - **2026-11-06:** The Targets sky view marks popular objects from `ssc/sky_catalog.json`, built by `scripts/build_sky_catalog.py`. Marker shape carries the type, because Red has no hues, and each marker has one soft colour so the owner's frames and white labels stay loudest. What a tapped object is shows below the view, not on the image, and its action uses the search result's path. Canvas colours in Red are full red, since the floor would erase the blue frame.
 - **2026-11-06:** Final design review: the language is done. Phone Tonight now puts the Night Line directly under the sentence, because a glance has to show the night. Image corners are 0 everywhere. Schedule and Live stay on Bootstrap unless they earn the move.

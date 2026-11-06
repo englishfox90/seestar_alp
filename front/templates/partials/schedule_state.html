@@ -11,13 +11,15 @@
           hx-vals='{"action": "toggle"}'
           {% if state == "working" %}
             class="btn btn-danger">
+          {% elif state == "stopped" or state == "complete" %}
+            class="btn btn-primary">
           {% else %}
             class="btn btn-secondary">
           {% endif %}
           {% if state == "stopped" or state == "complete" %}
             Start
           {% else %}
-            Stop
+            Stop schedule
           {% endif %}
         </button>
         {% if state == "working" %}
