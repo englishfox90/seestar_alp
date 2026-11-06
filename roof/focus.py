@@ -51,6 +51,7 @@ class FocusLog:
         self._lock = threading.Lock()
         self._clock = clock
         self._run = None
+        self.on_finish = None  # called once per run, on the socket thread
 
     def on_event(self, event):
         # Runs on the thread that reads the scope's socket, which must survive
@@ -77,6 +78,7 @@ class FocusLog:
         state = event.get("state")
         result = event.get("result")
         now = self._clock()
+        finished = None
         with self._lock:
             if state == "start":
                 self._run = self._new_run(now)
@@ -96,8 +98,11 @@ class FocusLog:
                     run["state"] = state
                     run["finished_at"] = now
                     run["error"] = event.get("error")
+                    finished = dict(run)
                 if event.get("lapse_ms"):
                     run["lapse_ms"] = event["lapse_ms"]
+        if finished and self.on_finish:
+            self.on_finish(finished)
 
     def current(self):
         """The run worth showing right now, or None."""
@@ -143,7 +148,7 @@ def _ticks(low, high, count=5) -> list:
     return [round(i * step, 6) for i in range(first, last + 1)]
 
 
-def _fit_is_usable(curve) -> bool:
+def fit_is_usable(curve) -> bool:
     return (
         isinstance(curve, list)
         and len(curve) == 3
@@ -183,7 +188,7 @@ def chart(run) -> dict:
     if missing:
         plural = "step" if len(missing) == 1 else "steps"
         notes.append({"text": f"{len(missing)} {plural} gave no reading", "problem": True})
-    fit_ok = _fit_is_usable(curve)
+    fit_ok = fit_is_usable(curve)
     if curve is not None and not fit_ok:
         notes.append({"text": "The scope reported no usable curve fit", "problem": True})
 
