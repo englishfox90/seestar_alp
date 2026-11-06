@@ -1,0 +1,67 @@
+{# The ten cells of a mosaic or framed mosaic row. Desktop reads them under the shared header in
+   schedule_base.html; a phone shows each as a label on the left and its value on the right. #}
+{% macro yes_no(flag) -%}{{ "Yes" if flag == True else "No" }}{%- endmacro %}
+
+{% macro mosaic_cells(item, framed=false) -%}
+{%- set p = item["params"] -%}
+<span class="sch-cell sch-cell--target" data-label="Target">{{ p["target_name"] }}</span>
+<span class="sch-cell" data-label="Position"><span class="sch-v"><span>RA: {{ p["ra"] }}</span><span>DEC: {{ p["dec"] }}</span></span></span>
+{% if framed %}
+<span class="sch-cell" data-label="Scale">{{ p["mosaic_scale"] }}x</span>
+<span class="sch-cell" data-label="Angle">{{ p["mosaic_angle"] }}&deg;</span>
+{% elif p["ra_num"] > 1 or p["dec_num"] > 1 %}
+<span class="sch-cell" data-label="Panels"><span class="sch-v"><span>RA: {{ p["ra_num"] }}</span><span>DEC: {{ p["dec_num"] }}</span></span></span>
+<span class="sch-cell" data-label="Overlap">{{ p["panel_overlap_percent"] }}</span>
+{% else %}
+<span class="sch-cell" data-label="Panels">-</span>
+<span class="sch-cell" data-label="Overlap">-</span>
+{% endif %}
+<span class="sch-cell" data-label="J2000"><span id="{{ 'isJ2000_' if p['is_j2000'] == True else 'isNotJ2000_' }}{{ item['id'] }}">{{ yes_no(p["is_j2000"]) }}</span></span>
+{% if framed %}
+<span class="sch-cell" data-label="Exposure">{{ seconds_to_hms(p["panel_time_sec"]) }}</span>
+{% else %}
+<span class="sch-cell" data-label="Exposure"><span class="sch-v"><span>{{ seconds_to_hms(p["panel_time_sec"]) }} ea.</span><small class="sch-sub" title="Acquisition only; excludes slewing, autofocus, and retries">Total: {{ seconds_to_hms(p["panel_time_sec"] * mosaic_panel_count(p)) }}</small></span></span>
+{% endif %}
+<span class="sch-cell" data-label="Gain">{{ p["gain"] }}</span>
+<span class="sch-cell" data-label="LP filter"><span id="{{ 'isUseLPFilter_' if p['is_use_lp_filter'] == True else 'isNotUseLPFilter_' }}{{ item['id'] }}">{{ yes_no(p["is_use_lp_filter"]) }}</span></span>
+<span class="sch-cell" data-label="Autofocus"><span id="{{ 'isUseAutoFocus_' if p['is_use_autofocus'] == True else 'isNotUseAutoFocus_' }}{{ item['id'] }}">{{ yes_no(p["is_use_autofocus"]) }}</span></span>
+<span class="sch-cell sch-cell--panels" data-label="Selected panels">{{ "-" if framed else p["selected_panels"] }}</span>
+{%- endmacro %}
+
+{# The running item's detail, shown when its row is opened. #}
+{% macro run_detail(item, framed=false) -%}
+{%- set params = item["params"] -%}
+{% if schedule["is_stacking"] %}
+  {% if current_item is defined and current_item['item_remaining_time_s'] is defined %}
+    {% set item_remain = current_item['item_remaining_time_s'] %}
+    {% set item_elapse = current_item['item_total_time_s'] - item_remain %}
+    <p>Time Elapsed: {{ seconds_to_hms(item_elapse) }}</p>
+    <p>Time Remaining: {{ seconds_to_hms(item_remain) }}</p>
+  {% endif %}
+  {% if not framed and current_item is defined %}
+    {% if params["ra_num"] > 1 or params["dec_num"] > 1 %}
+      {% if current_item['cur_ra_panel_num'] and current_item['cur_dec_panel_num'] %}
+        <p>Current Panel: {{ current_item['cur_ra_panel_num'] }}{{ current_item['cur_dec_panel_num'] }}
+          (RA {{ current_item['cur_ra_panel_num'] }} / Dec {{ current_item['cur_dec_panel_num'] }})</p>
+      {% endif %}
+      {% if current_item['panel_remaining_time_s'] is defined %}
+        <p>Panel Remaining Time: {{ seconds_to_hms(current_item['panel_remaining_time_s']) }}</p>
+      {% endif %}
+    {% endif %}
+  {% endif %}
+  {% if not framed and current_stack is defined and current_stack["stacked_frame"] %}
+    <p>Stacked Frames: {{ current_stack["stacked_frame"] }}</p>
+    {% if current_stack["dropped_frame"] is defined %}
+      <p>Dropped Frames: {{ current_stack["dropped_frame"] }}</p>
+    {% endif %}
+    {% set stack_s = (current_stack["stacked_frame"] * current_exp) | int %}
+    <p>Integration Time: {{ seconds_to_hms(stack_s) }}</p>
+  {% endif %}
+{% endif %}
+{% if params['federation_mode'] %}
+  <p>Federation Mode: {{ params['federation_mode'] }}</p>
+  <p>Max Devices: {{ params['max_devices'] }}</p>
+{% endif %}
+<p>Retries: {{ params['num_tries'] }}</p>
+<p>Retry Wait: {{ params['retry_wait_s'] }}s</p>
+{%- endmacro %}

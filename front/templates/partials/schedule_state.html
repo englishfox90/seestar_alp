@@ -1,37 +1,35 @@
-<div id="schedule-state" class="row g-3 align-items-end">
+<div id="schedule-state" class="sch-state">
 
-  <div class="col-12 col-md">
+  <div class="sch-state__run">
     {% if client_master and online %}
-      <div class="d-flex flex-wrap align-items-center gap-3">
-        <div>State: {{ state }}</div>
-        <div class="d-flex gap-2">
+      <p class="sch-state__label">State <strong>{{ state }}</strong></p>
+      <div class="sch-buttons">
+        <button
+          hx-post="{{root}}/schedule/state"
+          hx-swap="outerHTML"
+          hx-target="#schedule-state"
+          hx-vals='{"action": "toggle"}'
+          {% if state == "working" %}
+            class="btn btn-danger">
+          {% else %}
+            class="btn btn-secondary">
+          {% endif %}
+          {% if state == "stopped" or state == "complete" %}
+            Start
+          {% else %}
+            Stop
+          {% endif %}
+        </button>
+        {% if state == "working" %}
           <button
             hx-post="{{root}}/schedule/state"
             hx-swap="outerHTML"
             hx-target="#schedule-state"
-            hx-vals='{"action": "toggle"}'
-            {% if state == "working" %}
-              class="btn btn-danger">
-            {% else %}
-              class="btn btn-primary">
-            {% endif %}
-            {% if state == "stopped" or state == "complete" %}
-              Start
-            {% else %}
-              Stop
-            {% endif %}
+            hx-vals='{"action": "skip"}'
+            class="btn btn-secondary">
+            Skip
           </button>
-          {% if state == "working" %}
-            <button
-              hx-post="{{root}}/schedule/state"
-              hx-swap="outerHTML"
-              hx-target="#schedule-state"
-              hx-vals='{"action": "skip"}'
-              class="btn btn-secondary">
-              Skip
-            </button>
-          {% endif %}
-        </div>
+        {% endif %}
       </div>
     {% elif not client_master %}
       <p class="mb-2">You are currently in guest mode. You can release this in the Advanced->Guest Mode of the SeeStar app.</p>
@@ -41,7 +39,7 @@
     {% endif %}
   </div>
 
-  <div class="col-12 col-md-5 col-lg-4">
+  <div class="sch-state__actions">
     <label for="actionSelector" class="form-label">Schedule actions</label>
     <select class="form-select app-select" id="actionSelector" onchange="handleAction()">
       <option value="">--Select an Action--</option>

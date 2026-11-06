@@ -10,12 +10,13 @@
 {% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ root_path }}/public/ssc/settings.css">
 
 <p class="panel-muted">Hover over an input section to see what the setting is for and its default.</p>
 
-<form method="post" action="{{ root_path }}/config" class="bordered-form">
+<form method="post" action="{{ root_path }}/config" class="sys-config">
 	{{ config.render_config_html() }}
-	<div class="card-body border">
+	<div class="sys-config__save">
 		<button type="submit" class="btn btn-primary">Save</button>
 	</div>
 </form>

@@ -1,25 +1,14 @@
 {% if online %}
   {% if state %}
     {% if state["guest_mode"] %}
-      <div class="row g-3 mb-3">
-          {% for client in state["client_list"] %}
-            <div class="col-12 col-md-6 col-lg-3">
-              {% if loop.index0 == state["master_index"] %}
-                {% set card_class = 'text-bg-success' %}
-                {% set card_type = 'Controller' %}
-              {% else %}
-                {% set card_class = 'text-bg-secondary' %}
-                {% set card_type = 'Guest' %}
-              {% endif %}
-
-              <div class="card text-center h-100 {{ card_class }}">
-                <div class="card-header"><strong>{{client}}</strong></div>
-                <div class="card-body">
-                  <p class="card-text">{{ card_type }}</p>
-                </div>
-              </div>
-            </div>
-          {% endfor %}
+      <div class="panel-card sys-rows">
+        <h2 class="panel-title mb-2">Clients</h2>
+        {% for client in state["client_list"] %}
+          <div class="stat-row">
+            <div class="stat-key">{{ client }}</div>
+            <div class="stat-value">{% if loop.index0 == state["master_index"] %}Controller{% else %}Guest{% endif %}</div>
+          </div>
+        {% endfor %}
       </div>
 
       <div class="panel-card">
