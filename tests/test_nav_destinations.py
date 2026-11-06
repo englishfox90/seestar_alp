@@ -216,7 +216,8 @@ def test_scope_switching_keeps_the_page_and_sub_path():
 def test_root_path_prefixes_every_link():
     html = _render("ssc/nav.html", "live", root="/p/1", root_path="/p")
     hrefs = re.findall(r'href="([^"]*)"', html)
-    assert hrefs and all(href.startswith("/p/") and not href.startswith("/p/p/") for href in hrefs)
+    links = [href for href in hrefs if not href.startswith("#")]  # "#" is a sprite icon
+    assert links and all(href.startswith("/p/") and not href.startswith("/p/p/") for href in links)
     assert 'hx-get="/p/roof/badge"' in html
 
 

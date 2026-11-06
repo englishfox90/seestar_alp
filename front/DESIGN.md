@@ -14,6 +14,10 @@ The design language and framework for the whole web UI. The owner approved this 
 
 - **Red floor corrected:** the specification's `filter` on `html` also greys the red overlay, which lets green and blue through. `red-floor.css` is the version in force: the multiply overlay alone, with images and canvases dimmed directly. The specification's Red contrast figures assume no extra dimming on text, which is now true.
 
+- **One scope:** the owner runs a single scope, so multi-scope cases only need to stay working, not be refined.
+- **Repeat Stop presses:** pressing Stop again reruns the sequence and can reset the park-attempt count. Tonight and Automation disable the button after a press. The owner chose to leave the server route unguarded for now.
+- **Bundled font:** none. Icons are Phosphor (`ssc/icons.svg`) and polled regions use idiomorph (`ssc/vendor/`).
+
 ## Status
 
 ### Done: foundation
@@ -30,23 +34,24 @@ The design language and framework for the whole web UI. The owner approved this 
 - [x] Pier camera on the dashboard from PFR Sentinel, with stale and offline warnings
 - [x] Drift tests: raw values banned under `ssc/`, legacy inline styles can only fall
 
+### Done: rebuild
+
+- [x] Tonight on the new shell: all states, Night Line with roof history, morning card, image viewer, Stop with confirm
+- [x] Tonight, Plan, Scope and System with a shared sub-navigation, on old and new pages
+- [x] Targets, Automation and Settings on the new shell
+- [x] Schedule, System, Live, Prepare and capture pages restyled on `base.html`
+- [x] Per-device Auto, Day, Night and Red
+- [x] Phosphor icons and idiomorph
+
 ### Next
 
-Follow section 10 of the specification from step 2.
-
-- [ ] Static prototype of the Tonight states on the real phone in all three themes, including Red, then owner sign-off
-- [ ] Four destinations and redirects. The shell and macros exist, limited to what Tonight needs.
-- [x] Tonight: `/tonight/state`, state mapping, Stop with confirm, Night Line, at `/dashboard`. Pier thumbnail is 120px wide. Inline icons and plain htmx swaps until Phosphor and idiomorph are vendored. Not yet tested on an iPhone.
-- [ ] Plan: Targets as rows on phones, Automation, retire the Roof page
-- [x] Per-device Day, Night, Red and Auto from the sun's altitude (`/roof/sun`). The control for it is built separately.
-- [ ] Phosphor icons and idiomorph, vendored
-- [ ] Settings and Schedule rows, Live controls
-- [ ] Roof history, Morning card, image viewer, a start that respects the roof
-- [ ] Common target names, which need a catalog lookup
+- [ ] Check on a real iPhone, including Red, the Live video and joystick
+- [ ] A start that respects the roof, as its own change, with a real test on the scope
+- [ ] Per-target images in the morning card, and common target names, which need a catalog lookup
+- [ ] Move Schedule and Live onto the shell, if they earn it
 
 ### Known gaps
 
-- Targets on a phone is still an 831px table in a 383px card.
 - Bootstrap's small checkbox radius and some stray sizes remain on legacy pages until each is moved.
 - The `webui_*` risks in the first review have not been tested, because testing writes config.
 

@@ -274,7 +274,7 @@ def test_badge_is_a_compact_status_on_either_shell(rig):
     html = _get(rig, "/roof/badge")
     assert all(word in html for word in ("Roof unsafe", "Scope offline", "Dry run"))
     assert "<svg" in html, "an icon, because Red has no hues"
-    assert ".app-status" in html, "base.html does not load components.css"
+    assert ".ssc-topbar__status" in html, "base.html does not load components.css"
 
 
 # ---- Targets ---------------------------------------------------------------------------------
@@ -369,7 +369,8 @@ def test_empty_list_and_unknown_site_say_so(rig):
 
 def test_top_bar_status_keeps_refreshing_on_targets(rig):
     html = _get(rig, "/1/targets")
-    assert 'id="ssc-status"' in html and 'hx-get="/roof/badge"' in html
+    assert 'hx-get="/roof/badge"' in html and 'hx-target="#ssc-status"' in html
+    assert "Roof safe" in html
 
 
 @pytest.mark.parametrize("path", ["/1/roof", "/1/targets"])

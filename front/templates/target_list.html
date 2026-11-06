@@ -9,6 +9,8 @@
 {%- endmacro %}
 
 {% block content %}
+  {# The nav gets a fixed status on this page, so this keeps it fresh. #}
+  <div hidden hx-get="{{ root_path }}/roof/badge" hx-trigger="every 10s [!document.hidden]" hx-target="#ssc-status" hx-sync="this:drop" hx-swap="innerHTML"></div>
 {% set priority_options = [] %}
 {% for p in priorities %}{% set _ = priority_options.append({"value": p, "label": p|capitalize}) %}{% endfor %}
 <main class="ssc-page plan-page" id="targets">

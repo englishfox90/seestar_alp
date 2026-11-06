@@ -828,7 +828,7 @@ def test_the_active_tab_is_filled_and_the_others_are_not(client):
     html = _get(client, "/1/dashboard")
     tabs = html[html.index('class="ssc-tabbar"') :]
     assert 'href="#moon-stars-fill"' in tabs
-    assert 'href="#target"' in tabs and 'href="#target-fill"' not in tabs
+    assert 'href="#list-checks"' in tabs and 'href="#list-checks-fill"' not in tabs
 
 
 def test_shell_loads_idiomorph_after_htmx_and_the_sprite(client):
