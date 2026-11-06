@@ -30,6 +30,14 @@ def _queue() -> target_queue.TargetQueue:
     return target_queue.TargetQueue(os.path.join(_base(), "roof_targets.json"))
 
 
+def _estimates() -> target_queue.FramingEstimates:
+    return target_queue.FramingEstimates(os.path.join(_base(), "roof_framing.json"))
+
+
+def _short_of_estimate(min_session_hours, estimate) -> bool:
+    return bool(estimate) and min_session_hours < estimate
+
+
 def _clock(ts) -> str:
     return datetime.fromtimestamp(ts).strftime("%H:%M")
 
@@ -89,13 +97,17 @@ def _context() -> dict:
     )
     finished = planner.finish_nights(plans, targets, log)
     names = {t.id: t.name for t in targets}
+    estimates = _estimates()
     for target in targets:
         progress = log.progress(target)
+        estimate = estimates.hours(target.mosaic_scale) if target.framed else None
         have = target.prior_hours + progress.counted_hours
         context["rows"].append(
             {
                 "target": target,
                 "framing": _framing(target),
+                "estimate": estimate,
+                "short": _short_of_estimate(target.min_session_hours, estimate),
                 "have": round(have, 1),
                 "partial": round(progress.partial_hours, 1),
                 "percent": min(100, round(100 * have / target.goal_hours)) if target.goal_hours else 100,
@@ -214,7 +226,9 @@ class QueueImport(_QueueAction):
                 return f"Import failed: {'; '.join(errors)}"
             found = target_queue.targets_from_schedule(items, source)
             label = source
-        added, updated = _queue().merge(found, goal_hours=goal)
+        added, updated = _queue().merge(
+            target_queue.apply_estimates(found, _estimates()), goal_hours=goal
+        )
         return f"From {label}: added {added}, updated {updated}."
 
 
@@ -231,15 +245,22 @@ class QueueUpdate(_QueueAction):
             raise falcon.HTTPBadRequest(description="prior_hours must be a number") from None
         if prior < 0:
             raise falcon.HTTPBadRequest(description="prior_hours is out of range")
+        minimum = _positive(form, "min_session_hours", maximum=14)
         changed = _queue().update(
             form.get("id", ""),
             goal_hours=_positive(form, "goal_hours"),
-            min_session_hours=_positive(form, "min_session_hours", maximum=14),
+            min_session_hours=minimum,
             prior_hours=prior,
             priority=priority,
             enabled=form.get("enabled") == "on",
         )
-        return "Saved." if changed else "That target is no longer listed."
+        if not changed:
+            return "That target is no longer listed."
+        target = next((t for t in _queue().all() if t.id == form.get("id")), None)
+        estimate = _estimates().hours(target.mosaic_scale) if target and target.framed else None
+        if _short_of_estimate(minimum, estimate):
+            return f"Saved, but {minimum:g} h is under the scope's {estimate:g} h estimate for this framing."
+        return "Saved."
 
 
 class QueueRemove(_QueueAction):

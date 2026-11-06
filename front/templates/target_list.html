@@ -35,7 +35,11 @@
             {% if row.partial %}<div class="small text-warning">{{ row.partial }} h more from framed runs too short to count</div>{% endif %}
           </td>
           <td><input form="target-{{ t.id }}" class="form-control form-control-sm" style="width: 5rem" name="goal_hours" value="{{ t.goal_hours }}" aria-label="{{ t.name }} goal hours"></td>
-          <td><input form="target-{{ t.id }}" class="form-control form-control-sm" style="width: 5rem" name="min_session_hours" value="{{ t.min_session_hours }}" aria-label="{{ t.name }} shortest run"></td>
+          <td><input form="target-{{ t.id }}" class="form-control form-control-sm" style="width: 5rem" name="min_session_hours" value="{{ t.min_session_hours }}" aria-label="{{ t.name }} shortest run">
+            {% if row.short %}<div class="small text-warning">Under the scope's {{ row.estimate }} h estimate</div>
+            {% elif row.estimate %}<div class="small text-body-secondary">Scope estimate {{ row.estimate }} h</div>
+            {% elif t.framed %}<div class="small text-body-secondary">No scope estimate until this size has run</div>{% endif %}
+          </td>
           <td><input form="target-{{ t.id }}" class="form-control form-control-sm" style="width: 5rem" name="prior_hours" value="{{ t.prior_hours }}" aria-label="{{ t.name }} earlier data"></td>
           <td><select form="target-{{ t.id }}" class="form-select form-select-sm" name="priority" aria-label="{{ t.name }} priority">
             {% for p in priorities %}<option value="{{ p }}" {% if p == t.priority %}selected{% endif %}>{{ p | capitalize }}</option>{% endfor %}

@@ -25,7 +25,7 @@ from logging.handlers import RotatingFileHandler
 from roof import config as roof_config
 from roof import planner, schedule_tools
 from roof import sentinel
-from roof.queue import TargetQueue
+from roof.queue import FramingEstimates, TargetQueue
 from roof.dew import DewMonitor
 from roof.scope import DryRunScope, RealScope, ScopeState
 from roof.sessions import SessionLog
@@ -67,6 +67,7 @@ class RoofAutomation:
         dew_monitor=None,
         session_log=None,
         plan_targets=None,
+        framing_estimates=None,
     ):
         self._load_settings = load_settings
         self._read_safety = read_safety or (
@@ -132,6 +133,7 @@ class RoofAutomation:
         self._started_at = clock()
         self._session_log = session_log
         self._plan_targets = plan_targets or (lambda s, now: (False, "no target list"))
+        self._framing_estimates = framing_estimates
         self._list_note = ""
         self._alarm_after_park = ""
         self._list_runs = 0
@@ -788,8 +790,24 @@ class RoofAutomation:
             return
         try:
             self._session_log.observe(state, night, now)
+            self._learn_framing_estimate(state)
         except Exception as e:
             self._logger.warning("could not record the stack: %s", e)
+
+    def _learn_framing_estimate(self, state):
+        # Only while stacking, when the firmware's setting is this target's framing.
+        if (
+            self._framing_estimates is None
+            or state.view_stage != "Stack"
+            or (state.mosaic_scale or 0) <= 1.0
+            or not state.mosaic_estimate_h
+        ):
+            return
+        if self._framing_estimates.note(state.mosaic_scale, state.mosaic_estimate_h):
+            self._log(
+                f"scope estimates {state.mosaic_estimate_h:g} h for a "
+                f"{state.mosaic_scale:g}x framing"
+            )
 
     def _targets_now(self, s, now):
         """Altitudes for the page, refreshed once a minute."""
@@ -983,6 +1001,7 @@ def get_automation() -> RoofAutomation:
             state_path=os.path.join(base, "roof_state.json"),
             logger=logger,
             session_log=log,
+            framing_estimates=FramingEstimates(os.path.join(base, "roof_framing.json")),
             plan_targets=lambda s, now: planner.write_night_plan(
                 s, targets.all(), log, now, schedule_tools.schedule_dir()
             ),

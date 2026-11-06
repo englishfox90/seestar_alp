@@ -10,7 +10,14 @@ import pytest
 
 from roof import planner, schedule_tools
 from roof.planner import PlanConfig, moon_required_separation, plan_night, to_schedule
-from roof.queue import Target, TargetQueue, targets_from_plan, targets_from_schedule
+from roof.queue import (
+    FramingEstimates,
+    Target,
+    TargetQueue,
+    apply_estimates,
+    targets_from_plan,
+    targets_from_schedule,
+)
 from roof.scope import RealScope, ScopeState
 from roof.automation import IDLE
 from roof.sentinel import SafetyReading
@@ -721,3 +728,107 @@ def test_roof_page_accepts_the_target_list_choice(monkeypatch):
     body = f"schedule={schedule_tools.TARGET_LIST}"
     assert client.simulate_post("/roof/select", headers=FORM, body=body).status_code == 302
     assert saved == {"schedule": schedule_tools.TARGET_LIST}
+
+
+# ---- the scope's estimate for a framing -------------------------------------
+
+
+def test_known_framing_size_needs_no_learning(tmp_path):
+    estimates = FramingEstimates(str(tmp_path / "f.json"))
+    assert estimates.hours(1.7) == 1.375
+    assert estimates.hours(2.2) is None
+
+
+def test_estimates_are_learned_and_kept(tmp_path):
+    path = str(tmp_path / "f.json")
+    assert FramingEstimates(path).note(2.2, 3.0) is True
+    assert FramingEstimates(path).note(2.2, 3.0) is False
+    assert FramingEstimates(path).hours(2.2) == 3.0
+    assert FramingEstimates(path).hours(1.7) == 1.375
+
+
+def test_damaged_estimates_fall_back_to_the_known_ones(tmp_path):
+    path = tmp_path / "f.json"
+    path.write_text("{broken")
+    assert FramingEstimates(str(path)).hours(1.7) == 1.375
+
+
+def test_new_framed_targets_start_at_the_estimate(tmp_path):
+    found = apply_estimates(targets_from_plan(PLAN), FramingEstimates(str(tmp_path / "f.json")))
+    assert found[0]["min_session_hours"] == 1.375
+    assert "min_session_hours" not in found[1]
+
+
+def test_unknown_size_keeps_the_fallback(tmp_path):
+    plan = json.loads(json.dumps(PLAN))
+    plan["list"][0]["mosaic"]["scale"] = 2.5
+    found = apply_estimates(targets_from_plan(plan), FramingEstimates(str(tmp_path / "f.json")))
+    assert found[0]["min_session_hours"] == 4.0
+
+
+def test_reimport_does_not_change_a_chosen_shortest_run(tmp_path):
+    queue = TargetQueue(str(tmp_path / "t.json"))
+    estimates = FramingEstimates(str(tmp_path / "f.json"))
+    queue.merge(apply_estimates(targets_from_plan(PLAN), estimates))
+    first = queue.all()[0]
+    queue.update(first.id, min_session_hours=6.0)
+    queue.merge(apply_estimates(targets_from_plan(PLAN), estimates))
+    assert queue.all()[0].min_session_hours == 6.0
+
+
+def test_page_flags_a_shortest_run_under_the_estimate(page, monkeypatch):
+    _, queue_web, _ = page
+    monkeypatch.setattr(
+        queue_web.time, "time", lambda: datetime(2026, 11, 6, 2, tzinfo=timezone.utc).timestamp()
+    )
+    queue_web._queue().merge(targets_from_plan(PLAN))
+    target = queue_web._queue().all()[0]
+    queue_web._queue().update(target.id, min_session_hours=1.0)
+    rows = {r["target"].name: r for r in queue_web._context()["rows"]}
+    assert rows["NGC 6960"]["short"] is True and rows["NGC 6960"]["estimate"] == 1.375
+    assert rows["M 42"]["short"] is False and rows["M 42"]["estimate"] is None
+    queue_web._queue().update(target.id, min_session_hours=1.375)
+    assert queue_web._context()["rows"][0]["short"] is False
+
+
+def test_saving_under_the_estimate_warns(page, monkeypatch):
+    client, queue_web, _ = page
+    import roof.web
+
+    shown = _NoPage()
+    monkeypatch.setattr(roof.web, "_front", lambda: shown)
+    queue_web._queue().merge(targets_from_plan(PLAN))
+    target = queue_web._queue().all()[0]
+    body = f"id={target.id}&goal_hours=9&min_session_hours=1&prior_hours=0&priority=normal&enabled=on"
+    client.simulate_post("/targets/update", headers=FORM, body=body)
+    assert "1.375 h estimate" in shown.message
+
+
+def test_automation_learns_the_estimate_only_while_stacking(tmp_path):
+    from tests.test_roof import Rig
+
+    rig = Rig(tmp_path)
+    estimates = FramingEstimates(str(tmp_path / "f.json"))
+    rig.auto._framing_estimates = estimates
+    rig.auto._session_log = SessionLog(str(tmp_path / "s.json"))
+    rig.set_scope(view_state="working", view_stage="AutoGoto", mosaic_scale=2.2, mosaic_estimate_h=3.0)
+    rig.tick()
+    assert estimates.hours(2.2) is None
+    rig.set_scope(view_stage="Stack")
+    rig.tick(10)
+    assert estimates.hours(2.2) == 3.0
+
+
+def test_scope_read_carries_the_framing_estimate():
+    reply = {"setting": {"mosaic": {"scale": 1.7, "estimated_hours": 1.375}}}
+    device = SimpleNamespace(
+        is_connected=True,
+        device_name="scope",
+        schedule={"state": "stopped", "list": [], "item_number": 0},
+        scheduler_thread=None,
+        send_message_param_sync=lambda data: {
+            "result": reply if data["method"] == "get_device_state" else {}
+        },
+    )
+    state = RealScope(lambda: device).read()
+    assert (state.mosaic_scale, state.mosaic_estimate_h) == (1.7, 1.375)

@@ -16,9 +16,12 @@ PRIORITIES = ("low", "normal", "high")
 DEFAULT_GOAL_HOURS = 10.0
 DEFAULT_SINGLE_SESSION_HOURS = 1.0
 # A framed mosaic is one stack that the firmware spreads across its panels, so a
-# short run leaves uneven coverage. The firmware reports no coverage, so this is a
-# judgement per target. 4 h matches what the Cygnus mosaics were scheduled for.
+# short run leaves uneven coverage. Used only until the scope has given an estimate
+# for that size of framing; 4 h matches what the Cygnus mosaics were scheduled for.
 DEFAULT_FRAMED_SESSION_HOURS = 4.0
+# setting.mosaic.estimated_hours, from the scope's logs on 2026-11-05. It stayed the
+# same across angles, targets and exposures, so it's kept per scale.
+KNOWN_FRAMING_HOURS = {"1.70": 1.375}
 DEFAULT_EXPOSURE_S = 30.0
 DEFAULT_GAIN = 200
 
@@ -124,6 +127,61 @@ def targets_from_schedule(items: list, source: str) -> list[dict]:
                 "star_map_angle": params.get("mosaic_star_map_angle"),
             }
         found.append(_with_framing(target, framing))
+    return found
+
+
+class FramingEstimates:
+    """The scope's own time estimate for each size of framing.
+
+    The firmware only reports it for the framing it's running, so sizes are learned
+    as they run. Losing the file only loses what can be learned again.
+    """
+
+    def __init__(self, path: str):
+        self._path = path
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _key(scale: float) -> str:
+        return f"{float(scale):.2f}"
+
+    def _read(self) -> dict:
+        learned = dict(KNOWN_FRAMING_HOURS)
+        try:
+            with open(self._path) as f:
+                doc = json.load(f)
+            if isinstance(doc, dict):
+                learned.update(doc)
+        except (OSError, ValueError):
+            pass
+        return learned
+
+    def hours(self, scale: float) -> float | None:
+        with self._lock:
+            value = self._read().get(self._key(scale))
+        return float(value) if isinstance(value, (int, float)) and value > 0 else None
+
+    def note(self, scale: float, hours: float) -> bool:
+        """Remember an estimate. True if it was new."""
+        with self._lock:
+            learned = self._read()
+            if learned.get(self._key(scale)) == hours:
+                return False
+            learned[self._key(scale)] = hours
+            tmp = f"{self._path}.tmp"
+            with open(tmp, "w") as f:
+                json.dump(learned, f, indent=1)
+            os.replace(tmp, self._path)
+        return True
+
+
+def apply_estimates(found: list[dict], estimates: FramingEstimates) -> list[dict]:
+    """Start new framed targets at the scope's estimate for their size, if known."""
+    for target in found:
+        if target.get("mosaic_scale", 1.0) > 1.0:
+            hours = estimates.hours(target["mosaic_scale"])
+            if hours:
+                target["min_session_hours"] = hours
     return found
 
 

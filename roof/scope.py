@@ -31,6 +31,7 @@ class ScopeState:
     dropped: int = 0
     exposure_s: float = 0.0
     stack_lapse_s: float = 0.0
+    mosaic_estimate_h: float | None = None  # the firmware's time for this framing
 
 
 def _failed(res) -> str | None:
@@ -84,7 +85,12 @@ class RealScope:
             )
         mosaic = (device_state.get("setting") or {}).get("mosaic")
         if isinstance(mosaic, dict) and isinstance(mosaic.get("scale"), (int, float)):
-            state = replace(state, mosaic_scale=float(mosaic["scale"]))
+            estimate = mosaic.get("estimated_hours")
+            state = replace(
+                state,
+                mosaic_scale=float(mosaic["scale"]),
+                mosaic_estimate_h=float(estimate) if isinstance(estimate, (int, float)) else None,
+            )
         app_state = self._rpc(dev, "iscope_get_app_state")
         view = app_state.get("View") or {}
         plan = app_state.get("ViewPlan") or {}
