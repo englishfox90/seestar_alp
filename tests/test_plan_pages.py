@@ -360,6 +360,54 @@ def test_sky_view_has_every_id_its_script_uses(rig):
         assert f"/public/{src}" in html
 
 
+def test_sky_objects_have_every_id_their_script_uses(rig):
+    html = _get(rig, "/1/targets")
+    script = (Path(__file__).parent.parent / "front/public/sky_objects.js").read_text()
+    wanted = set(re.findall(r'field\("([^"]+)"\)', script))
+    assert wanted and wanted <= set(_parse(html).ids), wanted - set(_parse(html).ids)
+    assert "/public/sky_objects.js" in html
+    assert html.index("/public/sky_objects.js") < html.index("/public/target_sky.js")
+    assert 'data-sky-catalog="/public/ssc/sky_catalog.json"' in html
+
+
+def test_sky_objects_stay_hidden_until_they_can_work(rig):
+    # Without Aladin or the catalog, the page shows what it showed before.
+    html = _get(rig, "/1/targets")
+    for element in ("target-sky-objects", "target-sky-pick"):
+        tag = re.search(rf'<div id="{element}"[^>]*>', html).group(0)
+        assert " hidden" in tag, element
+    script = (Path(__file__).parent.parent / "front/public/target_sky.js").read_text()
+    assert "if (window.SkyObjects)" in script
+
+
+def test_sky_objects_add_no_form_or_route(rig):
+    html = _get(rig, "/1/targets")
+    pick = html[html.index('id="target-sky-pick"'): html.index('id="target-sky-frame-controls"')]
+    assert "<form" not in pick
+    assert 'type="button"' in pick
+    script = (Path(__file__).parent.parent / "front/public/sky_objects.js").read_text()
+    assert "POST" not in script and "/targets" not in script
+    page = (Path(__file__).parent.parent / "front/public/target_sky.js").read_text()
+    assert "onFrame: (entry) => startNew(entry.r, entry.d, entry.n)" in page
+    assert "onShow: select" in page
+
+
+def test_sky_objects_go_under_the_owners_labels(rig):
+    # Aladin draws catalogs in the order added, so the owner's must be added last.
+    page = (Path(__file__).parent.parent / "front/public/target_sky.js").read_text()
+    assert page.index("window.SkyObjects.start(") < page.index("    labels();\n")
+
+
+def test_red_colours_keep_their_red_channel():
+    # Red's floor keeps only the red channel, so a canvas colour needs a strong one.
+    public = Path(__file__).parent.parent / "front/public"
+    page = (public / "target_sky.js").read_text()
+    red = re.search(r"red: \{([^}]*)\}", page).group(1)
+    sky = re.search(r'MARKER = \{[^}]*red: "#(\w{6})"', (public / "sky_objects.js").read_text()).group(1)
+    for value in [*re.findall(r'"#(\w{6})"', red), sky]:
+        assert int(value[:2], 16) >= 0xC0, value
+
+
 def test_show_buttons_are_wired_for_the_sky_script(rig):
     target = _add(rig)
     assert f'data-sky-show="{target.id}"' in _get(rig, "/1/targets")

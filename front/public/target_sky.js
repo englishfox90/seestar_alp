@@ -2,9 +2,14 @@
 // from a search, and adjusting the framing of a listed one. Nothing here commands
 // the scope. Saving posts to the page's normal forms.
 (function () {
-  const COLOR_SELECTED = "#0A84FF";
-  const COLOR_OTHER = "#AEAEB2";
+  // Red's floor keeps only the red channel, which would all but erase the blue.
+  const COLORS = {
+    night: { selected: "#0A84FF", other: "#AEAEB2", label: "#FFFFFF" },
+    red: { selected: "#FF0000", other: "#FF0000", label: "#FF0000" },
+  };
   const MODELS_FALLBACK = "S30 Pro";
+  const TOUCH_RADIUS = 22; // half of the 44px hit area
+  const TAP_MAX_MOVE = 10; // a finger shifts a little on a tap, and Aladin calls that a drag
 
   const card = document.getElementById("target-sky");
   if (!card) return;
@@ -18,6 +23,9 @@
 
   let aladin = null;
   let frames = null;
+  let labelLayer = null;
+  let skyObjects = null;
+  let press = null;
   // The frame being adjusted. target is null while it's a new one from a search.
   const current = { target: null, ra: null, dec: null };
 
@@ -33,20 +41,27 @@
     return parseFloat(field("target-sky-angle").value);
   }
 
+  function colors() {
+    return document.documentElement.dataset.theme === "red" ? COLORS.red : COLORS.night;
+  }
+
   function polygon(ra, dec, frameScale, frameAngle, color, lineWidth) {
     const corners = window.FrameGeometry.corners(ra, dec, fovW, fovH, frameScale, frameAngle);
-    return window.A.polygon(corners, { color: color, lineWidth: lineWidth });
+    // Aladin's default selection is green, which Red turns black.
+    return window.A.polygon(corners, { color: color, lineWidth: lineWidth, selectionColor: color, hoverColor: color });
   }
 
   function draw() {
     if (!aladin) return;
+    aladin.selectObjects(); // a selected frame would outlive removeAll
     frames.removeAll();
+    const palette = colors();
     targets.forEach(function (t) {
       if (current.target && t.id === current.target.id) return;
-      frames.add(polygon(t.ra, t.dec, t.scale, t.angle, COLOR_OTHER, 1));
+      frames.add(polygon(t.ra, t.dec, t.scale, t.angle, palette.other, 1));
     });
     if (current.ra !== null) {
-      frames.add(polygon(current.ra, current.dec, scale(), angle(), COLOR_SELECTED, 3));
+      frames.add(polygon(current.ra, current.dec, scale(), angle(), palette.selected, 3));
     }
   }
 
@@ -89,10 +104,12 @@
     fit();
     draw();
     showControls();
+    if (skyObjects) skyObjects.changed();
   }
 
   function select(target) {
     current.target = target;
+    if (skyObjects) skyObjects.clear();
     field("target-sky-scale").value = target.scale;
     field("target-sky-angle").value = target.angle;
     setStatus("");
@@ -131,6 +148,7 @@
     current.target = null;
     current.ra = null;
     current.dec = null;
+    if (skyObjects) skyObjects.clear();
     field("target-sky-scale").value = 1;
     field("target-sky-angle").value = 0;
     setStatus("");
@@ -148,6 +166,7 @@
     // Past about a hemisphere the usual projection can't show the whole view.
     aladin.setProjection(wanted > 150 ? "MOL" : "SIN");
     aladin.setFoV(Math.min(wanted, 360));
+    if (skyObjects) skyObjects.changed();
   }
 
   // Decimal degrees "313.1 30.7", or sexagesimal "20 52 22 +30 28 54".
@@ -168,6 +187,7 @@
 
   function startNew(ra, dec, name) {
     current.target = null;
+    if (skyObjects) skyObjects.clear();
     field("target-sky-add-name").value = name;
     setStatus("");
     goTo(ra, dec);
@@ -216,23 +236,70 @@
   }
 
   function labels() {
-    const catalog = window.A.catalog({
+    const palette = colors();
+    labelLayer = window.A.catalog({
       name: "Targets",
       sourceSize: 10,
-      color: COLOR_OTHER,
+      color: palette.other,
+      selectionColor: palette.other,
       displayLabel: true,
       labelColumn: "name",
-      labelColor: "#FFFFFF",
+      labelColor: palette.label,
       labelFont: "13px -apple-system, system-ui, sans-serif",
       onClick: "none",
     });
-    aladin.addCatalog(catalog);
-    catalog.addSources(targets.map((t) => window.A.source(t.ra, t.dec, { name: t.name, id: t.id })));
-    aladin.on("objectClicked", function (object) {
-      const id = object && object.data && object.data.id;
-      const target = targets.find((t) => t.id === id);
-      if (target) select(target);
+    aladin.addCatalog(labelLayer);
+    labelLayer.addSources(targets.map((t) => window.A.source(t.ra, t.dec, { name: t.name, id: t.id })));
+  }
+
+  // The theme can change while the page is open, and Aladin needs concrete colours.
+  function applyTheme() {
+    const palette = colors();
+    labelLayer.labelColor = palette.label;
+    labelLayer.setSelectionColor(palette.other);
+    labelLayer.setColor(palette.other);
+    draw();
+  }
+
+  function targetAt(x, y) {
+    let best = null;
+    let bestDistance = TOUCH_RADIUS;
+    targets.forEach(function (t) {
+      const source = labelLayer.getSources().find((s) => s.data.id === t.id);
+      if (!source || !source.x || !source.y) return;
+      const distance = Math.hypot(source.x - x, source.y - y);
+      if (distance <= bestDistance) {
+        best = t;
+        bestDistance = distance;
+      }
     });
+    return best;
+  }
+
+  // Where a press began, in view pixels. Aladin stops these events reaching the page, so this
+  // listens on the way down. A second finger means a pinch, which is never a tap.
+  function trackPress() {
+    function onPress(event) {
+      const fingers = event.touches ? event.touches.length : 1;
+      const point = event.touches ? event.touches[0] : event;
+      const rect = view.getBoundingClientRect();
+      press = fingers > 1 ? null : { x: point.clientX - rect.left, y: point.clientY - rect.top };
+    }
+    view.addEventListener("mousedown", onPress, true);
+    view.addEventListener("touchstart", onPress, { capture: true, passive: true });
+  }
+
+  // Everything tappable goes through here, so a target always wins over a sky object.
+  function onSkyClick(event) {
+    const start = press;
+    press = null;
+    if (!start || Math.hypot(event.x - start.x, event.y - start.y) > TAP_MAX_MOVE) return;
+    const target = targetAt(event.x, event.y);
+    if (target) {
+      select(target);
+    } else if (skyObjects) {
+      skyObjects.pickAt(event.x, event.y);
+    }
   }
 
   function start() {
@@ -243,9 +310,25 @@
       showGotoControl: false,
       showReticle: true,
     });
-    frames = window.A.graphicOverlay({ color: COLOR_OTHER, lineWidth: 1 });
+    frames = window.A.graphicOverlay({ color: colors().other, lineWidth: 1 });
     aladin.addOverlay(frames);
+    // Aladin draws catalogs in the order added, then every overlay on top. So the owner's
+    // frames and labels stay above the sky objects as long as those go first.
+    if (window.SkyObjects) {
+      skyObjects = window.SkyObjects.start(aladin, {
+        url: card.dataset.skyCatalog,
+        targets: targets,
+        onFrame: (entry) => startNew(entry.r, entry.d, entry.n),
+        onShow: select,
+      });
+    }
     labels();
+    trackPress();
+    aladin.on("click", onSkyClick);
+    new MutationObserver(applyTheme).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
     showAll();
     const wanted = new URLSearchParams(window.location.search).get("show");
     const target = targets.find((t) => t.id === wanted);

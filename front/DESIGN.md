@@ -57,6 +57,7 @@ The design language and framework for the whole web UI. The owner approved this 
 
 ## Decision log
 
+- **2026-11-06:** The Targets sky view marks popular objects from `ssc/sky_catalog.json`, built by `scripts/build_sky_catalog.py`. Marker shape carries the type, because Red has no hues, and each marker has one soft colour so the owner's frames and white labels stay loudest. What a tapped object is shows below the view, not on the image, and its action uses the search result's path. Canvas colours in Red are full red, since the floor would erase the blue frame.
 - **2026-11-06:** Final design review: the language is done. Phone Tonight now puts the Night Line directly under the sentence, because a glance has to show the night. Image corners are 0 everywhere. Schedule and Live stay on Bootstrap unless they earn the move.
 - **2026-11-05:** Keep htmx and server templates. New screens get their own shell without Bootstrap, and legacy pages stay on it.
 - **2026-11-05:** The first mockup, with glass panels and teal and coral accents, was rejected as AI-looking. The second, with system colours, was approved and then overturned in part by the design review.

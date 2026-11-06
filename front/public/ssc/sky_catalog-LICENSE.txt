@@ -1,0 +1,12 @@
+sky_catalog.json is an adapted database, built by scripts/build_sky_catalog.py.
+
+OpenNGC, copyright Mattia Verga, licensed under CC BY-SA 4.0:
+https://github.com/mattiaverga/OpenNGC
+https://creativecommons.org/licenses/by-sa/4.0/
+Changes: selected objects by type, size and brightness, reformatted names and
+coordinates, and added common names and Sharpless cross-references.
+sky_catalog.json is shared under the same licence.
+
+Sharpless, S. 1959, "A Catalogue of H II Regions", ApJS 4, 257. From the CDS VizieR
+service, catalogue VII/20: https://cdsarc.cds.unistra.fr/viz-bin/cat/VII/20
+Changes: coordinates converted from B1900 to J2000.

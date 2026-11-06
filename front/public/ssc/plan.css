@@ -153,11 +153,29 @@
 .plan-sky__status { color: var(--ssc-text-1); font-size: var(--ssc-text-footnote); }
 .plan-sky__status:empty { display: none; }
 .plan-sky__sliders { display: grid; gap: var(--ssc-gap); grid-template-columns: minmax(0, 1fr); align-items: end; }
+.plan-sky__pick { display: flex; flex-direction: column; gap: var(--ssc-space-4); }
+.plan-sky__pick-text { display: flex; flex-direction: column; gap: var(--ssc-space-1); min-width: 0; }
+.plan-sky__pick-name { font-size: var(--ssc-text-section); font-weight: var(--ssc-weight-strong); overflow-wrap: anywhere; }
+.plan-sky__legend {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--ssc-space-3) var(--ssc-space-5);
+    margin: 0;
+    padding: 0;
+    color: var(--ssc-text-2);
+    font-size: var(--ssc-text-footnote);
+    list-style: none;
+}
+.plan-sky__legend li { display: flex; align-items: center; gap: var(--ssc-space-3); }
+.plan-sky__legend svg { flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; }
 .plan-range { width: 100%; min-height: var(--ssc-touch); margin: 0; accent-color: var(--ssc-accent); }
 
 @media (min-width: 768px) {
     .plan-fields { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
     .plan-sky__sliders { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+    .plan-sky__pick { flex-direction: row; justify-content: space-between; align-items: center; }
+    .plan-sky__pick .ssc-button { flex: none; }
+    .plan-sky__legend { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .plan-actions { justify-content: flex-end; }
     .plan-actions .ssc-button { flex: none; }
 

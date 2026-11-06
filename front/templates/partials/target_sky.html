@@ -1,7 +1,7 @@
 {# The sky view. Every id here is used by target_sky.js. The forms post to the page's normal routes. #}
 {% import 'ssc/form.html' as form %}
 {% import 'ssc/ui.html' as ui %}
-<section id="target-sky" class="plan-section plan-sky" data-model="{{ sky_model|e }}" data-simbad="{{ root_path }}/simbad">
+<section id="target-sky" class="plan-section plan-sky" data-model="{{ sky_model|e }}" data-simbad="{{ root_path }}/simbad" data-sky-catalog="{{ root_path }}/public/ssc/sky_catalog.json">
   <div class="plan-section__head">
     <h2 id="target-sky-heading" class="ssc-section">All targets</h2>
     <button id="target-sky-all" class="ssc-button" data-kind="plain" type="button">Show all</button>
@@ -13,6 +13,16 @@
     </div>
     <p id="target-sky-status" class="plan-sky__status" role="status"></p>
     <div id="target-sky-view" class="plan-sky__view"></div>
+
+    {# What a tapped object is. Filled in by sky_objects.js. #}
+    <div id="target-sky-pick" class="plan-sky__pick" role="status" hidden>
+      <div class="plan-sky__pick-text">
+        <p id="target-sky-pick-name" class="plan-sky__pick-name"></p>
+        <p id="target-sky-pick-facts" class="ssc-footnote"></p>
+        <p id="target-sky-pick-listed" class="ssc-footnote" hidden></p>
+      </div>
+      <button id="target-sky-pick-action" class="ssc-button" data-kind="secondary" type="button"></button>
+    </div>
 
     <div id="target-sky-frame-controls" class="plan-stack" hidden>
       <div class="plan-sky__sliders">
@@ -50,10 +60,26 @@
       </form>
     </div>
     <p class="ssc-footnote">Click a target's marker to adjust it. A framing change applies from the next start, and its progress so far is kept.</p>
+
+    {# Stays hidden until Aladin and the catalog have both loaded. #}
+    <div id="target-sky-objects" class="plan-stack" hidden>
+      {{ form.toggle("Show popular objects", "target-sky-objects-on", "", checked=true, help="Zoom in to see more. Tap a marker to see what it is.") }}
+      <ul id="target-sky-legend" class="plan-sky__legend">
+        {# The same shapes the canvas draws, in sky_objects.js. #}
+        <li><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12"/></svg>Nebula</li>
+        <li><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2 14 14H2Z"/></svg>Supernova remnant</li>
+        <li><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2 14 8 8 14 2 8Z"/></svg>Planetary nebula</li>
+        <li><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke-dasharray="2 3"/></svg>Open cluster</li>
+        <li><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M2 8H14M8 2V14"/></svg>Globular cluster</li>
+        <li><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><ellipse cx="8" cy="8" rx="6" ry="2.7" transform="rotate(-30 8 8)"/></svg>Galaxy</li>
+      </ul>
+      <p class="ssc-footnote">Object data from <a href="https://github.com/mattiaverga/OpenNGC">OpenNGC</a>, <a href="{{ root_path }}/public/ssc/sky_catalog-LICENSE.txt">CC BY-SA 4.0</a>, and Sharpless 2 through VizieR.</p>
+    </div>
   </div>
 </section>
 <script type="application/json" id="target-sky-data">{{ sky_targets | tojson }}</script>
 <script src="{{ root_path }}/public/seestar_models.js"></script>
 <script src="{{ root_path }}/public/aladin_loader.js"></script>
 <script src="{{ root_path }}/public/frame_geometry.js"></script>
+<script src="{{ root_path }}/public/sky_objects.js"></script>
 <script src="{{ root_path }}/public/target_sky.js"></script>
