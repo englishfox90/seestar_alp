@@ -4,42 +4,40 @@
 
 {% block html_header %}
 <style>
-  #dash-live .alert-danger { background: #5c1620 !important; border: 1px solid #dc3545 !important; color: #fff !important; font-weight: 600; }
   .dash-grid [hidden] { display: none !important; }
-  .dash-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; align-items: start; }
-  .dash-column { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+  .dash-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--ssc-gap); align-items: stretch; }
+  .dash-column { display: flex; flex-direction: column; gap: var(--ssc-gap); min-width: 0; }
+  /* The last panel takes up the slack, so both columns end on one line. */
+  .dash-grid > .dash-column > .panel-card:last-child { flex: 1; }
   .dash-column .panel-card { margin-bottom: 0; }
   .dash-column .dashboard-stat-list { max-width: none; }
   .dash-badges { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
-  .dash-badges .badge { font-size: 0.85rem; }
-  .dash-headline { font-size: 1.25rem; font-weight: 650; margin: 0; overflow-wrap: anywhere; }
+  .dash-headline { font-size: var(--ssc-text-sentence); font-weight: 600; margin: 0; overflow-wrap: anywhere; }
   .dash-track { list-style: none; display: flex; margin: 0; padding: 0; }
-  .dash-step { position: relative; flex: 1 1 0; min-width: 0; text-align: center; font-size: 0.72rem; opacity: 0.55; }
+  .dash-step { position: relative; flex: 1 1 0; min-width: 0; text-align: center; font-size: var(--ssc-text-caption); opacity: 0.6; }
   /* The line spans the gap between the previous dot and this one, edge to edge.
      Dimmed steps form their own stacking contexts, so it can't rely on z-index. */
   .dash-step:not(:first-child)::before { content: ""; position: absolute; top: 0.68rem; left: calc(-50% + 0.75rem); right: calc(50% + 0.75rem); height: 3px; background: var(--ui-border-soft); }
-  .dash-dot { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; margin: 0 auto 0.3rem; border-radius: 50%; border: 2px solid var(--ui-border-soft); background: #0a1427; font-size: 0.75rem; font-weight: 700; color: #fff; }
+  .dash-dot { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; margin: 0 auto 0.3rem; border-radius: 50%; border: 2px solid var(--ui-border-soft); background: var(--ds-surface); font-size: var(--ssc-text-caption); font-weight: 600; color: #fff; }
   .dash-step.is-done, .dash-step.is-skipped, .dash-step.is-warn, .dash-step.is-active, .dash-step.is-failed, .dash-step.is-blocked { opacity: 1; }
-  .dash-step.is-done::before, .dash-step.is-skipped::before, .dash-step.is-warn::before, .dash-step.is-active::before, .dash-step.is-failed::before, .dash-step.is-blocked::before { background: #198754; }
-  .dash-step.is-done .dash-dot { background: #198754; border-color: #198754; }
-  .dash-step.is-warn .dash-dot { background: #b58105; border-color: #b58105; }
-  .dash-step.is-skipped .dash-dot { border-color: #198754; color: #198754; }
+  .dash-step.is-done::before, .dash-step.is-skipped::before, .dash-step.is-warn::before, .dash-step.is-active::before, .dash-step.is-failed::before, .dash-step.is-blocked::before { background: var(--ds-green-strong); }
+  .dash-step.is-done .dash-dot { background: var(--ds-green-strong); border-color: var(--ds-green-strong); }
+  .dash-step.is-warn .dash-dot { background: var(--ds-orange); border-color: var(--ds-orange); }
+  .dash-step.is-skipped .dash-dot { border-color: var(--ds-green); color: var(--ds-green); }
   .dash-step.is-skipped { opacity: 0.75; }
-  .dash-step.is-active .dash-dot { background: var(--ui-primary); border-color: var(--ui-primary); animation: dash-pulse 2s ease-in-out infinite; }
-  .dash-step.is-active { font-weight: 700; }
-  .dash-step.is-failed .dash-dot, .dash-step.is-blocked .dash-dot { background: #dc3545; border-color: #dc3545; }
-  .dash-step.is-failed, .dash-step.is-blocked { font-weight: 700; color: #ff8a95; }
-  @keyframes dash-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ui-primary) 60%, transparent); } 50% { box-shadow: 0 0 0 0.4rem transparent; } }
-  @media (prefers-reduced-motion: reduce) { .dash-step.is-active .dash-dot { animation: none; } }
+  .dash-step.is-active .dash-dot { background: var(--ui-primary); border-color: var(--ui-primary); }
+  .dash-step.is-active { font-weight: 600; }
+  .dash-step.is-failed .dash-dot, .dash-step.is-blocked .dash-dot { background: var(--ds-red-strong); border-color: var(--ds-red-strong); }
+  .dash-step.is-failed, .dash-step.is-blocked { font-weight: 600; color: var(--ds-red); }
   .dash-track-detail { margin: 0.7rem 0 0; font-weight: 600; text-align: center; overflow-wrap: anywhere; }
-  .dash-track-note { margin: 0.2rem 0 0; font-size: 0.8rem; text-align: center; opacity: 0.8; overflow-wrap: anywhere; }
-  .dash-track-note.is-problem { font-weight: 600; opacity: 1; color: #e0b040; }
-  .dash-image { display: block; width: 100%; max-height: 72vh; object-fit: contain; background: #000; border-radius: 0.5rem; }
-  .dash-image-empty { padding: 3rem 1rem; text-align: center; background: #000; border-radius: 0.5rem; }
+  .dash-track-note { margin: 0.2rem 0 0; font-size: var(--ssc-text-footnote); text-align: center; color: var(--ui-muted); overflow-wrap: anywhere; }
+  .dash-track-note.is-problem { font-weight: 600; opacity: 1; color: var(--ds-orange); }
+  .dash-image { display: block; width: 100%; max-height: 72vh; object-fit: contain; background: #000; border-radius: var(--ssc-radius-image); }
+  .dash-image-empty { padding: 3rem 1rem; text-align: center; background: #000; border-radius: var(--ds-radius-small); }
   .dash-image-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; margin-top: 0.6rem; }
   /* The curve takes the image's place while there is one. The image keeps updating underneath. */
   .dash-image-slot:has(.dash-focus) .dash-image-view { display: none; }
-  .dash-focus-plot { display: block; width: 100%; height: auto; background: #000; border-radius: 0.5rem; }
+  .dash-focus-plot { display: block; width: 100%; height: auto; background: #000; border-radius: var(--ds-radius-small); }
   .dash-focus-plot text { fill: #c3c2b7; font-size: 13px; font-variant-numeric: tabular-nums; }
   .dash-focus-plot .dash-focus-final-label { fill: #f0efec; font-weight: 600; }
   .dash-focus-grid { stroke: rgba(255, 255, 255, 0.14); stroke-width: 1; }
@@ -47,16 +45,21 @@
   .dash-focus-fit { fill: none; stroke: #c3c2b7; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; opacity: 0.55; }
   .dash-focus-dot { fill: var(--ui-primary); stroke: #000; stroke-width: 2; }
   .dash-focus-final { fill: #f0efec; stroke: #000; stroke-width: 2; }
-  .dash-focus-missing { stroke: #e0b040; stroke-width: 2; stroke-linecap: round; }
+  .dash-focus-missing { stroke: var(--ds-orange); stroke-width: 2; stroke-linecap: round; }
   .dash-focus-hit { fill: transparent; }
-  .dash-focus-key { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 0.5rem 0 0; font-size: 0.8rem; opacity: 0.85; }
+  .dash-focus-key { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 0.5rem 0 0; font-size: var(--ssc-text-footnote); color: var(--ui-muted); }
   .dash-focus-swatch { display: inline-block; width: 1.1rem; height: 2px; margin-right: 0.35rem; vertical-align: middle; }
   .dash-focus-dot-key { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin-right: 0.35rem; }
-  .dash-plan-row { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.45rem 0.55rem; border-radius: 0.45rem; }
-  .dash-plan-row.is-now { outline: 1px solid var(--ui-primary); font-weight: 620; }
+  .dash-plan-row { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 8px 12px; margin: 0 -12px; border-radius: var(--ds-radius-small); }
+  .dash-plan-row.is-now { background: color-mix(in srgb, var(--ui-primary) 18%, transparent); font-weight: 600; }
   .dash-plan-row.is-done { opacity: 0.6; }
   .dash-plan-name { overflow-wrap: anywhere; }
   .dash-plan-meta { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  /* Astrophotos are never cropped. On a phone the image takes its full height. */
+  @media (max-width: 991.98px) {
+    .dash-image { height: auto; max-height: none; }
+    .dash-image-slot, #dash-pier { overflow: hidden; }
+  }
   @media (min-width: 992px) {
     .dash-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   }
@@ -116,6 +119,13 @@
       </section>
     </div>
     <div class="dash-column">
+      <section class="panel-card" id="dash-pier" hidden>
+        <h2 class="panel-title mb-3">Pier camera</h2>
+        <a href="{{ root_path }}{{ page_root }}/pier.jpg?full=true" target="_blank" rel="noopener">
+          <img id="dash-pier-image" class="dash-image" alt="Latest pier camera image from PFR Sentinel">
+        </a>
+        <div class="small text-body-secondary mt-2" id="dash-pier-caption" role="status"></div>
+      </section>
       <div id="dash-session" class="dash-column no-htmx-fx"></div>
       <section class="panel-card">
         <h2 class="panel-title mb-3">Hardware</h2>
@@ -193,11 +203,49 @@
     }
   }
 
+  const pier = document.getElementById('dash-pier');
+  const pierImage = document.getElementById('dash-pier-image');
+  const pierCaption = document.getElementById('dash-pier-caption');
+  let shownPier = null;
+
+  function pierNote(meta) {
+    const taken = clock(meta.captured_at * 1000);
+    if (!meta.online) return 'Sentinel is not responding. Image from ' + taken;
+    if (meta.stale) return 'Image is out of date, from ' + taken;
+    return 'Updated ' + taken;
+  }
+
+  async function pollPier() {
+    if (document.hidden) return;
+    try {
+      const reply = await fetch(root + '/pier.json', {cache: 'no-store'});
+      if (!reply.ok) return;
+      const meta = await reply.json();
+      if (!meta.available) return;
+      if (meta.frame !== shownPier) {
+        // Load first, so the old image stays up until the new one is ready.
+        const next = new Image();
+        next.onload = function () {
+          pierImage.src = next.src;
+          pier.hidden = false;
+          shownPier = meta.frame;
+        };
+        next.src = root + '/pier.jpg?v=' + encodeURIComponent(meta.frame);
+      }
+      pierCaption.textContent = pierNote(meta);
+      pierCaption.classList.toggle('text-warning', !meta.online || meta.stale);
+    } catch (err) {
+      // The freshness line already reports a lost connection.
+    }
+  }
+
   pollImage();
+  pollPier();
   setInterval(pollImage, 15000);
+  setInterval(pollPier, 30000);
   setInterval(showFreshness, 5000);
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) pollImage();
+    if (!document.hidden) { pollImage(); pollPier(); }
   });
 })();
 </script>

@@ -339,6 +339,7 @@ async function toggleuitheme() {
     } else {
         document.documentElement.setAttribute('data-bs-theme','dark')
     }
+    window.sscTheme?.sync();
 
     //update the config
     try{

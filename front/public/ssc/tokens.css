@@ -1,0 +1,160 @@
+/*
+ * SSC design tokens: the one source of colour, type, spacing and radius.
+ * Rules and reasoning: front/DESIGN.md. No other file under ssc/ may use raw values.
+ * data-theme on <html> is day, night or red. See theme.js.
+ */
+
+:root,
+[data-theme="night"] {
+    --ssc-canvas: #000000;
+    --ssc-surface: #131315;
+    --ssc-raised: #1c1c1f;
+    --ssc-text-1: #e8e8ea;
+    --ssc-text-2: #a3a3a9;
+    --ssc-text-3: #85858c;
+    --ssc-separator: rgba(255, 255, 255, 0.1);
+    --ssc-fill-1: rgba(255, 255, 255, 0.07);
+    --ssc-fill-2: rgba(255, 255, 255, 0.12);
+    --ssc-accent: #5fa4f8;
+    --ssc-accent-tint: #1c2a3c;
+    --ssc-on-accent: #000000;
+    --ssc-green: #3ec46d;
+    --ssc-orange: #f0a030;
+    --ssc-red: #ff6259;
+    --ssc-danger-fill: #a8201a;
+    --ssc-on-danger: #ffffff;
+    /* Primary actions are a tint after dark, because a solid fill is a large light. */
+    --ssc-primary-bg: var(--ssc-accent-tint);
+    --ssc-primary-fg: var(--ssc-accent);
+    --ssc-bar: rgba(19, 19, 21, 0.88);
+    --ssc-bar-filter: saturate(1.4) blur(20px);
+    --ssc-accent-rgb: 95, 164, 248;
+    --ssc-green-rgb: 62, 196, 109;
+    --ssc-orange-rgb: 240, 160, 48;
+    --ssc-red-rgb: 255, 98, 89;
+    --ssc-canvas-rgb: 0, 0, 0;
+    color-scheme: dark;
+}
+
+[data-theme="day"] {
+    --ssc-canvas: #f5f5f7;
+    --ssc-surface: #ffffff;
+    --ssc-raised: #ffffff;
+    --ssc-text-1: #1d1d1f;
+    --ssc-text-2: #55555c;
+    --ssc-text-3: #6b6b73;
+    --ssc-separator: rgba(60, 60, 67, 0.18);
+    --ssc-fill-1: rgba(118, 118, 128, 0.12);
+    --ssc-fill-2: rgba(118, 118, 128, 0.2);
+    --ssc-accent: #0a62c9;
+    --ssc-accent-tint: #e3edf8;
+    --ssc-on-accent: #ffffff;
+    --ssc-green: #1a7f37;
+    --ssc-orange: #a85400;
+    --ssc-red: #c1271d;
+    --ssc-danger-fill: #c1271d;
+    --ssc-on-danger: #ffffff;
+    --ssc-primary-bg: var(--ssc-accent);
+    --ssc-primary-fg: var(--ssc-on-accent);
+    --ssc-bar: rgba(255, 255, 255, 0.88);
+    --ssc-bar-filter: saturate(1.4) blur(20px);
+    --ssc-accent-rgb: 10, 98, 201;
+    --ssc-green-rgb: 26, 127, 55;
+    --ssc-orange-rgb: 168, 84, 0;
+    --ssc-red-rgb: 193, 39, 29;
+    --ssc-canvas-rgb: 245, 245, 247;
+    color-scheme: light;
+}
+
+[data-theme="red"] {
+    --ssc-canvas: #000000;
+    --ssc-surface: #140000;
+    --ssc-raised: #200000;
+    --ssc-text-1: #d40000;
+    --ssc-text-2: #a80000;
+    --ssc-text-3: #a80000;
+    --ssc-separator: #3a0000;
+    --ssc-fill-1: #1f0000;
+    --ssc-fill-2: #2e0000;
+    --ssc-accent: #d40000;
+    --ssc-accent-tint: #2e0000;
+    --ssc-on-accent: #000000;
+    --ssc-green: #d40000;
+    --ssc-orange: #d40000;
+    --ssc-red: #d40000;
+    --ssc-danger-fill: #c80000;
+    --ssc-on-danger: #000000;
+    --ssc-primary-bg: var(--ssc-accent-tint);
+    --ssc-primary-fg: var(--ssc-accent);
+    --ssc-bar: #140000;
+    --ssc-bar-filter: none;
+    --ssc-accent-rgb: 212, 0, 0;
+    --ssc-green-rgb: 212, 0, 0;
+    --ssc-orange-rgb: 212, 0, 0;
+    --ssc-red-rgb: 212, 0, 0;
+    --ssc-canvas-rgb: 0, 0, 0;
+    color-scheme: dark;
+}
+
+:root {
+    --ssc-font: system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+    /* Sizes in rem: 24, 20, 28, 17, 15, 16, 13, 12px. */
+    --ssc-text-title: 1.5rem;
+    --ssc-text-sentence: 1.25rem;
+    --ssc-text-metric: 1.75rem;
+    --ssc-text-section: 1.0625rem;
+    --ssc-text-body: 0.9375rem;
+    --ssc-text-input: 1rem;
+    --ssc-text-footnote: 0.8125rem;
+    --ssc-text-caption: 0.75rem;
+
+    --ssc-weight-regular: 400;
+    --ssc-weight-strong: 600;
+
+    --ssc-space-1: 2px;
+    --ssc-space-2: 4px;
+    --ssc-space-3: 8px;
+    --ssc-space-4: 12px;
+    --ssc-space-5: 16px;
+    --ssc-space-6: 24px;
+    --ssc-space-7: 32px;
+    --ssc-space-8: 48px;
+
+    --ssc-inset: var(--ssc-space-5);
+    --ssc-gutter: var(--ssc-space-5);
+    --ssc-gap: var(--ssc-space-5);
+    --ssc-max-width: 1280px;
+
+    --ssc-radius-panel: 10px;
+    --ssc-radius-control: 8px;
+    --ssc-radius-sheet: 14px;
+    --ssc-radius-image: 0;
+
+    --ssc-control-height: 44px;
+    --ssc-bar-height: 44px;
+    --ssc-tabbar-height: 50px;
+}
+
+@media (min-width: 768px) {
+    :root {
+        --ssc-text-title: 1.75rem;
+        --ssc-text-sentence: 1.375rem;
+        --ssc-text-input: 0.9375rem;
+        --ssc-gutter: var(--ssc-space-6);
+        --ssc-radius-image: 4px;
+    }
+}
+
+@media (pointer: fine) {
+    :root {
+        --ssc-control-height: 36px;
+    }
+}
+
+/* Red has low contrast by nature, so its small text is larger. */
+[data-theme="red"] {
+    --ssc-text-body: 1rem;
+    --ssc-text-footnote: 0.9375rem;
+    --ssc-text-caption: 0.8125rem;
+}

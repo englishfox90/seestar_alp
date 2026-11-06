@@ -514,12 +514,11 @@ class _NoPage:
         raise falcon.HTTPFound(location)
 
 
-def test_nav_lists_the_page_under_functions():
+def test_nav_lists_the_page_at_the_top_level():
     from pathlib import Path
 
     nav = (Path(__file__).parent.parent / "front/templates/nav.html").read_text()
-    menu = nav[nav.index(">Functions"):]
-    assert '{{ root }}/targets">Target List<' in menu[: menu.index("</ul>")]
+    assert '{{ root }}/targets">Targets<' in nav[: nav.index(">More<")]
 
 
 # ---- writing the night's plan ----------------------------------------------

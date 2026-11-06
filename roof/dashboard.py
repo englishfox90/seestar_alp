@@ -3,6 +3,7 @@
 Nothing here commands the scope. The only message it can send is
 get_stacked_img on the imaging port, which reads the current stack, and only
 while a browser is polling for the image. The autofocus curve only listens.
+The pier camera comes from PFR Sentinel, not the scope.
 """
 
 import json
@@ -15,6 +16,7 @@ import cv2
 import falcon
 import numpy as np
 import pydash
+import requests
 
 from roof import config as roof_config
 from roof import focus, planner, schedule_tools
@@ -28,6 +30,11 @@ PREVIEW_QUALITY = 80
 FULL_QUALITY = 92
 # A stack image is large and crosses the scope's Wi-Fi, so never ask more often.
 MIN_FETCH_INTERVAL_S = 30
+PIER_PREVIEW_WIDTH = 1024
+PIER_FETCH_INTERVAL_S = 30
+PIER_TIMEOUT_S = 5
+# Sentinel's own default for calling an image stale.
+PIER_STALE_S = 300
 
 
 def _front():
@@ -608,6 +615,77 @@ def _image_meta(image) -> dict:
     }
 
 
+class PierStore:
+    """The latest image PFR Sentinel published. Fetched only while a browser polls.
+
+    Keeps the last good image through a failed fetch, and records when it was
+    captured so an old view of the roof is never shown as if it were current.
+    """
+
+    def __init__(self, clock=time.time):
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._image = None
+        self._checked_at = None
+        self._online = False
+
+    def latest(self, image_url: str, status_url: str) -> dict | None:
+        with self._lock:
+            now = self._clock()
+            if self._checked_at is None or now - self._checked_at >= PIER_FETCH_INTERVAL_S:
+                self._checked_at = now
+                self._online = self._fetch(image_url, status_url, now)
+            return self._image
+
+    @property
+    def online(self) -> bool:
+        return self._online
+
+    def _fetch(self, image_url, status_url, now) -> bool:
+        try:
+            reply = requests.get(image_url, timeout=PIER_TIMEOUT_S)
+            reply.raise_for_status()
+            age = requests.get(status_url, timeout=PIER_TIMEOUT_S).json().get("image_age_seconds")
+            tag = reply.headers.get("ETag") or str(hash(reply.content))
+            if self._image and self._image["tag"] == tag:
+                return True
+            decoded = cv2.imdecode(np.frombuffer(reply.content, np.uint8), cv2.IMREAD_COLOR)
+            if decoded is None:
+                raise ValueError("not an image")
+            height, width = decoded.shape[:2]
+            if width > PIER_PREVIEW_WIDTH:
+                size = (PIER_PREVIEW_WIDTH, round(height * PIER_PREVIEW_WIDTH / width))
+                decoded = cv2.resize(decoded, size, interpolation=cv2.INTER_AREA)
+            self._image = {
+                "tag": tag,
+                "preview": _jpeg(decoded, PREVIEW_QUALITY),
+                "full": reply.content,
+                "captured_at": now - float(age or 0),
+            }
+            return True
+        except Exception:
+            return False
+
+    def meta(self, image) -> dict:
+        if not image:
+            return {"available": False, "online": self._online}
+        return {
+            "available": True,
+            "online": self._online,
+            "frame": image["tag"],
+            "captured_at": image["captured_at"],
+            "stale": self._clock() - image["captured_at"] > PIER_STALE_S,
+        }
+
+
+_pier_store = PierStore()
+
+
+def _pier_image():
+    settings = roof_config.load()
+    return _pier_store.latest(settings.pier_image_url, settings.pier_status_url)
+
+
 class DashboardPage:
     @staticmethod
     def on_get(req, resp, telescope_id=1):
@@ -730,6 +808,28 @@ class DashboardImage:
             resp.data = image["preview"]
 
 
+class DashboardPierMeta:
+    """What the browser polls. A poll is also what prompts a fresh fetch."""
+
+    @staticmethod
+    def on_get(req, resp, telescope_id=1):
+        image = _pier_image()
+        resp.content_type = "application/json"
+        resp.set_header("Cache-Control", "no-store")
+        resp.text = json.dumps(_pier_store.meta(image))
+
+
+class DashboardPierImage:
+    @staticmethod
+    def on_get(req, resp, telescope_id=1):
+        image = _pier_image()
+        if not image:
+            raise falcon.HTTPNotFound(description="no pier image")
+        resp.content_type = "image/jpeg"
+        resp.set_header("Cache-Control", "no-store")
+        resp.data = image["full"] if req.get_param_as_bool("full") else image["preview"]
+
+
 PAGES = {
     "dashboard": DashboardPage,
     "dashboard/live": DashboardLive,
@@ -738,4 +838,6 @@ PAGES = {
     "dashboard/focus": DashboardFocus,
     "dashboard/image.json": DashboardImageMeta,
     "dashboard/image.jpg": DashboardImage,
+    "dashboard/pier.json": DashboardPierMeta,
+    "dashboard/pier.jpg": DashboardPierImage,
 }

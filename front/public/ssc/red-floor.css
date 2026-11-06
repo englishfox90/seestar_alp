@@ -1,0 +1,24 @@
+/*
+ * Red's floor: zero green and blue on every page, including images, canvases
+ * and legacy pages. Tokens alone cannot guarantee that. This is the one file
+ * under ssc/ allowed a raw colour, because it is the mechanism rather than a choice.
+ *
+ * Multiplying by pure red leaves only the red channel. A filter on <html> would
+ * also apply to this overlay and turn it grey, so bright content is dimmed directly.
+ */
+html[data-theme="red"] body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 2147483647;
+    background: #f00;
+    mix-blend-mode: multiply;
+    pointer-events: none;
+}
+
+html[data-theme="red"] img,
+html[data-theme="red"] canvas,
+html[data-theme="red"] video,
+html[data-theme="red"] svg image {
+    filter: brightness(0.7);
+}

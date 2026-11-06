@@ -703,3 +703,110 @@ def test_dashboard_without_a_device_number_goes_to_the_scope(client):
     result = client.simulate_get("/dashboard")
     assert result.status_code == 302
     assert result.headers["location"].endswith("/dashboard")
+
+
+# ---- pier camera ------------------------------------------------------------
+
+
+def _jpeg_bytes(width=2048, height=2048):
+    import cv2
+
+    ok, data = cv2.imencode(".jpg", np.zeros((height, width, 3), np.uint8))
+    assert ok
+    return data.tobytes()
+
+
+class _Reply:
+    def __init__(self, content=b"", headers=None, body=None):
+        self.content, self.headers, self._body = content, headers or {}, body
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self._body
+
+
+@pytest.fixture
+def sentinel(monkeypatch):
+    state = SimpleNamespace(calls=0, up=True, tag="one", age=20, content=_jpeg_bytes())
+
+    def fake_get(url, timeout):
+        state.calls += 1
+        if not state.up:
+            raise OSError("down")
+        if url == "image":
+            return _Reply(state.content, {"ETag": state.tag})
+        return _Reply(body={"image_age_seconds": state.age})
+
+    monkeypatch.setattr(dashboard.requests, "get", fake_get)
+    return state
+
+
+def test_pier_image_is_shrunk_and_the_original_kept(sentinel):
+    import cv2
+
+    store = dashboard.PierStore(clock=lambda: 1000.0)
+    image = store.latest("image", "status")
+    preview = cv2.imdecode(np.frombuffer(image["preview"], np.uint8), cv2.IMREAD_COLOR)
+    assert preview.shape[1] == dashboard.PIER_PREVIEW_WIDTH
+    assert image["full"] == sentinel.content
+    assert image["captured_at"] == 980.0
+
+
+def test_pier_fetches_at_most_once_per_interval(sentinel):
+    now = [1000.0]
+    store = dashboard.PierStore(clock=lambda: now[0])
+    store.latest("image", "status")
+    calls = sentinel.calls
+    now[0] += dashboard.PIER_FETCH_INTERVAL_S - 1
+    store.latest("image", "status")
+    assert sentinel.calls == calls
+    now[0] += 1
+    store.latest("image", "status")
+    assert sentinel.calls > calls
+
+
+def test_pier_keeps_the_last_image_and_says_sentinel_is_down(sentinel):
+    now = [1000.0]
+    store = dashboard.PierStore(clock=lambda: now[0])
+    store.latest("image", "status")
+    sentinel.up = False
+    now[0] += dashboard.PIER_FETCH_INTERVAL_S
+    meta = store.meta(store.latest("image", "status"))
+    assert meta["available"] and not meta["online"] and not meta["stale"]
+
+
+def test_pier_reports_an_old_image_as_stale(sentinel):
+    sentinel.age = dashboard.PIER_STALE_S + 1
+    store = dashboard.PierStore(clock=lambda: 1000.0)
+    assert store.meta(store.latest("image", "status"))["stale"] is True
+
+
+def test_pier_with_no_image_is_unavailable(sentinel):
+    sentinel.up = False
+    store = dashboard.PierStore(clock=lambda: 1000.0)
+    meta = store.meta(store.latest("image", "status"))
+    assert meta == {"available": False, "online": False}
+
+
+def test_pier_endpoints(client, sentinel, monkeypatch):
+    monkeypatch.setattr(dashboard, "_pier_store", dashboard.PierStore(clock=lambda: 1000.0))
+    monkeypatch.setattr(
+        dashboard.roof_config,
+        "load",
+        lambda: SimpleNamespace(pier_image_url="image", pier_status_url="status"),
+    )
+    meta = client.simulate_get("/1/dashboard/pier.json").json
+    assert meta["available"] and meta["frame"] == "one"
+    preview = client.simulate_get("/1/dashboard/pier.jpg")
+    assert preview.headers["content-type"] == "image/jpeg"
+    full = client.simulate_get("/1/dashboard/pier.jpg", query_string="full=true")
+    assert full.content == sentinel.content
+
+
+def test_dashboard_page_has_the_pier_panel_hidden_until_an_image_loads(client, monkeypatch):
+    monkeypatch.setattr(front_app, "get_context", lambda *a: {"root": "/1", "telescope": {}, "telescopes": []})
+    html = client.simulate_get("/1/dashboard").text
+    assert 'id="dash-pier" hidden' in html
+    assert html.index("Latest image") < html.index('id="dash-pier"') < html.index('id="dash-session"')

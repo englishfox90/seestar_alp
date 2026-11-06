@@ -1,95 +1,9 @@
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark py-2">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container">
-        <a class="navbar-brand d-flex align-items-center gap-2" href="{{ root }}/">
-            <span class="badge text-bg-primary border border-0 px-2 py-1">SSC</span>
-            <span class="small text-body-secondary">Control Console</span>
-        </a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent"
-                aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarSupportedContent">
-            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                <li class="nav-item">
-                    <a class="nav-link" aria-current="page" href="{{ root }}/">Home</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ root }}/dashboard">Dashboard</a>
-                </li>
-              <li class="nav-item">
-                <a class="nav-link" aria-current="page" href="{{ root }}/startup">Startup</a>
-              </li>
-				<li class="nav-item dropdown">
-					<a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Functions
-					</a>
-					<ul class="dropdown-menu" aria-labelledby="navbarDropdown">
-						<li>
-							<a class="dropdown-item" href="{{ root }}/command">Commands</a>
-						</li>
-            <li>
-							<a class="dropdown-item" href="{{ root }}/guestmode">Guest Mode</a>
-						</li>
-						<li>
-							<a class="dropdown-item" href="{{ root }}/targets">Target List</a>
-						</li>
-						<li>
-							<a class="dropdown-item" href="{{ root }}/goto">Goto</a>
-						</li>
-						<li>
-							<a class="dropdown-item" href="{{ root }}/image">Image</a>
-						</li>
-						<li>
-							<a class="dropdown-item" href="{{ root }}/live">Live</a>
-						</li>
-						<li>
-							<a class="dropdown-item" href="{{ root }}/mosaic">Mosaic</a>
-						</li>
-						<li>
-							<a class="dropdown-item" href="{{ root }}/framed_mosaic">Framed Mosaic</a>
-						</li>
-            {% if experimental %}
-              <li>
-							  <a class="dropdown-item" href="{{ root }}/planning">Planning</a>
-						  </li>
-            {% endif %}
-						<li>
-							<a class="dropdown-item" href="{{ root }}/schedule">Schedule</a>
-						</li>
-						<li>
-							<a class="dropdown-item" href="{{ root }}/settings">Settings</a>
-						</li>
-						<li>
-							<a class="dropdown-item" href="{{ root}}/config">SSC Config</a>
-						</li>
-						<li>
-							<a class="dropdown-item" href="{{ root }}/stats">Stats</a>
-						</li>
-            {% if platform == "raspberry_pi" %}
-            <li>
-              <a class="dropdown-item" href="{{ root }}/platform-rpi">Platform</a>
-            </li>
-            {% endif %}
-					</ul>
-				</li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ root }}/support">Support</a>
-                </li>
-            </ul>
-            <a class="nav-item me-3 text-decoration-none no-htmx-fx" href="{{ root }}/roof" hx-get="{{ root_path }}/roof/badge" hx-trigger="load, every 10s" hx-swap="innerHTML"></a>
-            <div class="nav-item me-1">
-                <div class="form-check form-switch me-3">
-                    {% if uitheme == "dark" %}
-                        <input class="form-check-input" type="checkbox" role="switch" id="toggleuitheme" onclick="toggleuitheme()" checked="checked">
-                    {% else %}
-                        <input class="form-check-input" type="checkbox" role="switch" id="toggleuitheme" onclick="toggleuitheme()">
-                    {% endif %}
-                    <label class="form-check-label" for="toggleuitheme"><span class="text-secondary">Dark Mode</span></label>
-                  </div>
-            </div>
-            <div class="dropdown">
+        <div class="dropdown app-scope">
                 <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown"
                         aria-expanded="false">
-                    {{ telescope["name"] }} ({{ telescope["ip_address"] }})
+                    {{ telescope["name"] }}
                 </button>
                 <ul class="dropdown-menu">
                     {% for tel in telescopes %}
@@ -104,8 +18,86 @@
 					{% endif %}
                 </ul>
             </div>
+        <a class="app-status no-htmx-fx" href="{{ root }}/roof" hx-get="{{ root_path }}/roof/badge" hx-trigger="load, every 10s" hx-swap="innerHTML"></a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent"
+                aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ root }}/dashboard">Dashboard</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ root }}/targets">Targets</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ root }}/live">Live</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ root }}/roof">Roof</a>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">More</a>
+                    <ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+                        <li><a class="dropdown-item" href="{{ root }}/">Home</a></li>
+                        <li><a class="dropdown-item" href="{{ root }}/startup">Startup</a></li>
+                        <li><a class="dropdown-item" href="{{ root }}/command">Commands</a></li>
+                        <li><a class="dropdown-item" href="{{ root }}/guestmode">Guest Mode</a></li>
+                        <li><a class="dropdown-item" href="{{ root }}/goto">Goto</a></li>
+                        <li><a class="dropdown-item" href="{{ root }}/image">Image</a></li>
+                        <li><a class="dropdown-item" href="{{ root }}/mosaic">Mosaic</a></li>
+                        <li><a class="dropdown-item" href="{{ root }}/framed_mosaic">Framed Mosaic</a></li>
+                        {% if experimental %}
+                        <li><a class="dropdown-item" href="{{ root }}/planning">Planning</a></li>
+                        {% endif %}
+                        <li><a class="dropdown-item" href="{{ root }}/schedule">Schedule</a></li>
+                        <li><a class="dropdown-item" href="{{ root }}/settings">Settings</a></li>
+                        <li><a class="dropdown-item" href="{{ root}}/config">SSC Config</a></li>
+                        <li><a class="dropdown-item" href="{{ root }}/stats">Stats</a></li>
+                        {% if platform == "raspberry_pi" %}
+                        <li><a class="dropdown-item" href="{{ root }}/platform-rpi">Platform</a></li>
+                        {% endif %}
+                        <li><a class="dropdown-item" href="{{ root }}/support">Support</a></li>
+                        <li><button class="dropdown-item" type="button" onclick="sscTheme.toggleRed()">Red night mode</button></li>
+                    </ul>
+                </li>
+            </ul>
+                        <div class="nav-item me-1">
+                <div class="form-check form-switch me-3">
+                    {% if uitheme == "dark" %}
+                        <input class="form-check-input" type="checkbox" role="switch" id="toggleuitheme" onclick="toggleuitheme()" checked="checked">
+                    {% else %}
+                        <input class="form-check-input" type="checkbox" role="switch" id="toggleuitheme" onclick="toggleuitheme()">
+                    {% endif %}
+                    <label class="form-check-label" for="toggleuitheme"><span class="text-secondary">Dark Mode</span></label>
+                  </div>
+            </div>
         </div>
     </div>
+</nav>
+
+<nav class="app-tabbar" aria-label="Main">
+    <a class="app-tab" href="{{ root }}/dashboard">
+        <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13a7 7 0 1 1 14 0M10 13l3.5-4.5"></path></svg>
+        Dashboard
+    </a>
+    <a class="app-tab" href="{{ root }}/targets">
+        <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"></circle><circle cx="10" cy="10" r="2.5"></circle></svg>
+        Targets
+    </a>
+    <a class="app-tab" href="{{ root }}/live">
+        <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4.5" width="15" height="11" rx="2.5"></rect><path d="M8.5 8v4l3.2-2-3.2-2Z"></path></svg>
+        Live
+    </a>
+    <a class="app-tab" href="{{ root }}/roof">
+        <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 10 4l7 6M5.5 8.5V16h9V8.5"></path></svg>
+        Roof
+    </a>
+    <button class="app-tab" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false">
+        <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" stroke="none"><circle cx="4.5" cy="10" r="1.5"></circle><circle cx="10" cy="10" r="1.5"></circle><circle cx="15.5" cy="10" r="1.5"></circle></svg>
+        More
+    </button>
 </nav>
 
 <script>
@@ -113,7 +105,7 @@
     // JavaScript to set active class
     document.addEventListener("DOMContentLoaded", function () {
       // Get all nav-link elements
-      const navLinks = document.querySelectorAll('.nav-link');
+      const navLinks = document.querySelectorAll('.nav-link, a.app-tab');
 
       // Get the current URL path
       const currentPath = window.location.pathname;

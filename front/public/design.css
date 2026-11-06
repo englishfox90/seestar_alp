@@ -1,0 +1,1001 @@
+/*
+ * Legacy skin: restyles Bootstrap for pages still on base.html. Rules: front/DESIGN.md.
+ * Frozen except for bug fixes. New screens use ssc/ and do not load this file.
+ *
+ * Loaded after the <style> block in base.html and before each page's own styles.
+ * All values come from ssc/tokens.css. The webui_* settings still win, because they
+ * use !important in base.html and reach this file through --ui-* variables.
+ */
+
+/* ---- Tokens ------------------------------------------------------------ */
+
+:root,
+[data-theme] {
+    --ds-canvas: var(--ssc-canvas);
+    --ds-surface: var(--ssc-surface);
+    --ds-surface-raised: var(--ssc-raised);
+    --ds-fill: var(--ssc-fill-1);
+    --ds-fill-strong: var(--ssc-fill-2);
+    --ds-separator: var(--ssc-separator);
+    --ds-bar-glass: var(--ssc-bar);
+    --ds-green: var(--ssc-green);
+    --ds-orange: var(--ssc-orange);
+    --ds-red: var(--ssc-red);
+    --ds-red-strong: var(--ssc-danger-fill);
+    /* Solid status buttons need a fixed fill that passes with their own text. */
+    --ds-green-strong: #1f7a36;
+    --ds-orange-strong: #f0a030;
+
+    --ds-radius: var(--ssc-radius-panel);
+    --ds-radius-small: var(--ssc-radius-control);
+    --ds-gutter: var(--ssc-inset);
+
+    --ui-main-bg: var(--ssc-canvas);
+    --ui-surface-glass: var(--ssc-surface);
+    --ui-border-soft: var(--ssc-separator);
+    --ui-nav-bg: var(--ssc-bar);
+    --ui-dropdown-bg: var(--ssc-raised);
+    --ui-radius: var(--ssc-radius-panel);
+    --ui-shadow: none;
+
+    --bs-box-shadow: none;
+    --bs-body-bg: var(--ssc-canvas);
+    --bs-body-bg-rgb: var(--ssc-canvas-rgb);
+    --bs-secondary-bg: var(--ssc-fill-2);
+    --bs-tertiary-bg: var(--ssc-surface);
+    --bs-border-color: var(--ssc-separator);
+    --bs-emphasis-color: var(--ssc-text-1);
+    --bs-primary-rgb: var(--ssc-accent-rgb);
+    --bs-success-rgb: var(--ssc-green-rgb);
+    --bs-warning-rgb: var(--ssc-orange-rgb);
+    --bs-danger-rgb: var(--ssc-red-rgb);
+    --bs-success-text-emphasis: var(--ssc-green);
+    --bs-warning-text-emphasis: var(--ssc-orange);
+    --bs-danger-text-emphasis: var(--ssc-red);
+    --bs-body-font-size: var(--ssc-text-body);
+    --bs-border-radius: var(--ssc-radius-control);
+    --bs-border-radius-sm: var(--ssc-radius-control);
+    --bs-border-radius-lg: var(--ssc-radius-panel);
+    --bs-border-radius-xl: var(--ssc-radius-panel);
+    --bs-border-radius-xxl: var(--ssc-radius-panel);
+}
+
+/* ---- Type -------------------------------------------------------------- */
+
+body {
+    font-size: var(--ssc-text-body);
+    line-height: 1.33;
+}
+
+h1, .h1, .page-title {
+    font-size: var(--ssc-text-title);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.22;
+}
+
+h2, .h2, h3, .h3, .panel-title, .focus-title, .accordion-button, .card-header {
+    font-size: var(--ssc-text-section);
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 1.3;
+}
+
+h4, .h4, h5, .h5 {
+    font-size: var(--ssc-text-body);
+    font-weight: 600;
+    line-height: 1.33;
+}
+
+h6, .h6 {
+    font-size: var(--ssc-text-footnote);
+    font-weight: 600;
+}
+
+b, strong, th, .fw-bold, .fw-bolder {
+    font-weight: 600 !important;
+}
+
+.fs-1, .fs-2 {
+    font-size: var(--ssc-text-title) !important;
+}
+
+.fs-3, .fs-4, .fs-5 {
+    font-size: var(--ssc-text-section) !important;
+}
+
+small, .small, .form-text, .footer-meta, .panel-muted, .unsaved-pill,
+.stats-section-title, .form-group-title, .focus-value-label, .table th,
+.live-quickbar .btn {
+    font-size: var(--ssc-text-footnote);
+}
+
+.panel-muted, .footer-meta, .page-subtitle, .form-text,
+.stats-section-title, .form-group-title, .focus-value-label, .table th {
+    color: var(--ui-muted);
+    font-weight: 400 !important;
+    letter-spacing: 0;
+    opacity: 1;
+    text-transform: none;
+}
+
+.page-subtitle {
+    font-size: var(--ssc-text-body);
+}
+
+.text-secondary, .text-muted {
+    color: var(--ui-muted) !important;
+}
+
+.focus-value {
+    font-size: var(--ssc-text-metric);
+    font-weight: 600;
+}
+
+.record-btn {
+    font-size: var(--ssc-text-section);
+}
+
+/* Numbers line up across rows. */
+.stat-value, .table td, .badge, time {
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- Page frame -------------------------------------------------------- */
+
+body {
+    background: var(--ds-canvas);
+}
+
+main.container,
+.navbar > .container {
+    max-width: var(--ssc-max-width);
+    padding-left: var(--ssc-gutter);
+    padding-right: var(--ssc-gutter);
+}
+
+main.container {
+    margin-top: var(--ssc-space-6) !important;
+    margin-bottom: var(--ssc-space-7) !important;
+}
+
+/* Many pages wrap their content in another .container. It must add no inset. */
+main.container .container,
+main.container .container-fluid {
+    max-width: none;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+main.container .container:first-child {
+    margin-top: 0 !important;
+}
+
+/* Panels in one row share their top and bottom edges. */
+main.container .row > [class*="col"] > .card:only-child,
+main.container .row > [class*="col"] > .panel-card:only-child {
+    height: 100%;
+}
+
+/* The page is the canvas. A frame around it only adds a layer of inset. */
+.content {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    animation: none;
+}
+
+.page-hero {
+    align-items: flex-end;
+    margin-bottom: var(--ds-gutter);
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+
+/* The title already says where you are. */
+.page-kicker {
+    display: none;
+}
+
+/* ---- Surfaces ---------------------------------------------------------- */
+
+.panel-card,
+.surface-card,
+.live-side-card,
+.focus-panel,
+.card {
+    border: 0;
+    border-radius: var(--ds-radius);
+    background: var(--ds-surface);
+    box-shadow: none;
+    animation: none;
+}
+
+.panel-card,
+.live-side-card,
+.focus-panel {
+    padding: var(--ds-gutter);
+    margin-bottom: var(--ds-gutter);
+}
+
+.card {
+    --bs-card-bg: var(--ds-surface);
+    --bs-card-border-width: 0;
+    --bs-card-border-radius: var(--ds-radius);
+    --bs-card-inner-border-radius: var(--ds-radius);
+    --bs-card-cap-bg: transparent;
+    --bs-card-spacer-x: var(--ds-gutter);
+    --bs-card-spacer-y: var(--ds-gutter);
+    --bs-card-cap-padding-x: var(--ds-gutter);
+    color: var(--ui-body);
+}
+
+/* One surface per group. Anything nested sits flat on its parent. */
+.panel-card .panel-card,
+.panel-card .card,
+.panel-card .surface-card,
+.panel-card .focus-panel,
+.card .card,
+.card .panel-card,
+.card .surface-card,
+.live-side-card .focus-panel,
+.live-side-card .card {
+    padding: 0;
+    margin-bottom: 0;
+    background: transparent;
+}
+
+.panel-card .card {
+    --bs-card-spacer-x: 0;
+    --bs-card-cap-padding-x: 0;
+}
+
+.panel-card-tight {
+    padding: 12px var(--ds-gutter);
+}
+
+.bg-body-tertiary {
+    background-color: var(--ds-surface) !important;
+}
+
+.stat-grid {
+    gap: var(--ds-gutter);
+}
+
+.action-row {
+    gap: 8px;
+}
+
+/* ---- Stat rows --------------------------------------------------------- */
+
+.dashboard-stat-list {
+    gap: 0;
+    max-width: none;
+}
+
+.stat-row,
+.dashboard-stat-list .stat-row,
+.dashboard-stat-list .stat-row:nth-child(odd),
+.dashboard-stat-list .stat-row:nth-child(even) {
+    align-items: baseline;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--ds-separator);
+    border-radius: 0;
+    background: none;
+}
+
+.stat-row:last-child,
+.dashboard-stat-list .stat-row:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+
+.stat-key,
+.dashboard-stat-list .stat-key {
+    color: var(--ui-muted);
+    font-weight: 400;
+    line-height: inherit;
+    opacity: 1;
+}
+
+.stat-value,
+.dashboard-stat-list .stat-value {
+    font-weight: 600;
+}
+
+.metric-bar {
+    height: 4px;
+    margin-top: 4px;
+    border-radius: 2px;
+    background: var(--ds-fill-strong);
+}
+
+.metric-bar::after {
+    background: var(--ui-primary);
+}
+
+/* ---- Navigation -------------------------------------------------------- */
+
+.navbar {
+    --bs-navbar-padding-y: 0;
+    min-height: var(--ssc-bar-height);
+    background: var(--ssc-bar) !important;
+    -webkit-backdrop-filter: var(--ssc-bar-filter);
+    backdrop-filter: var(--ssc-bar-filter);
+    border-bottom: 1px solid var(--ds-separator);
+}
+
+.navbar-dark {
+    --bs-navbar-color: var(--ui-muted);
+    --bs-navbar-hover-color: var(--ui-body);
+    --bs-navbar-active-color: var(--ui-body);
+    --bs-navbar-brand-color: var(--ui-body);
+    --bs-navbar-brand-hover-color: var(--ui-body);
+}
+
+.navbar .nav-link {
+    border-radius: var(--ds-radius-small);
+    padding: var(--ssc-space-3) var(--ssc-space-4);
+}
+
+.navbar .nav-link:hover {
+    background: none;
+    color: var(--ui-body) !important;
+}
+
+.navbar .nav-link.active {
+    background: none;
+    color: var(--ui-body) !important;
+    font-weight: 600;
+}
+
+/* The scope name sits at the page's left edge, so its text lines up with the titles. */
+.navbar .app-scope > .btn {
+    min-height: var(--ssc-bar-height);
+    padding-left: 0;
+    padding-right: 0;
+    border: 0;
+    background: none;
+    color: var(--ui-link);
+    font-weight: 600;
+}
+
+.navbar .app-scope > .btn:hover,
+.navbar .app-scope > .btn.show {
+    background: none;
+    color: var(--ui-link);
+}
+
+.app-status {
+    display: flex;
+    align-items: center;
+    min-height: var(--ssc-bar-height);
+    margin-left: auto;
+    text-decoration: none;
+}
+
+@media (min-width: 992px) {
+    .navbar .app-scope {
+        margin-right: var(--ssc-space-5);
+    }
+
+    .app-status {
+        order: 6;
+        margin-left: var(--ssc-space-4);
+    }
+}
+
+.dropdown-menu {
+    --bs-dropdown-bg: var(--ds-surface-raised);
+    --bs-dropdown-color: var(--ui-body);
+    --bs-dropdown-font-size: var(--ssc-text-body);
+    --bs-dropdown-link-color: var(--ui-body);
+    --bs-dropdown-link-hover-bg: var(--ds-fill);
+    --bs-dropdown-link-hover-color: var(--ui-body);
+    --bs-dropdown-link-active-bg: var(--ds-fill-strong);
+    --bs-dropdown-link-active-color: var(--ui-body);
+    border: 1px solid var(--ds-separator);
+    border-radius: var(--ds-radius);
+    background: var(--ds-surface-raised);
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    padding: var(--ssc-space-2);
+}
+
+.dropdown-item {
+    border-radius: 6px;
+    padding: var(--ssc-space-3) var(--ssc-space-4);
+}
+
+/* Phone tab bar, docked. Above the lg breakpoint the top bar has the same links. */
+.app-tabbar {
+    display: none;
+}
+
+@media (max-width: 991.98px) {
+    body {
+        padding-bottom: calc(var(--ssc-tabbar-height) + env(safe-area-inset-bottom) + var(--ssc-space-5));
+    }
+
+    .navbar-toggler {
+        display: none;
+    }
+
+    .navbar-collapse {
+        order: 5;
+        flex-basis: 100%;
+        max-height: 70svh;
+        overflow-y: auto;
+    }
+
+    /* More opens straight onto its list, with no menu inside a menu. */
+    .navbar-collapse .navbar-nav > .dropdown > .dropdown-toggle {
+        display: none;
+    }
+
+    .navbar-collapse .navbar-nav > .dropdown > .dropdown-menu {
+        display: block;
+        position: static;
+        border: 0;
+        background: none;
+        padding: 0;
+    }
+
+    .navbar-collapse .dropdown-item {
+        display: flex;
+        align-items: center;
+        min-height: var(--ssc-control-height);
+        padding-left: 0;
+        padding-right: 0;
+        border-bottom: 1px solid var(--ds-separator);
+        border-radius: 0;
+    }
+
+    .app-tabbar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1030;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        height: calc(var(--ssc-tabbar-height) + env(safe-area-inset-bottom));
+        padding-bottom: env(safe-area-inset-bottom);
+        border-top: 1px solid var(--ds-separator);
+        background: var(--ssc-bar);
+        -webkit-backdrop-filter: var(--ssc-bar-filter);
+        backdrop-filter: var(--ssc-bar-filter);
+    }
+
+    /* The other destinations are already on the tab bar. */
+    body:not(.live-has-quickbar) .navbar-collapse .navbar-nav > .nav-item:not(.dropdown) {
+        display: none;
+    }
+
+    /* The live page has its own bottom bar on phones, so the menu button stays. */
+    body.live-has-quickbar .app-tabbar {
+        display: none;
+    }
+
+    body.live-has-quickbar .navbar-toggler {
+        display: block;
+        margin-left: var(--ssc-space-3);
+    }
+}
+
+.app-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--ssc-space-1);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--ui-muted);
+    font-size: var(--ssc-text-caption);
+    line-height: 1.33;
+    text-decoration: none;
+}
+
+.app-tab:hover {
+    color: var(--ui-body);
+}
+
+.app-tab.active {
+    color: var(--ui-link);
+    font-weight: 600;
+}
+
+.app-tab svg {
+    width: 24px;
+    height: 24px;
+}
+
+.nav-pills {
+    gap: 4px;
+}
+
+.nav-pills .nav-link {
+    border: 0;
+    border-radius: var(--ds-radius-small);
+    background: var(--ds-fill);
+    color: var(--ui-body);
+    padding: 6px 12px;
+}
+
+.nav-pills .nav-link.active {
+    background: var(--ssc-primary-bg);
+    box-shadow: none;
+    color: var(--ssc-primary-fg);
+}
+
+.nav-tabs {
+    --bs-nav-tabs-border-color: var(--ds-separator);
+    --bs-nav-tabs-link-active-bg: transparent;
+    --bs-nav-tabs-link-active-color: var(--ui-body);
+    --bs-nav-tabs-link-active-border-color: transparent transparent var(--ui-primary);
+    --bs-nav-tabs-link-hover-border-color: transparent;
+}
+
+/* ---- Buttons ----------------------------------------------------------- */
+
+.btn {
+    --bs-btn-font-size: var(--ssc-text-body);
+    --bs-btn-font-weight: 600;
+    --bs-btn-border-radius: var(--ds-radius-small);
+    --bs-btn-box-shadow: none;
+    border-radius: var(--ds-radius-small);
+    letter-spacing: 0;
+    box-shadow: none;
+}
+
+.btn-sm {
+    --bs-btn-font-size: var(--ssc-text-footnote);
+    --bs-btn-border-radius: var(--ds-radius-small);
+}
+
+.btn-primary,
+.btn-success,
+.btn-danger,
+.btn-warning,
+.btn-secondary,
+.btn-dark,
+.btn-light,
+.btn-info {
+    --bs-btn-border-color: transparent;
+    --bs-btn-hover-border-color: transparent;
+    --bs-btn-active-border-color: transparent;
+    --bs-btn-disabled-border-color: transparent;
+    --bs-btn-color: #ffffff;
+    --bs-btn-hover-color: #ffffff;
+    --bs-btn-active-color: #ffffff;
+    --bs-btn-disabled-color: #ffffff;
+    border: 1px solid transparent;
+    box-shadow: none;
+}
+
+.btn-primary {
+    --bs-btn-color: var(--ssc-primary-fg);
+    --bs-btn-hover-color: var(--ssc-primary-fg);
+    --bs-btn-active-color: var(--ssc-primary-fg);
+    --bs-btn-disabled-color: var(--ssc-primary-fg);
+    --bs-btn-bg: var(--ssc-primary-bg);
+    --bs-btn-hover-bg: color-mix(in srgb, var(--ssc-primary-bg) 85%, var(--ssc-text-1));
+    --bs-btn-active-bg: color-mix(in srgb, var(--ssc-primary-bg) 85%, var(--ssc-text-1));
+    --bs-btn-disabled-bg: var(--ssc-primary-bg);
+    background: var(--bs-btn-bg);
+}
+
+.btn-success {
+    --bs-btn-bg: var(--ds-green-strong);
+    --bs-btn-hover-bg: color-mix(in srgb, var(--ds-green-strong) 85%, #ffffff);
+    --bs-btn-active-bg: color-mix(in srgb, var(--ds-green-strong) 85%, #ffffff);
+    --bs-btn-disabled-bg: var(--ds-green-strong);
+}
+
+.btn-danger {
+    --bs-btn-bg: var(--ds-red-strong);
+    --bs-btn-hover-bg: color-mix(in srgb, var(--ds-red-strong) 85%, #ffffff);
+    --bs-btn-active-bg: color-mix(in srgb, var(--ds-red-strong) 85%, #ffffff);
+    --bs-btn-disabled-bg: var(--ds-red-strong);
+}
+
+.btn-warning {
+    --bs-btn-color: #000000;
+    --bs-btn-hover-color: #000000;
+    --bs-btn-active-color: #000000;
+    --bs-btn-disabled-color: #000000;
+    --bs-btn-bg: var(--ds-orange-strong);
+    --bs-btn-hover-bg: color-mix(in srgb, var(--ds-orange-strong) 85%, #ffffff);
+    --bs-btn-active-bg: color-mix(in srgb, var(--ds-orange-strong) 85%, #ffffff);
+    --bs-btn-disabled-bg: var(--ds-orange-strong);
+}
+
+.btn-secondary,
+.btn-dark,
+.btn-light,
+.btn-info {
+    --bs-btn-color: var(--ui-body);
+    --bs-btn-hover-color: var(--ui-body);
+    --bs-btn-active-color: var(--ui-body);
+    --bs-btn-disabled-color: var(--ui-body);
+    --bs-btn-bg: var(--ds-fill);
+    --bs-btn-hover-bg: var(--ds-fill-strong);
+    --bs-btn-active-bg: var(--ds-fill-strong);
+    --bs-btn-disabled-bg: var(--ds-fill);
+}
+
+/* Outlined buttons become tinted fills. */
+.btn-outline-primary,
+.btn-outline-secondary,
+.btn-outline-success,
+.btn-outline-danger,
+.btn-outline-warning,
+.btn-outline-info,
+.btn-outline-light,
+.btn-outline-dark {
+    --bs-btn-border-color: transparent;
+    --bs-btn-hover-border-color: transparent;
+    --bs-btn-active-border-color: transparent;
+    --bs-btn-disabled-border-color: transparent;
+    --bs-btn-disabled-bg: var(--ds-fill);
+    background-color: var(--bs-btn-bg);
+    border-color: transparent;
+    color: var(--bs-btn-color);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--ui-link);
+    --bs-btn-bg: color-mix(in srgb, var(--ui-primary) 16%, transparent);
+    --bs-btn-hover-color: var(--ui-link);
+    --bs-btn-hover-bg: color-mix(in srgb, var(--ui-primary) 28%, transparent);
+    --bs-btn-active-color: var(--ssc-primary-fg);
+    --bs-btn-active-bg: var(--ssc-primary-bg);
+    --bs-btn-disabled-color: var(--ui-link);
+}
+
+.btn-outline-secondary,
+.btn-outline-light,
+.btn-outline-dark,
+.btn-outline-info {
+    --bs-btn-color: var(--ui-body);
+    --bs-btn-bg: var(--ds-fill);
+    --bs-btn-hover-color: var(--ui-body);
+    --bs-btn-hover-bg: var(--ds-fill-strong);
+    --bs-btn-active-color: var(--ssc-primary-fg);
+    --bs-btn-active-bg: var(--ssc-primary-bg);
+    --bs-btn-disabled-color: var(--ui-muted);
+}
+
+.btn-outline-success {
+    --bs-btn-color: var(--ds-green);
+    --bs-btn-bg: color-mix(in srgb, var(--ds-green) 16%, transparent);
+    --bs-btn-hover-color: var(--ds-green);
+    --bs-btn-hover-bg: color-mix(in srgb, var(--ds-green) 28%, transparent);
+    --bs-btn-active-color: #ffffff;
+    --bs-btn-active-bg: var(--ds-green-strong);
+    --bs-btn-disabled-color: var(--ds-green);
+}
+
+.btn-outline-danger {
+    --bs-btn-color: var(--ds-red);
+    --bs-btn-bg: color-mix(in srgb, var(--ds-red) 16%, transparent);
+    --bs-btn-hover-color: var(--ds-red);
+    --bs-btn-hover-bg: color-mix(in srgb, var(--ds-red) 28%, transparent);
+    --bs-btn-active-color: #ffffff;
+    --bs-btn-active-bg: var(--ds-red-strong);
+    --bs-btn-disabled-color: var(--ds-red);
+}
+
+.btn-outline-warning {
+    --bs-btn-color: var(--ds-orange);
+    --bs-btn-bg: color-mix(in srgb, var(--ds-orange) 16%, transparent);
+    --bs-btn-hover-color: var(--ds-orange);
+    --bs-btn-hover-bg: color-mix(in srgb, var(--ds-orange) 28%, transparent);
+    --bs-btn-active-color: #000000;
+    --bs-btn-active-bg: var(--ds-orange-strong);
+    --bs-btn-disabled-color: var(--ds-orange);
+}
+
+.btn-group .btn {
+    border-radius: var(--ds-radius-small);
+}
+
+@media (pointer: coarse) {
+    .btn:not(.btn-close),
+    .form-control,
+    .form-select {
+        min-height: var(--ssc-control-height);
+    }
+}
+
+/* ---- Forms ------------------------------------------------------------- */
+
+.form-label,
+.col-form-label {
+    margin-bottom: 4px;
+    font-size: var(--ssc-text-footnote);
+    color: var(--ui-muted);
+}
+
+.form-control,
+.form-select {
+    border: 1px solid transparent;
+    border-radius: var(--ds-radius-small);
+    background-color: var(--ds-fill);
+    color: var(--ui-body);
+    /* 16px on phones, or iOS zooms the page when a field takes focus. */
+    font-size: var(--ssc-text-input);
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--ui-primary);
+    background-color: var(--ds-fill);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-primary) 30%, transparent);
+    color: var(--ui-body);
+}
+
+.form-control::placeholder {
+    color: var(--ui-muted);
+    opacity: 1;
+}
+
+.form-select option {
+    background-color: var(--ds-surface-raised);
+    color: var(--ui-body);
+}
+
+.app-select {
+    border-color: transparent !important;
+    background-color: var(--ds-fill) !important;
+    box-shadow: none;
+}
+
+.app-select:focus {
+    border-color: var(--ui-primary) !important;
+    background-color: var(--ds-fill) !important;
+}
+
+.app-select:disabled {
+    background-color: var(--ds-fill) !important;
+}
+
+.form-check-input {
+    border-color: var(--ds-separator);
+    background-color: var(--ds-fill);
+}
+
+.form-check-input:checked {
+    border-color: var(--ui-primary);
+    background-color: var(--ui-primary);
+}
+
+.form-check-input:focus {
+    border-color: var(--ui-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-primary) 30%, transparent);
+}
+
+.form-range::-webkit-slider-thumb {
+    background-color: var(--ui-primary);
+}
+
+.form-range::-moz-range-thumb {
+    background-color: var(--ui-primary);
+}
+
+.form-range::-webkit-slider-runnable-track {
+    background-color: var(--ds-fill-strong);
+}
+
+.form-range::-moz-range-track {
+    background-color: var(--ds-fill-strong);
+}
+
+.input-group-text {
+    border-color: transparent;
+    background-color: var(--ds-fill);
+    color: var(--ui-muted);
+}
+
+.progress {
+    --bs-progress-height: 4px;
+    --bs-progress-bg: var(--ds-fill-strong);
+    --bs-progress-bar-bg: var(--ui-primary);
+}
+
+/* ---- Tables and lists -------------------------------------------------- */
+
+.table {
+    --bs-table-bg: transparent;
+    --bs-table-striped-bg: transparent;
+    --bs-table-striped-color: var(--ui-body);
+    --bs-table-hover-bg: var(--ds-fill);
+    --bs-table-hover-color: var(--ui-body);
+    --bs-table-border-color: var(--ds-separator);
+}
+
+.table th,
+.table td {
+    border-color: var(--ds-separator);
+}
+
+.list-group {
+    --bs-list-group-bg: var(--ds-surface);
+    --bs-list-group-color: var(--ui-body);
+    --bs-list-group-border-color: var(--ds-separator);
+    --bs-list-group-border-radius: var(--ds-radius);
+    --bs-list-group-action-hover-bg: var(--ds-fill);
+    --bs-list-group-action-hover-color: var(--ui-body);
+    --bs-list-group-active-bg: var(--ui-primary);
+    --bs-list-group-active-border-color: var(--ui-primary);
+}
+
+.list-group-item {
+    background: var(--bs-list-group-bg);
+}
+
+/* A selected row is marked quietly, never as a block of accent colour. */
+.list-group-item.active {
+    background: var(--ds-fill-strong);
+    border-color: var(--ds-separator);
+    color: var(--ui-body);
+    font-weight: 600;
+}
+
+.accordion {
+    --bs-accordion-bg: var(--ds-surface);
+    --bs-accordion-color: var(--ui-body);
+    --bs-accordion-border-color: var(--ds-separator);
+    --bs-accordion-border-radius: var(--ds-radius);
+    --bs-accordion-inner-border-radius: var(--ds-radius);
+    --bs-accordion-btn-bg: var(--ds-surface);
+    --bs-accordion-btn-color: var(--ui-body);
+    --bs-accordion-active-bg: var(--ds-surface);
+    --bs-accordion-active-color: var(--ui-body);
+    --bs-accordion-btn-focus-box-shadow: inset 0 0 0 2px var(--ui-primary);
+    --bs-accordion-btn-padding-x: var(--ds-gutter);
+    --bs-accordion-body-padding-x: var(--ds-gutter);
+}
+
+/* ---- Feedback ---------------------------------------------------------- */
+
+.alert {
+    border: 0;
+    border-radius: var(--ds-radius);
+    color: var(--ui-body);
+    padding: 12px var(--ds-gutter);
+}
+
+.alert-primary,
+.alert-info,
+.alert-secondary,
+.alert-light,
+.alert-dark {
+    background: color-mix(in srgb, var(--ui-primary) 18%, var(--ds-surface));
+}
+
+.alert-success {
+    background: color-mix(in srgb, var(--ds-green) 18%, var(--ds-surface));
+}
+
+.alert-warning {
+    background: color-mix(in srgb, var(--ds-orange) 22%, var(--ds-surface));
+}
+
+/* Danger is the one loud thing on a page. */
+.alert-danger {
+    background: var(--ssc-danger-fill);
+    color: var(--ssc-on-danger);
+    font-weight: 600;
+}
+
+.alert-danger a {
+    color: var(--ssc-on-danger);
+}
+
+/* Status reads as a coloured word on a quiet fill. Only danger is solid. */
+.badge {
+    --bs-badge-font-size: var(--ssc-text-footnote);
+    --bs-badge-font-weight: 600;
+    --bs-badge-padding-x: var(--ssc-space-3);
+    --bs-badge-padding-y: 3px;
+    --bs-badge-border-radius: var(--ds-radius-small);
+}
+
+.text-bg-success {
+    background-color: var(--ds-fill) !important;
+    color: var(--ssc-green) !important;
+}
+
+.text-bg-danger {
+    background-color: var(--ssc-danger-fill) !important;
+    color: var(--ssc-on-danger) !important;
+}
+
+.text-bg-warning {
+    background-color: var(--ds-fill) !important;
+    color: var(--ssc-orange) !important;
+}
+
+.text-bg-secondary {
+    background-color: var(--ds-fill) !important;
+    color: var(--ui-muted) !important;
+}
+
+.text-bg-primary {
+    background-color: var(--ssc-accent-tint) !important;
+    color: var(--ssc-accent) !important;
+}
+
+.unsaved-pill {
+    border: 0;
+    border-radius: var(--ds-radius-small);
+    padding: 3px 8px;
+}
+
+.modal {
+    --bs-modal-bg: var(--ds-surface-raised);
+    --bs-modal-border-width: 0;
+    --bs-modal-border-radius: var(--ssc-radius-sheet);
+    --bs-modal-inner-border-radius: var(--ssc-radius-sheet);
+    --bs-modal-box-shadow: none;
+    --bs-modal-header-border-color: var(--ds-separator);
+    --bs-modal-footer-border-color: var(--ds-separator);
+}
+
+:focus-visible {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: 2px;
+}
+
+/* ---- Live view --------------------------------------------------------- */
+
+img#liveViewImg {
+    border: 0;
+    border-radius: var(--ssc-radius-image);
+    box-shadow: none;
+    background: #000000;
+}
+
+.live-quickbar {
+    left: var(--ds-gutter);
+    right: var(--ds-gutter);
+    border: 1px solid var(--ds-separator);
+    border-radius: var(--ds-radius);
+    background: var(--ds-bar-glass);
+    -webkit-backdrop-filter: var(--ssc-bar-filter);
+    backdrop-filter: var(--ssc-bar-filter);
+    box-shadow: none;
+    padding: 4px;
+    gap: 4px;
+}
+
+/* The video centres in this column, but a panel fills it, so its edge stays on the page edge. */
+.live-main > .panel-card {
+    width: 100%;
+}
+
+/* ---- Small screens ----------------------------------------------------- */
+
+@media (max-width: 768px) {
+    main.container {
+        margin-top: var(--ssc-space-5) !important;
+        margin-bottom: var(--ssc-space-5) !important;
+    }
+
+    .content {
+        padding: 0;
+    }
+
+    .page-hero {
+        align-items: flex-start;
+        gap: 4px;
+    }
+}

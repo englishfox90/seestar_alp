@@ -126,6 +126,35 @@ def test_flash_and_get_messages_roundtrip():
     assert front_app.get_messages() == []
 
 
+def test_nav_keeps_every_page_reachable():
+    html = _render_nav("")
+    for route in (
+        "", "dashboard", "targets", "live", "roof", "startup", "command",
+        "guestmode", "goto", "image", "mosaic", "framed_mosaic", "planning",
+        "schedule", "settings", "config", "stats", "platform-rpi", "support",
+    ):
+        assert f'href="/1/{route}"' in html, route
+
+
+def test_scope_and_status_stay_outside_the_collapsed_menu():
+    html = _render_nav("")
+    collapse = html.index('id="navbarSupportedContent"')
+    assert html.index('class="dropdown app-scope"') < collapse
+    assert html.index('class="app-status no-htmx-fx"') < collapse
+
+
+def test_red_mode_is_reachable_from_the_menu():
+    assert "sscTheme.toggleRed()" in _render_nav("")
+
+
+def test_phone_tab_bar_matches_the_top_level_nav():
+    html = _render_nav("")
+    tabbar = html[html.index('class="app-tabbar"'):]
+    for route in ("dashboard", "targets", "live", "roof"):
+        assert f'href="/1/{route}"' in tabbar, route
+    assert 'data-bs-target="#navbarSupportedContent"' in tabbar
+
+
 def test_nav_shows_federation_option_on_home():
     html = _render_nav("")
     assert "Seestar Federation" in html
@@ -1487,6 +1516,30 @@ def test_auth_warning_rendered_in_base_template(monkeypatch):
     assert "interop_pem" in html
 
 
+def test_design_stylesheet_loads_before_page_styles():
+    context = _minimal_context("stats")
+    context.update(flashed_messages=[], messages=[], version="test", now="now", root_path="/proxy")
+    html = front_app.fetch_template("base.html").render(**context)
+    assert (
+        html.index("bootstrap.min.css")
+        < html.index('href="/proxy/public/ssc/tokens.css"')
+        < html.index('href="/proxy/public/design.css"')
+    )
+    # Theme is set before the first stylesheet, so a page never flashes the wrong one.
+    assert html.index("/proxy/public/ssc/theme.js") < html.index("bootstrap.min.css")
+
+
+def test_webui_settings_still_override_design_defaults():
+    context = _minimal_context("stats")
+    context.update(
+        flashed_messages=[], messages=[], version="test", now="now",
+        webui_accent_color="#123456", webui_link_color="#654321",
+    )
+    html = front_app.fetch_template("base.html").render(**context)
+    assert "--ui-primary: #123456;" in html
+    assert "--ui-link: #654321;" in html
+
+
 def test_auth_warning_absent_when_not_needed(monkeypatch):
     context = _minimal_context("stats")
     context["needs_auth_warning"] = False
@@ -1515,7 +1568,7 @@ def test_form_text_stays_legible_with_default_theme():
     template = front_app.fetch_template("base.html")
     html = template.render(**context)
     assert "--bs-secondary-color: var(--ui-muted);" in html
-    assert "--ui-muted: rgba(231, 237, 247, 0.75);" in html
+    assert "--ui-muted: var(--ssc-text-2);" in html
 
 
 # ---------------------------------------------------------------------------

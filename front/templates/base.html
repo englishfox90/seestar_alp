@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}{% endblock %} - SSC</title>
+    <script src="{{ root_path }}/public/ssc/theme.js"></script>
     {#    <link href="/public/xterm.css" rel="stylesheet">#}
     <script src="{{ root_path }}/public/htmx.min.js"></script>
     <script src="{{ root_path }}/public/sse.js"></script>
@@ -12,6 +13,8 @@
     {#    <script src="/public/xterm.js"></script>#}
     <link rel="icon" type="image/x-icon" href="{{ root_path }}/public/favicon.ico">
     <link href="{{ root_path }}/public/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ root_path }}/public/ssc/tokens.css" rel="stylesheet">
+    <link href="{{ root_path }}/public/ssc/red-floor.css" rel="stylesheet">
     {% if webui_font_url %}
     <link href="{{ webui_font_url }}" rel="stylesheet">
     {% endif %}
@@ -19,7 +22,7 @@
     {% set accent_color = webui_accent_color %}
     <style>
         :root {
-            --ui-font: "Avenir Next", "Segoe UI Variable", "IBM Plex Sans", "Noto Sans", sans-serif;
+            --ui-font: var(--ssc-font);
             --ui-radius: 0.85rem;
             --ui-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
             --ui-border-soft: rgba(255, 255, 255, 0.12);
@@ -29,14 +32,13 @@
             --ui-main-bg: radial-gradient(140% 80% at 12% -5%, #173c67 0%, transparent 60%),
                            radial-gradient(120% 80% at 92% 6%, #4a2b1f 0%, transparent 55%),
                            linear-gradient(135deg, #050910 0%, #111b2f 55%, #17253d 100%);
-            --ui-primary: {{ accent_color or "#2cb1ff" }};
+            --ui-primary: {{ accent_color or "var(--ssc-accent)" }};
             --ui-primary-hover: color-mix(in srgb, var(--ui-primary) 82%, #ffffff);
-            --ui-body: {{ webui_text_color or "#e7edf7" }};
-            --ui-muted: {{ webui_text_color or "rgba(231, 237, 247, 0.75)" }};
-            --ui-link: {{ webui_link_color or (accent_color or "#6fc9ff") }};
+            --ui-body: {{ webui_text_color or "var(--ssc-text-1)" }};
+            --ui-muted: {{ webui_text_color or "var(--ssc-text-2)" }};
+            --ui-link: {{ webui_link_color or (accent_color or "var(--ssc-accent)") }};
 
             --bs-primary: var(--ui-primary);
-            --bs-primary-rgb: 44, 177, 255;
             --bs-link-color: var(--ui-link);
             --bs-link-hover-color: var(--ui-link);
             --bs-body-color: var(--ui-body);
@@ -79,8 +81,10 @@
             --ui-main-bg: radial-gradient(120% 90% at 12% -5%, #b7d8ff 0%, transparent 58%),
                            radial-gradient(120% 90% at 96% 8%, #ffe4c1 0%, transparent 52%),
                            linear-gradient(135deg, #f6fbff 0%, #eef5ff 55%, #e9f2ff 100%);
-            --ui-body: {{ webui_text_color or "#1b2a42" }};
-            --ui-muted: {{ webui_text_color or "rgba(27, 42, 66, 0.75)" }};
+            --bs-link-color: var(--ui-link);
+            --bs-link-hover-color: var(--ui-link);
+            --bs-body-color: var(--ui-body);
+            --bs-secondary-color: var(--ui-muted);
         }
 
         body {
@@ -698,9 +702,9 @@
             background: color-mix(in srgb, var(--ui-primary) 10%, transparent);
         }
 
-        input:invalid,
-        select:invalid,
-        textarea:invalid {
+        input:user-invalid,
+        select:user-invalid,
+        textarea:user-invalid {
             border-color: #dc3545 !important;
         }
 
@@ -1080,6 +1084,7 @@
         }
         {% endif %}
     </style>
+    <link href="{{ root_path }}/public/design.css" rel="stylesheet">
     {% block html_header %}{% endblock %}
 </head>
 <body>
