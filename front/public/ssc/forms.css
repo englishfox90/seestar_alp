@@ -1,0 +1,114 @@
+/* Form components. Macros: templates/ssc/form.html. Spec: front/DESIGN.md section 6. */
+
+.ssc-group { display: flex; flex-direction: column; gap: var(--ssc-space-3); }
+.ssc-group__title {
+    margin: 0;
+    font-size: var(--ssc-text-section);
+    font-weight: var(--ssc-weight-strong);
+}
+.ssc-group__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ssc-space-5);
+    padding: var(--ssc-inset);
+    border-radius: var(--ssc-radius-panel);
+    background: var(--ssc-surface);
+}
+
+.ssc-field { display: flex; flex-direction: column; gap: var(--ssc-space-2); min-width: 0; }
+.ssc-field__label { padding: 0; color: var(--ssc-text-2); font-size: var(--ssc-text-footnote); }
+.ssc-field__help { margin: 0; color: var(--ssc-text-2); font-size: var(--ssc-text-footnote); }
+.ssc-field__error { margin: 0; color: var(--ssc-red); font-size: var(--ssc-text-footnote); }
+
+.ssc-input {
+    width: 100%;
+    min-height: var(--ssc-control-height);
+    box-sizing: border-box;
+    padding: 0 var(--ssc-space-4);
+    border: 0;
+    border-radius: var(--ssc-radius-control);
+    background: var(--ssc-fill-1);
+    color: var(--ssc-text-1);
+    font: inherit;
+    font-size: var(--ssc-text-input);
+    font-variant-numeric: tabular-nums;
+}
+.ssc-input:focus-visible { outline: var(--ssc-space-1) solid var(--ssc-accent); outline-offset: 0; }
+.ssc-field[data-tone="danger"] .ssc-input { outline: var(--ssc-space-1) solid var(--ssc-red); }
+.ssc-input:disabled { opacity: 0.6; }
+
+.ssc-toggle {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--ssc-space-5);
+    min-height: var(--ssc-touch);
+    cursor: pointer;
+}
+.ssc-toggle__text { display: flex; flex-direction: column; gap: var(--ssc-space-1); min-width: 0; }
+.ssc-toggle__input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.ssc-toggle__track {
+    position: relative;
+    flex: none;
+    width: 51px;
+    height: 31px;
+    border-radius: var(--ssc-radius-round);
+    background: var(--ssc-fill-2);
+    transition: background var(--ssc-motion-press) ease-out;
+}
+.ssc-toggle__track::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 27px;
+    height: 27px;
+    border-radius: var(--ssc-radius-round);
+    background: var(--ssc-text-1);
+    transition: transform var(--ssc-motion-press) ease-out;
+}
+.ssc-toggle__input:checked + .ssc-toggle__track { background: var(--ssc-accent); }
+.ssc-toggle__input:checked + .ssc-toggle__track::after { transform: translateX(20px); background: var(--ssc-on-accent); }
+.ssc-toggle__input:focus-visible + .ssc-toggle__track { outline: var(--ssc-space-1) solid var(--ssc-accent); outline-offset: var(--ssc-space-1); }
+
+.ssc-segmented { min-width: 0; margin: 0; padding: 0; border: 0; }
+.ssc-segmented__cells {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: var(--ssc-space-1);
+    margin-top: var(--ssc-space-2);
+    padding: var(--ssc-space-1);
+    border-radius: var(--ssc-radius-control);
+    background: var(--ssc-fill-1);
+}
+.ssc-segmented__cell { position: relative; display: flex; cursor: pointer; }
+.ssc-segmented__cell input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.ssc-segmented__cell span {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--ssc-control-height);
+    border-radius: var(--ssc-radius-control);
+    text-align: center;
+}
+.ssc-segmented__cell input:checked + span { background: var(--ssc-fill-2); font-weight: var(--ssc-weight-strong); }
+.ssc-segmented__cell input:focus-visible + span { outline: var(--ssc-space-1) solid var(--ssc-accent); }
+
+.ssc-link-row { color: inherit; text-decoration: none; min-height: var(--ssc-touch); }
+
+.ssc-action-bar {
+    position: sticky;
+    bottom: calc(var(--ssc-tabbar-height) + env(safe-area-inset-bottom));
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--ssc-space-3);
+    padding: var(--ssc-space-3) 0;
+    background: var(--ssc-canvas);
+}
+@media (min-width: 768px) {
+    .ssc-action-bar { bottom: 0; }
+}

@@ -1,0 +1,67 @@
+{# Form components for the shell. Spec: front/DESIGN.md section 6. attrs carries ids,
+   names and hx-* through unchanged, so moving a page here changes no behaviour. #}
+
+{% macro group(title="") -%}
+<section class="ssc-group">
+  {% if title %}<h2 class="ssc-group__title">{{ title|e }}</h2>{% endif %}
+  <div class="ssc-group__body">{{ caller() }}</div>
+</section>
+{%- endmacro %}
+
+{% macro field(label, id, name, value="", type="text", help="", error="", attrs="") -%}
+<div class="ssc-field"{% if error %} data-tone="danger"{% endif %}>
+  <label class="ssc-field__label" for="{{ id }}">{{ label|e }}</label>
+  <input class="ssc-input" id="{{ id }}" name="{{ name }}" type="{{ type }}" value="{{ value|e }}" {{ attrs }}>
+  {% if error %}<p class="ssc-field__error">{{ error|e }}</p>{% elif help %}<p class="ssc-field__help">{{ help|e }}</p>{% endif %}
+</div>
+{%- endmacro %}
+
+{# options: list of {"value", "label"}. A native select, except in Red, where its menu can flash light. #}
+{% macro picker(label, id, name, options, selected="", help="", attrs="") -%}
+<div class="ssc-field">
+  <label class="ssc-field__label" for="{{ id }}">{{ label|e }}</label>
+  <select class="ssc-input" id="{{ id }}" name="{{ name }}" {{ attrs }}>
+    {% for option in options %}<option value="{{ option.value|e }}"{% if option.value|string == selected|string %} selected{% endif %}>{{ option.label|e }}</option>{% endfor %}
+  </select>
+  {% if help %}<p class="ssc-field__help">{{ help|e }}</p>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro toggle(label, id, name, checked=false, help="", attrs="") -%}
+<label class="ssc-toggle" for="{{ id }}">
+  <span class="ssc-toggle__text">
+    <span>{{ label|e }}</span>
+    {% if help %}<span class="ssc-field__help">{{ help|e }}</span>{% endif %}
+  </span>
+  <input class="ssc-toggle__input" id="{{ id }}" name="{{ name }}" type="checkbox" role="switch"{% if checked %} checked{% endif %} {{ attrs }}>
+  <span class="ssc-toggle__track" aria-hidden="true"></span>
+</label>
+{%- endmacro %}
+
+{# options: list of {"value", "label"}, 2 to 4 of them. #}
+{% macro segmented(label, name, options, selected="", attrs="") -%}
+<fieldset class="ssc-segmented">
+  <legend class="ssc-field__label">{{ label|e }}</legend>
+  <div class="ssc-segmented__cells">
+    {% for option in options %}
+    <label class="ssc-segmented__cell">
+      <input type="radio" name="{{ name }}" value="{{ option.value|e }}"{% if option.value|string == selected|string %} checked{% endif %} {{ attrs }}>
+      <span>{{ option.label|e }}</span>
+    </label>
+    {% endfor %}
+  </div>
+</fieldset>
+{%- endmacro %}
+
+{# A row a person can tap. Separators start at the text edge. #}
+{% macro link_row(label, href, value="", sub="") -%}
+<a class="ssc-row ssc-link-row" href="{{ href|e }}">
+  <span class="ssc-row__label">{{ label|e }}{% if sub %}<span class="ssc-row__sub">{{ sub|e }}</span>{% endif %}</span>
+  {% if value %}<span class="ssc-row__value">{{ value|e }}</span>{% endif %}
+</a>
+{%- endmacro %}
+
+{# The page's one primary action stays in reach on phones. #}
+{% macro action_bar() -%}
+<div class="ssc-action-bar">{{ caller() }}</div>
+{%- endmacro %}

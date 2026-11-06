@@ -130,6 +130,7 @@
     --ssc-radius-control: 8px;
     --ssc-radius-sheet: 14px;
     --ssc-radius-image: 0;
+    --ssc-radius-round: 999px;
     --ssc-radius-bar: 2px;
     --ssc-radius-full: 50%;
 
