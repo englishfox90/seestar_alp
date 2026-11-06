@@ -14,6 +14,7 @@ from front.app import FrontMain, get_live_status
 
 from device.app import DeviceMain  # type: ignore
 from device.config import Config, ConfigError  # type: ignore
+from device import framing_log  # type: ignore
 from device import log  # type: ignore
 from device import telescope  # type: ignore
 
@@ -85,6 +86,8 @@ if __name__ == "__main__":
         os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp"
     # We want to initialize ALP logger
     logger = log.init_logging()
+    # Beside roof_automation.log, which also goes in the working directory.
+    framing_log.enable(os.getcwd())
 
     logger.info("Starting ALP web server")
     main = AppRunner(logger, "ALP", DeviceMain)

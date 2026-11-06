@@ -20,6 +20,7 @@ and stops + parks when it isn't. Page: `http://localhost:5432/roof`.
 | Target list selected | Each start plans the rest of the night from the list instead of resuming, and the plan ends at any gap of 30 min or more; it parks, then replans when the next target is due |
 | Plan from the target list ends early | Under half its planned time means a target failed: alarm, and done until Start or the next night. At most 8 runs a night |
 | Different schedule selected | Applies at the next start; clears the resume point and the "finished tonight" state |
+| Framed target stacks at the wrong scale or angle | The device stops the stack and retries once without autofocus. If it still doesn't hold, the item is skipped and the schedule moves on. Each outcome raises an alarm that stays on Tonight, and the steps go in `roof_framing_diag.log` |
 | Session started elsewhere, roof safe | Left alone |
 
 The dew heater uses the smaller margin from Sentinel's weather and Open-Meteo, stays

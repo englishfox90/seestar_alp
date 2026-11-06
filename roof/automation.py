@@ -83,6 +83,7 @@ class RoofAutomation:
         self._active_items = []
         self._skip_asked = 0
         self._framing_checked = 0
+        self._framing_seen = 0
         self._target_rows = []
         self._target_rows_at = 0.0
         self._scope_factory = scope_factory or _default_scopes
@@ -668,6 +669,7 @@ class RoofAutomation:
                 return
             if not self._list_run_may_replan(night, now):
                 self._completed_night = night
+            self._report_framing_guard(state)
             self._resume = {}
             self._save_state()
             if s.enabled and state.connected:
@@ -728,13 +730,17 @@ class RoofAutomation:
 
     def _check_framing(self, state):
         """Alarm if a framed mosaic is stacking without its mosaic scale."""
+        self._report_framing_guard(state)
         number = state.item_number
+        guard = state.framing or {}
+        guard = guard if guard.get("item_number") == number else {}
         if (
             self._adopted
             or state.view_stage != "Stack"
             or not 1 <= number <= len(self._active_items)
             or state.mosaic_scale is None
             or self._framing_checked == number
+            or guard.get("state") in ("retrying", "skipped")  # already reported
         ):
             return
         self._framing_checked = number
@@ -746,9 +752,26 @@ class RoofAutomation:
             name = item["params"].get("target_name", "?")
             self._raise_alarm(
                 f"{name} is stacking at scale {state.mosaic_scale:g}, not the planned {wanted:g}"
+                + ("; still wrong after the device's framing check" if guard else "")
             )
         else:
             self._log(f"framing confirmed: mosaic scale {state.mosaic_scale:g}")
+
+    def _report_framing_guard(self, state):
+        """Show what the device's framing guard did. Decides nothing: reports only."""
+        guard = state.framing or {}
+        seq, note = guard.get("seq"), guard.get("note", "")
+        if self._adopted or not seq or seq == self._framing_seen:
+            return
+        self._framing_seen = seq
+        if guard["state"] == "retrying":
+            self._raise_alarm(note)
+        elif guard["state"] in ("restored", "unconfirmed", "skipped"):
+            # Kept for after the park, or Tonight would lose it then.
+            self._alarm_after_park = f"{note} {self._alarm_after_park}".strip()
+            self._raise_alarm(self._alarm_after_park)
+        elif note:
+            self._log(f"framing: {note}")
 
     def _manage_dew(self, scope, s, state):
         """Heater follows the dew margin during our sessions, and is off otherwise.

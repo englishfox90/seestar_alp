@@ -12,7 +12,7 @@ from time import sleep
 import collections
 import copy
 import itertools
-from typing import Optional, Any, TypedDict, NotRequired
+from typing import Callable, Optional, Any, TypedDict, NotRequired
 
 import pydash
 from blinker import signal
@@ -27,6 +27,7 @@ from pyhocon import ConfigFactory
 
 from device.abstract_device import MessageParams, StartStackParams, Schedule
 from device.config import Config
+from device import framing_log
 from device import horizon
 from device.version import Version  # type: ignore
 from device.seestar_util import Util
@@ -66,6 +67,53 @@ class FixedSizeOrderedDict(OrderedDict):
         if self.maxsize is not None and len(self) >= self.maxsize:
             self.popitem(last=False)  # Remove the oldest item
         super().__setitem__(key, value)
+
+
+# A framed mosaic's stored setting, compared with what was asked for.
+FRAMING_SCALE_TOLERANCE = 0.05
+FRAMING_ANGLE_TOLERANCE_DEG = 1.0
+# The re-centring view start of a framing retry. A 25 degree slew with its plate
+# solve took 27 s (S30 Pro, 9.75); a start already on target hasn't been timed.
+FRAMING_RETRY_GOTO_TIMEOUT_S = 90
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _framing_matches(asked: dict, reported: dict) -> bool:
+    """Does the stored mosaic have the asked scale and angle, within tolerance?
+
+    A rectangle turned 180 degrees frames the same sky, so a firmware that stores
+    the angle another way round isn't a mismatch. A reply with no angle is judged
+    on its scale alone.
+    """
+    if abs(reported["scale"] - asked["scale"]) > FRAMING_SCALE_TOLERANCE:
+        return False
+    angle = reported.get("angle")
+    if not _is_number(angle):
+        return True
+    difference = (angle - asked["angle"] + 90) % 180 - 90
+    return abs(difference) <= FRAMING_ANGLE_TOLERANCE_DEG
+
+
+def _framing_text(mosaic: Optional[dict]) -> str:
+    if mosaic is None:
+        return "unreadable"
+    return f"scale {mosaic.get('scale'):g} angle {mosaic.get('angle', '?')}"
+
+
+def _reply_failed(reply) -> bool:
+    if not isinstance(reply, dict):
+        return True
+    result = reply.get("result")
+    return "error" in reply or (isinstance(result, str) and result.startswith("Error"))
+
+
+def _reply_text(reply) -> str:
+    if isinstance(reply, dict):
+        return str(reply.get("error") or reply.get("result"))[:120]
+    return repr(reply)[:120]
 
 
 class DequeEncoder(JSONEncoder):
@@ -144,6 +192,9 @@ class Seestar:
 
         self.mosaic_thread: Optional[threading.Thread] = None
         self.scheduler_thread: Optional[threading.Thread] = None
+        # The framing guard's latest outcome this schedule, for the automation.
+        self.framing_status: Optional[dict] = None
+        self._framing_seq = 0
         self.schedule: Schedule = {
             "version": 1.0,
             "Event": "Scheduler",
@@ -2340,6 +2391,7 @@ class Seestar:
         is_use_autofocus: bool,
         is_use_LP_filter: bool,
         mosaic: Optional[dict] = None,
+        after_step: Optional[Callable[[str], Any]] = None,
     ) -> bool:
         result = self.goto_target(
             {
@@ -2363,11 +2415,15 @@ class Seestar:
         self.send_message_param_sync(
             {"method": "set_setting", "params": {"stack_lenhance": is_use_LP_filter}}
         )
+        if after_step:
+            after_step("after_goto")
         if is_use_autofocus:
             self.event_state["scheduler"]["cur_scheduler_item"]["action"] = (
                 "auto focusing"
             )
             result = self.try_auto_focus(2)
+            if after_step:
+                after_step("after_autofocus")
         if not result:
             self.logger.info(
                 "Failed to auto focus, but will continue to image panel anyway."
@@ -2824,6 +2880,13 @@ class Seestar:
             "angle": mosaic_angle,
             "star_map_angle": mosaic_angle if star_map_angle is None else star_map_angle,
         }
+        guarded = abs(mosaic_scale - 1.0) > FRAMING_SCALE_TOLERANCE
+        after_step = None
+        if guarded:
+
+            def after_step(step):
+                return self._note_framing(target_name, step, mosaic)
+
         try:
             total_time_s = round(panel_time_sec)
             item_state: SchedulerItemState = {
@@ -2858,6 +2921,7 @@ class Seestar:
                     is_use_autofocus,
                     is_use_LP_filter,
                     mosaic=mosaic,
+                    after_step=after_step,
                 )
                 if result:
                     break
@@ -2890,12 +2954,25 @@ class Seestar:
 
                 self.set_target_name(target_name)
 
-                if not self.start_stack(
-                    {"gain": gain, "restart": True, "stack_type": stack_type}
-                ):
-                    msg = "Failed to start stacking."
+                if not self._start_framed_stack(gain, stack_type, after_step):
+                    msg = (
+                        "Stopped before stacking."
+                        if self.schedule["state"] != "working"
+                        else "Failed to start stacking."
+                    )
                     self.logger.warning(msg)
                     self.event_state["scheduler"]["cur_scheduler_item"]["action"] = msg
+                    return
+
+                if guarded and not self._guard_framing(
+                    target_name,
+                    center_RA,
+                    center_Dec,
+                    is_use_LP_filter,
+                    gain,
+                    stack_type,
+                    mosaic,
+                ):
                     return
 
                 remaining_time_s = round(panel_time_sec)
@@ -2948,6 +3025,218 @@ class Seestar:
             self.event_state["scheduler"]["cur_scheduler_item"]["action"] = "complete"
         finally:
             self.is_cur_scheduler_item_working = False
+
+    def _start_framed_stack(self, gain, stack_type, after_step=None) -> bool:
+        """start_stack in two parts, so the mosaic can be read between them."""
+        if stack_type:
+            self.logger.info("Setting stack type: %s", stack_type)
+            self.send_message_param_sync(
+                {"method": "set_stack_type", "params": {"type": stack_type}}
+            )
+            if after_step:
+                after_step("after_set_stack_type")
+        if self.schedule["state"] != "working":
+            return False
+        return self.start_stack({"gain": gain, "restart": True})
+
+    def _read_mosaic_setting(self) -> Optional[dict]:
+        """The scope's stored mosaic, or None when it can't be read."""
+        try:
+            reply = self.send_message_param_sync({"method": "get_device_state"})
+        except Exception as e:
+            self.logger.warning("Could not read the mosaic setting: %s", e)
+            return None
+        result = reply.get("result") if isinstance(reply, dict) else None
+        setting = result.get("setting") if isinstance(result, dict) else None
+        mosaic = setting.get("mosaic") if isinstance(setting, dict) else None
+        if isinstance(mosaic, dict) and _is_number(mosaic.get("scale")):
+            return mosaic
+        return None
+
+    def _note_framing(self, target_name, step, mosaic) -> Optional[dict]:
+        """Read the mosaic back and record one compact line. None if unreadable."""
+        if self.schedule["state"] != "working":
+            return None
+        reported = self._read_mosaic_setting()
+        line = (
+            f"framing {self.device_name} {target_name} {step}: "
+            f"asked {_framing_text(mosaic)} scope {_framing_text(reported)}"
+        )
+        if reported is not None:
+            verdict = "match" if _framing_matches(mosaic, reported) else "MISMATCH"
+            line += (
+                f" est_h={reported.get('estimated_hours')}"
+                f" star_map={reported.get('star_map_angle')}"
+                f" ratio={reported.get('star_map_ratio')} {verdict}"
+            )
+        self.logger.info(line)
+        framing_log.append(line)
+        return reported
+
+    def _publish_framing(self, state, target_name, note=""):
+        """Record the guard's outcome where the automation can read it."""
+        self._framing_seq += 1
+        self.framing_status = {
+            "seq": self._framing_seq,
+            "state": state,
+            "item_number": self.schedule.get("item_number", 0),
+            "target_name": target_name,
+            "note": note,
+        }
+        line = f"framing {self.device_name} {target_name} guard: {state}"
+        if note:
+            line += f": {note}"
+            self.logger.warning(line)
+        else:
+            self.logger.info(line)
+        framing_log.append(line)
+
+    def _framing_interrupted(self) -> bool:
+        return self.schedule["state"] != "working" or bool(
+            self.schedule.get("is_skip_requested")
+        )
+
+    def _guard_framing(
+        self, target_name, center_RA, center_Dec, is_use_LP_filter, gain, stack_type, mosaic
+    ) -> bool:
+        """Check the stack that just started has the planned framing, and retry once.
+
+        True: carry on into the stacking loop, whose checks deal with any stop or
+        skip that arrived in the meantime. False: the framing would not hold, the
+        stack is stopped, and this schedule item is over.
+        """
+        reported = self._note_framing(target_name, "after_start_stack", mosaic)
+        if self._framing_interrupted():
+            return True
+        if reported is None:
+            # Not knowing is no reason to abort what may be a good session.
+            self._publish_framing("unverified", target_name)
+            return True
+        if _framing_matches(mosaic, reported):
+            self._publish_framing("held", target_name)
+            return True
+
+        wanted = f"{mosaic['scale']:g}"
+        self._publish_framing(
+            "retrying",
+            target_name,
+            f"{target_name} is stacking at scale {reported['scale']:g}, "
+            f"not the planned {wanted}; retrying once "
+            f"(asked {_framing_text(mosaic)}, scope reports {_framing_text(reported)})",
+        )
+        self.event_state["scheduler"]["cur_scheduler_item"]["action"] = (
+            "framing did not hold; retrying once"
+        )
+        why = self._retry_framing(
+            target_name, center_RA, center_Dec, is_use_LP_filter, gain, stack_type, mosaic
+        )
+        if why is None:
+            reported = self._note_framing(target_name, "retry_after_start_stack", mosaic)
+            if not self._framing_interrupted():
+                if reported is None:
+                    self._publish_framing(
+                        "unconfirmed",
+                        target_name,
+                        f"{target_name} lost its framing and was retried, but the scope "
+                        f"could not be read to confirm scale {wanted}; still stacking",
+                    )
+                    return True
+                if _framing_matches(mosaic, reported):
+                    self._publish_framing(
+                        "restored",
+                        target_name,
+                        f"{target_name} lost its framing, and one retry restored "
+                        f"scale {reported['scale']:g}; still stacking",
+                    )
+                    return True
+                why = f"the scope still reports {_framing_text(reported)}"
+        if why is None or self._framing_interrupted():
+            self._publish_framing("interrupted", target_name, "retry ended by a stop or skip")
+            return True
+
+        self.stop_stack()
+        msg = (
+            f"{target_name} skipped: asked for {_framing_text(mosaic)}, and after one "
+            f"retry {why}. Stack stopped; moving to the next item"
+        )
+        self._publish_framing("skipped", target_name, msg)
+        self.event_state["scheduler"]["cur_scheduler_item"]["action"] = msg
+        return False
+
+    def _retry_framing(
+        self, target_name, center_RA, center_Dec, is_use_LP_filter, gain, stack_type, mosaic
+    ) -> Optional[str]:
+        """Stop the stack, resend the mosaic with a view start, stack again.
+
+        Autofocus is not repeated, as the focuser hasn't moved. The view start does
+        re-centre, because the only view start firmware 9.75 is known to take a mosaic
+        from includes the target. Returns None when the new stack started, otherwise
+        why not. After a stop or skip it returns at once, and the caller finds out
+        from _framing_interrupted.
+        """
+        reply = self.stop_stack()
+        if self._framing_interrupted():
+            return "it was interrupted"
+        if _reply_failed(reply):
+            return f"the first stack could not be stopped ({_reply_text(reply)})"
+
+        if not self.goto_target(
+            {
+                "ra": center_RA,
+                "dec": center_Dec,
+                "is_j2000": False,
+                "target_name": target_name,
+                "mosaic": mosaic,
+            }
+        ):
+            if self._framing_interrupted():
+                return "it was interrupted"
+            return "the scope refused the view start"
+
+        for _ in range(FRAMING_RETRY_GOTO_TIMEOUT_S):
+            threading.current_thread().last_run = datetime.now()
+            if self._framing_interrupted():
+                # The stop's own stop_slew may have gone before this view start did.
+                self.stop_slew()
+                return "it was interrupted"
+            if not self.is_goto():
+                break
+            time.sleep(1)
+        else:
+            self.stop_slew()
+            self.mark_goto_status_as_stopped()
+            return f"the view start had not finished after {FRAMING_RETRY_GOTO_TIMEOUT_S} s"
+        if not self.is_goto_completed_ok():
+            return "the view start did not complete"
+
+        for _ in range(3):  # as the first goto does: the firmware's last events arrive
+            if self._framing_interrupted():
+                return "it was interrupted"
+            time.sleep(1)
+        self.send_message_param_sync(
+            {"method": "set_setting", "params": {"stack_lenhance": is_use_LP_filter}}
+        )
+        if self._framing_interrupted():
+            return "it was interrupted"
+
+        reported = self._note_framing(target_name, "retry_after_view", mosaic)
+        if self._framing_interrupted():
+            return "it was interrupted"
+        if reported is not None and not _framing_matches(mosaic, reported):
+            return f"the view start left {_framing_text(reported)}"
+
+        self.set_target_name(target_name)
+        if self._framing_interrupted():
+            return "it was interrupted"
+        if not self._start_framed_stack(
+            gain,
+            stack_type,
+            lambda step: self._note_framing(target_name, f"retry_{step}", mosaic),
+        ):
+            if self._framing_interrupted():
+                return "it was interrupted"
+            return "the stack would not start again"
+        return None
 
     def get_schedule(self, params):
         if "schedule_id" in params:
@@ -3256,6 +3545,7 @@ class Seestar:
             f"start run scheduler with seestar_alp version {Version.app_version}"
         )
 
+        self.framing_status = None
         self.schedule["state"] = "working"
         self.schedule["is_stacking"] = False
         self.schedule["is_stacking_paused"] = False

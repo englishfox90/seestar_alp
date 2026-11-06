@@ -30,6 +30,9 @@ PREVIEW_QUALITY = 80
 FULL_QUALITY = 92
 # A stack image is large and crosses the scope's Wi-Fi, so never ask more often.
 MIN_FETCH_INTERVAL_S = 30
+# A request's label only describes a reply that comes back about then. Images can also
+# arrive without one, and go unseen until a browser polls hours later.
+PENDING_MAX_AGE_S = 2 * MIN_FETCH_INTERVAL_S
 PIER_PREVIEW_WIDTH = 1024
 PIER_FETCH_INTERVAL_S = 30
 PIER_TIMEOUT_S = 5
@@ -538,16 +541,29 @@ class ImageStore:
             size = (PREVIEW_WIDTH, round(height * PREVIEW_WIDTH / width))
             preview = cv2.resize(image, size, interpolation=cv2.INTER_AREA)
 
-        view = view or {}
-        made = self._pending or {
-            "target": view.get("target_name"),
-            "stacked": pydash.get(view, "Stack.stacked_frame"),
-        }
+        received_at = getattr(imager.comm, "received_at", lambda: None)()
+        now = self._clock()
+        # A label is only good for a reply to its own request, and not an image that
+        # arrived before it was made.
+        fresh = (
+            self._pending
+            and now - self._requested_at <= PENDING_MAX_AGE_S
+            and (received_at is None or received_at >= self._requested_at)
+        )
+        if fresh:
+            made = self._pending
+        elif is_stacking(view):
+            made = {"target": view.get("target_name"), "stacked": view["Stack"].get("stacked_frame")}
+        else:
+            # Parked or idle: the view's target is whatever it last had, which may not
+            # be this image's. No name is better than a wrong one.
+            made = {"target": None, "stacked": None}
         self._image = {
             "frame": frame,
             "target": made["target"],
             "stacked": made["stacked"],
-            "captured_at": self._clock(),
+            # When it reached us, not when a browser next happened to look.
+            "captured_at": received_at or now,
             "snr": _snr(raw),
             "preview": _jpeg(preview, PREVIEW_QUALITY),
             "full": _jpeg(image, FULL_QUALITY),
