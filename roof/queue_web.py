@@ -170,6 +170,11 @@ class QueuePage:
         )
 
 
+# Seconds. The top matches the 90000 ms limit on ALP's Settings page.
+MIN_EXPOSURE_S = 1.0
+MAX_EXPOSURE_S = 90.0
+
+
 class _QueueAction(_Action):
     redirect_to = "targets"
 
@@ -182,6 +187,21 @@ def _positive(form, key, default=None, maximum=None) -> float:
     if value <= 0 or (maximum is not None and value > maximum):
         raise falcon.HTTPBadRequest(description=f"{key} is out of range")
     return value
+
+
+def _form_capture(form) -> dict:
+    """Exposure and filter from a form; a field the form didn't send stays as it is."""
+    changes = {}
+    if "exposure_s" in form:
+        exposure = _positive(form, "exposure_s", maximum=MAX_EXPOSURE_S)
+        if exposure < MIN_EXPOSURE_S:
+            raise falcon.HTTPBadRequest(description="exposure_s is out of range")
+        changes["exposure_s"] = exposure
+    if "lp_filter" in form:
+        if form["lp_filter"] not in ("on", "off"):
+            raise falcon.HTTPBadRequest(description="unknown filter")
+        changes["lp_filter"] = form["lp_filter"] == "on"
+    return changes
 
 
 def _coordinate(text, unit, low, high) -> float:
@@ -292,6 +312,7 @@ class QueueUpdate(_QueueAction):
             prior_hours=prior,
             priority=priority,
             enabled=form.get("enabled") == "on",
+            **_form_capture(form),
         )
         if not changed:
             return "That target is no longer listed."

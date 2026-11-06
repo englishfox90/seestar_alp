@@ -13,6 +13,7 @@
   <div hidden hx-get="{{ root_path }}/roof/badge" hx-trigger="every 10s [!document.hidden]" hx-target="#ssc-status" hx-sync="this:drop" hx-swap="innerHTML"></div>
 {% set priority_options = [] %}
 {% for p in priorities %}{% set _ = priority_options.append({"value": p, "label": p|capitalize}) %}{% endfor %}
+{% set filter_options = [{"value": "on", "label": "LP"}, {"value": "off", "label": "None"}] %}
 <main class="ssc-page plan-page" id="targets">
   <h1 class="ssc-title">Targets</h1>
 
@@ -58,6 +59,8 @@
               {{ form.field("Shortest run (h)", "target-min-" ~ t.id, "min_session_hours", value=t.min_session_hours, attrs='inputmode="decimal"', help=("Scope estimate " ~ row.estimate ~ " h" if row.estimate and not row.short else ("No scope estimate until this size has run" if t.framed and not row.short else ""))) }}
               {% if row.short %}{{ warning("Under the scope's " ~ row.estimate ~ " h estimate") }}{% endif %}
             </div>
+            {{ form.field("Exposure (s)", "target-exposure-" ~ t.id, "exposure_s", value=t.exposure_s, type="number", attrs='min="1" max="90" step="any" required') }}
+            {{ form.segmented("Filter", "lp_filter", filter_options, selected="on" if t.lp_filter else "off") }}
             {{ form.segmented("Priority", "priority", priority_options, selected=t.priority) }}
           </div>
           <div class="plan-actions plan-actions--row">

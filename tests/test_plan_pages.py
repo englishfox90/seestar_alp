@@ -300,7 +300,9 @@ def test_targets_keeps_every_form(rig):
     html = _get(rig, "/1/targets")
     update = next(f for f in _parse(html).forms if f["id"] == f"target-{target.id}")
     assert update["action"] == "/1/targets/update" and update["method"] == "post"
-    assert set(update["fields"]) == {"id", "enabled", "goal_hours", "min_session_hours", "prior_hours", "priority"}
+    assert set(update["fields"]) == {
+        "id", "enabled", "goal_hours", "min_session_hours", "prior_hours", "priority", "exposure_s", "lp_filter",
+    }
     assert _form(html, "/1/targets/remove")["fields"]["id"]["value"] == target.id
     assert set(_form(html, "/1/targets/import")["fields"]) == {"source", "goal_hours"}
     added = [f for f in _parse(html).forms if f["action"] == "/1/targets/add"]
@@ -312,7 +314,7 @@ def test_targets_keeps_every_form(rig):
 
 def test_saving_a_row_untouched_changes_nothing(rig):
     target = _add(rig)
-    queue_web._queue().update(target.id, priority="high", prior_hours=1.5, enabled=False)
+    queue_web._queue().update(target.id, priority="high", prior_hours=1.5, enabled=False, exposure_s=20.0, lp_filter=False)
     before = next(t for t in queue_web._queue().all() if t.id == target.id)
     html = _get(rig, "/1/targets")
     block = html[html.index(f'id="target-{target.id}"'):html.index("</form>", html.index(f'id="target-{target.id}"'))]
@@ -320,6 +322,8 @@ def test_saving_a_row_untouched_changes_nothing(rig):
     for name in ("goal_hours", "min_session_hours", "prior_hours"):
         fields[name] = re.search(rf'name="{name}" type="text" value="([^"]*)"', block).group(1)
     fields["priority"] = re.search(r'name="priority" value="(\w+)" checked', block).group(1)
+    fields["exposure_s"] = re.search(r'name="exposure_s" type="number" value="([^"]*)"', block).group(1)
+    fields["lp_filter"] = re.search(r'name="lp_filter" value="(\w+)" checked', block).group(1)
     assert 'name="enabled" type="checkbox" role="switch" checked' not in block
     assert rig.client.simulate_post("/1/targets/update", headers=FORM, body=urlencode(fields)).status_code == 302
     assert next(t for t in queue_web._queue().all() if t.id == target.id) == before
