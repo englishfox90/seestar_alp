@@ -2,7 +2,7 @@
 
 {% block header %}
 	<div class="container mt-3">
-		<p class="h1">{% block title %}Goto Target{% endblock %}</p>
+		<div class="page-hero"><div><h1 class="page-title">{% block title %}Goto Target{% endblock %}</h1></div></div>
 	</div>
 {% endblock %}
 
@@ -13,7 +13,7 @@
 			<div class="acordion" id="eventStatusAccordion">
 				<div class="accordion-item">
 					<h2 class="accordion-header" id="headingOne">
-						<button class="accordion-button fs-5 fw-bold" type="button"
+						<button class="accordion-button" type="button"
 								data-bs-toggle="collapse"
 								data-bs-target="#eventStatusDiv"
 								aria-expanded="true"
@@ -36,7 +36,7 @@
 		</div>
 		<div class="container mt-3">
 		<!--	<p class="h3 mb-2">Enter Target</p> -->
-			<p>Locates an object and starts tracking</p>
+			<p class="mb-3">Locates an object and starts tracking</p>
 			{% include 'goto_target.html' with context %}
 		</div>
 

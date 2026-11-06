@@ -1,0 +1,68 @@
+{# The polled parts of Tonight, rendered the same by the page and by /tonight/state. #}
+{% import 'ssc/ui.html' as ui %}
+
+{% macro bands(state, root) %}
+  {% for item in state.bands %}{{ ui.band(item, root ~ "/roof") }}{% endfor %}
+{% endmacro %}
+
+{% macro now(state, root) %}
+<div id="t-state-data" data-state="{{ state.key }}" data-hero="{{ state.hero }}" data-dim="{{ "1" if state.dim else "0" }}" data-stop="{{ "1" if state.stop else "0" }}"></div>
+{% if not state.sentence_in_band %}
+<p class="t-sentence" data-tone="{{ state.tone }}">{% if state.tone != "neutral" %}{{ ui.icon("warning", 20) }} {% endif %}{{ state.sentence|e }}</p>
+{% endif %}
+{% for item in state.notices %}{{ ui.notice(item.tone, item.text) }}{% endfor %}
+{% if state.metrics %}
+<div class="t-metrics">{% for item in state.metrics %}{{ ui.metric(item) }}{% endfor %}</div>
+{% endif %}
+{% if state.action %}
+<div class="t-action">
+  {% if state.action.kind == "stop" %}{{ ui.stop_action(state.action) }}
+  {% else %}{{ ui.link_action(state.action.label, root ~ "/" ~ state.action.route) }}{% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro progress(state, steps) %}
+  {% if state.bar_shown %}{{ ui.bar(state.bar) }}{% endif %}
+  {% if steps %}
+  <ol class="t-steps">
+    {% for step in steps %}
+    <li class="t-step" data-state="{{ step.state }}"{% if step.state == "active" %} aria-current="step"{% endif %}>{% if step.state in ("done", "warn") %}{{ ui.icon("check", 16) }}{% elif step.state in ("failed", "blocked") %}{{ ui.icon("warning", 16) }}{% endif %}{{ step.label|e }}</li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+{% endmacro %}
+
+{% macro plan_list(plan, status) %}
+  {% if plan.earned_targets %}
+    <h2 class="ssc-section">Tonight's stacks</h2>
+    <div class="ssc-group">
+      {% for item in plan.earned_targets %}{{ ui.row(item.name, item.hours) }}{% endfor %}
+    </div>
+  {% endif %}
+  {% if plan.rows %}
+    <h2 class="ssc-section">Plan</h2>
+    <div class="ssc-group">
+      {% for item in plan.rows %}
+      <div class="ssc-row" data-progress="{{ item.progress or "" }}"{% if item.progress == "now" %} aria-current="true"{% endif %}>
+        <span class="ssc-row__label">
+          {{ item.name|e }}{% if item.progress == "now" %} <span class="ssc-row__tag">Now</span>{% elif item.progress == "done" %} <span class="ssc-row__tag">Passed</span>{% endif %}
+          {% if item.when %}<span class="ssc-row__sub">{{ item.when|e }}{% if item.goal %}. {{ item.goal|e }}{% endif %}</span>{% endif %}
+        </span>
+        <span class="ssc-row__value">{% if item.altitude is none %}Alt unknown{% else %}{{ "%.0f"|format(item.altitude) }}&deg;{% endif %}{% if not item.ok %} too low{% endif %}</span>
+      </div>
+      {% endfor %}
+    </div>
+  {% elif status.uses_target_list and not plan.error %}
+    <p class="ssc-footnote">Nothing on the target list can be imaged for the rest of this night.</p>
+  {% endif %}
+  {% for item in plan.skipped %}<p class="ssc-footnote">{{ item.name|e }}: {{ item.why|e }}</p>{% endfor %}
+{% endmacro %}
+
+{% macro detail_rows(rows) %}
+  {% for item in rows %}{{ ui.row(item.label, item.value) }}{% endfor %}
+{% endmacro %}
+
+{% macro roof_lines_html(lines) %}
+  {% for line in lines %}{{ ui.status(line.tone, line.text) }}{% endfor %}
+{% endmacro %}

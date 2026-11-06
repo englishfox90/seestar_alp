@@ -353,8 +353,33 @@ main.container .row > [class*="col"] > .panel-card:only-child {
     font-weight: 600;
 }
 
+/* Bootstrap floats the switch and adds a bottom margin, which lifts it off the
+   bar's centre line. Lay it out as a centred row like everything else here. */
+.navbar .form-switch {
+    display: flex;
+    align-items: center;
+    gap: var(--ssc-space-3);
+    min-height: 0;
+    margin-bottom: 0;
+    padding-left: 0;
+}
+
+.navbar .form-switch .form-check-input {
+    float: none;
+    flex: none;
+    margin: 0;
+}
+
+.navbar .form-switch .form-check-label {
+    line-height: 1.33;
+}
+
 /* The scope name sits at the page's left edge, so its text lines up with the titles. */
 .navbar .app-scope > .btn {
+    display: flex;
+    align-items: center;
+    gap: var(--ssc-space-2);
+    line-height: 1.33;
     min-height: var(--ssc-bar-height);
     padding-left: 0;
     padding-right: 0;
@@ -980,6 +1005,11 @@ img#liveViewImg {
 /* The video centres in this column, but a panel fills it, so its edge stays on the page edge. */
 .live-main > .panel-card {
     width: 100%;
+}
+
+.live-rotate-btn {
+    min-width: var(--ssc-control-height);
+    min-height: var(--ssc-control-height);
 }
 
 /* ---- Small screens ----------------------------------------------------- */

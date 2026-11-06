@@ -4,9 +4,8 @@
     <meta http-equiv="Cache-Control" content="no-cache">
     <div class="page-hero">
         <div>
-            <p class="page-kicker">Configuration</p>
             <h1 class="page-title">{% block title %}Settings{% endblock %}</h1>
-            <p class="page-subtitle">Device capture, processing, and behavior controls.</p>
+            <p class="page-subtitle">Device capture, processing and behavior controls</p>
         </div>
         {% if firmware_ver_int is defined %}
             {% set fw = firmware_ver_int|int %}
@@ -23,63 +22,71 @@
         {%- elif "temp" in key_l or "heater" in key_l or "dew" in key_l -%}
             Environment
         {%- elif "dither" in key_l or "focus" in key_l or "track" in key_l or "mount" in key_l -%}
-            Mount and Focus
+            Mount and focus
         {%- else -%}
             General
         {%- endif -%}
     {%- endmacro -%}
 
     {%- macro render_setting_row(key, value) -%}
-        <tr class="setting-row">
-            <th class="col">
-                {{ settings_friendly_names[key] }}
-                <div class="form-text">{{ settings_helper_text[key] }}</div>
+        <div class="setting-row row g-2 align-items-center py-3 border-bottom">
+            <div class="col-12 col-md-7">
+                <div class="fw-semibold">{{ settings_friendly_names[key] }}</div>
+                <div class="form-text mt-0">{{ settings_helper_text[key] }}</div>
                 {% if key == "light_duration_min" and value == -1 %}
-                    <div class="form-text">
+                    <div class="form-text mt-0">
                         Your firmware may not support stack settings; using the device default (-1).
                     </div>
                 {% endif %}
-            </th>
+            </div>
             {% if value is true or value is false %}
-                <td>
+                <div class="col-12 col-md-5 d-flex gap-3 justify-content-md-end">
                     {% if value is true %}
-                        <input class="form-check-input me-1" type="radio" id="{{ key }}_enable" name="{{ key }}" value="{{ value }}" checked>
-                        <label class="me-3" for="{{ key }}_enable">Enable</label>
-                        <input class="form-check-input me-1" type="radio" id="{{ key }}_disable" name="{{ key }}" value="false">
-                        <label for="{{ key }}_disable">Disable</label>
+                        <div class="form-check form-check-inline m-0">
+                            <input class="form-check-input" type="radio" id="{{ key }}_enable" name="{{ key }}" value="{{ value }}" checked>
+                            <label class="form-check-label" for="{{ key }}_enable">Enable</label>
+                        </div>
+                        <div class="form-check form-check-inline m-0">
+                            <input class="form-check-input" type="radio" id="{{ key }}_disable" name="{{ key }}" value="false">
+                            <label class="form-check-label" for="{{ key }}_disable">Disable</label>
+                        </div>
                     {% else %}
-                        <input class="form-check-input me-1" type="radio" id="{{ key }}_enable" name="{{ key }}" value="true">
-                        <label class="me-3" for="{{ key }}_enable">Enable</label>
-                        <input class="form-check-input me-1" type="radio" id="{{ key }}_disable" name="{{ key }}" value="{{ value }}" checked>
-                        <label for="{{ key }}_disable">Disable</label>
+                        <div class="form-check form-check-inline m-0">
+                            <input class="form-check-input" type="radio" id="{{ key }}_enable" name="{{ key }}" value="true">
+                            <label class="form-check-label" for="{{ key }}_enable">Enable</label>
+                        </div>
+                        <div class="form-check form-check-inline m-0">
+                            <input class="form-check-input" type="radio" id="{{ key }}_disable" name="{{ key }}" value="{{ value }}" checked>
+                            <label class="form-check-label" for="{{ key }}_disable">Disable</label>
+                        </div>
                     {% endif %}
-                </td>
+                </div>
             {% elif key == "temp_unit" %}
-                <td>
+                <div class="col-12 col-md-5">
                     <input class="form-control" type="text" id="{{ key }}" name="{{ key }}" value="{{ value }}" required pattern="[Cc]|[Ff]" aria-describedby="cfHelp">
-                    <div id="cfHelp" class="form-text">C/F</div>
-                </td>
+                    <div id="cfHelp" class="form-text">C or F</div>
+                </div>
             {% elif value is number %}
                 {% if key == "exp_ms_stack_l" %}
-                    <td>
+                    <div class="col-12 col-md-5">
                         <input class="form-control" type="number" id="{{ key }}" name="{{ key }}" value="{{ value }}" min="5" max="90000" required aria-describedby="numberHelp">
-                        <div id="numberHelp" class="form-text">Numbers Only (5ms-90000ms)</div>
-                    </td>
+                        <div id="numberHelp" class="form-text">Numbers only, 5 to 90000 ms</div>
+                    </div>
                 {% elif key == "stack_dither_pix" %}
-                    <td>
+                    <div class="col-12 col-md-5">
                         <input class="form-control" type="number" id="{{ key }}" name="{{ key }}" value="{{ value }}" min="10" max="200" required aria-describedby="numberHelp">
-                        <div id="numberHelp" class="form-text">Numbers only 10 - 200 pixels)</div>
-                    </td>
+                        <div id="numberHelp" class="form-text">Numbers only, 10 to 200 pixels</div>
+                    </div>
                 {% else %}
-                    <td>
+                    <div class="col-12 col-md-5">
                         <input class="form-control" type="number" id="{{ key }}" name="{{ key }}" value="{{ value }}" required aria-describedby="numberHelp">
-                        <div id="numberHelp" class="form-text">Numbers Only</div>
-                    </td>
+                        <div id="numberHelp" class="form-text">Numbers only</div>
+                    </div>
                 {% endif %}
             {% else %}
-                <td><input class="form-control" type="text" id="{{ key }}" name="{{ key }}" value="{{ value }}" required></td>
+                <div class="col-12 col-md-5"><input class="form-control" type="text" id="{{ key }}" name="{{ key }}" value="{{ value }}" required></div>
             {% endif %}
-        </tr>
+        </div>
     {%- endmacro -%}
 
     {% if firmware_ver_int is defined %}
@@ -90,45 +97,33 @@
             {% if output %}
                 <div class="alert alert-primary" role="alert">{{output}}</div>
             {% endif %}
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <div class="panel-muted">Changes apply immediately after save.</div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="panel-muted">Changes apply immediately after save</div>
                 <div id="unsavedPill" class="unsaved-pill d-none">
                     <span class="dot"></span>
-                    Unsaved Changes
+                    Unsaved changes
                 </div>
             </div>
             <form id="settingsForm" method="post" action="{{ action }}">
-                <div class="table-responsive">
-                <table class="table table-striped align-middle mb-3">
-                    <tbody>
-                    {% for group in ["Imaging", "Environment", "Mount and Focus", "General"] %}
-                        {% set ns = namespace(has_rows=false) %}
-                        {% for key, value in settings.items() %}
-                            {% if group_for_key(key) == group %}
-                                {% set ns.has_rows = true %}
-                            {% endif %}
-                        {% endfor %}
-                        {% if ns.has_rows %}
-                            <tr>
-                                <td colspan="2" class="pt-3 pb-2">
-                                    <div class="form-group-head">
-                                        <h3 class="form-group-title">{{ group }}</h3>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% for key, value in settings.items() %}
-                                {% if group_for_key(key) == group %}
-                                    {{ render_setting_row(key, value) }}
-                                {% endif %}
-                            {% endfor %}
+                {% for group in ["Imaging", "Environment", "Mount and focus", "General"] %}
+                    {% set ns = namespace(has_rows=false) %}
+                    {% for key, value in settings.items() %}
+                        {% if group_for_key(key) == group %}
+                            {% set ns.has_rows = true %}
                         {% endif %}
                     {% endfor %}
-                    </tbody>
-                </table>
-                </div>
-                <div class="action-row">
+                    {% if ns.has_rows %}
+                        <h2 class="panel-title mt-3 mb-1">{{ group }}</h2>
+                        {% for key, value in settings.items() %}
+                            {% if group_for_key(key) == group %}
+                                {{ render_setting_row(key, value) }}
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                {% endfor %}
+                <div class="action-row d-flex flex-wrap mt-3">
                     <button id="saveSettingsBtn" type="submit" class="btn btn-primary">Save</button>
-                    <button id="resetSettingsBtn" type="button" class="btn btn-outline-primary">Reset Form</button>
+                    <button id="resetSettingsBtn" type="button" class="btn btn-secondary">Reset form</button>
                 </div>
             </form>
         </div>

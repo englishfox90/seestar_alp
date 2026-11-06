@@ -32,6 +32,7 @@ class ScopeState:
     exposure_s: float = 0.0
     stack_lapse_s: float = 0.0
     mosaic_estimate_h: float | None = None  # the firmware's time for this framing
+    gain: int | None = None
 
 
 def _failed(res) -> str | None:
@@ -107,6 +108,7 @@ class RealScope:
             view_stage=str(view.get("stage", "")),
             plan_state=str(plan.get("state", "")),
             target=target or str(view.get("target_name", "")),
+            gain=view.get("gain") if isinstance(view.get("gain"), int) else None,
         )
 
     @staticmethod

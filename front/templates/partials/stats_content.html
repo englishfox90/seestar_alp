@@ -46,7 +46,7 @@
                     {% elif value is none or value == "" %}
                     {% elif key == "Balance Sensor (angle)" %}
                         {{ metric_row(key, value) }}
-                        <div class="ps-1 pb-2">{% include 'partials/bubble_level.html' with context %}</div>
+                        <div class="pb-2">{% include 'partials/bubble_level.html' with context %}</div>
                     {% else %}
                         {{ metric_row(key, value) }}
                     {% endif %}

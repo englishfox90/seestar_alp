@@ -3,7 +3,6 @@
 {% block header %}
     <div class="page-hero">
         <div>
-            <p class="page-kicker">Capture</p>
             <h1 class="page-title">{% block title %}Live View{% endblock %}</h1>
             <p class="page-subtitle">{{ telescope["name"] }} ({{ telescope["ip_address"] }})</p>
         </div>
@@ -14,7 +13,7 @@
     <div class="live-layout">
             <div class="live-main">
                 <div class="panel-card">
-                    <h2 class="panel-title mb-3">Select Live Mode</h2>
+                    <h2 class="panel-title mb-3">Select live mode</h2>
                     <div class="row">
                         {% include 'partials/live_controls_mode_none.html' with context %}
                         {% include 'partials/live_controls_mode_star.html' with context %}
@@ -32,7 +31,7 @@
                 {% include 'partials/live_card_status.html' with context %}
               </div>
 
-                <div class="live-side-card panel-muted" style="min-width: 320px;">
+                <div class="live-side-card panel-muted">
                     Live controls and status stream will appear after selecting a mode.
                 </div>
             </aside>

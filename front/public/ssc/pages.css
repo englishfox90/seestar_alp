@@ -1,0 +1,282 @@
+/* Tonight. Rules: front/DESIGN.md section 5, T1. */
+.t-page {
+    --t-now-reserve: 124px;
+    --t-thumb: 120px;
+    --t-stack-ratio: 0.5625;
+    --t-pier-ratio: 1;
+    /* Compact: the stack beside its thumbnail, kept whole above the Now panel. */
+    --t-slot: calc(100svh - var(--ssc-bar-height) - var(--ssc-tabbar-height) - var(--t-now-reserve));
+    display: flex;
+    flex-direction: column;
+    gap: var(--ssc-gap);
+}
+
+.t-page[data-hero="plan"] { --ssc-night-height: var(--ssc-night-height-hero); }
+.t-stack, .t-side, .t-plan, .t-now, .t-progress {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ssc-space-4);
+}
+.t-stack:empty, .t-progress:empty { display: none; }
+#t-bands { margin-top: var(--ssc-space-3); }
+#t-bands:empty { margin-top: 0; }
+
+.t-updated {
+    color: var(--ssc-text-2);
+    font-size: var(--ssc-text-footnote);
+    font-variant-numeric: tabular-nums;
+}
+.t-updated[data-tone="danger"] { color: var(--ssc-red); font-weight: var(--ssc-weight-strong); }
+
+.t-sentence {
+    display: flex;
+    align-items: baseline;
+    gap: var(--ssc-space-3);
+    font-size: var(--ssc-text-sentence);
+    font-weight: var(--ssc-weight-strong);
+    letter-spacing: -0.005em;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+.t-sentence .ssc-icon { align-self: center; }
+.t-sentence[data-tone="attention"] .ssc-icon { color: var(--ssc-orange); }
+.t-sentence[data-tone="danger"] .ssc-icon { color: var(--ssc-red); }
+
+.t-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+    gap: var(--ssc-space-4);
+}
+
+/* Images: black backing, contained, nothing on top. Never cropped. */
+.t-main { display: flex; flex-direction: column; gap: var(--ssc-gap); }
+.t-frame {
+    position: relative;
+    display: block;
+    width: 100%;
+    background: var(--ssc-image-backing);
+    border-radius: var(--ssc-radius-image);
+    overflow: hidden;
+}
+.t-frame img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    opacity: var(--t-image-opacity, 1);
+    transition: opacity var(--ssc-motion-image) ease-out;
+}
+.t-frame img[data-entering] { opacity: 0; }
+[data-theme="night"] .t-frame img { filter: brightness(0.85); }
+.t-page[data-dim="1"] #t-stack { --t-image-opacity: 0.55; }
+.t-image[data-stale="1"] { --t-image-opacity: 0.55; }
+
+.t-caption {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0 var(--ssc-space-3);
+    min-height: var(--ssc-touch);
+    color: var(--ssc-text-2);
+    font-size: var(--ssc-text-footnote);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+.t-image[data-stale="1"] .t-caption { color: var(--ssc-orange); }
+.t-save {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--ssc-touch);
+}
+.t-swap {
+    display: none;
+    width: 100%;
+    min-height: var(--ssc-touch);
+    padding: 0;
+    background: var(--ssc-fill-1);
+    border: 0;
+    border-radius: var(--ssc-radius-control);
+    color: var(--ssc-accent);
+    font: inherit;
+    font-size: var(--ssc-text-footnote);
+    font-weight: var(--ssc-weight-strong);
+    cursor: pointer;
+}
+
+/* Compact: one image large, the other a thumbnail to swap with. Only here may an
+   image touch the screen's edge. */
+@media (max-width: 767.98px) {
+    .t-images { margin: 0 calc(var(--ssc-gutter) * -1); }
+    .t-images:not(:has(> .t-image:not([hidden]))) { display: none; }
+    .t-image { min-width: 0; }
+    .t-caption { padding: 0 var(--ssc-gutter); }
+    .t-image[data-role="thumb"] .t-caption { padding: 0; }
+    .t-image[data-role="thumb"] .t-save { display: none; }
+    .t-image[data-role="thumb"] .t-swap { display: block; }
+
+    /* A tall image: the thumbnail beside it, in the margin it leaves. */
+    .t-images[data-layout="side"] {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) var(--t-thumb);
+        column-gap: var(--ssc-space-3);
+        padding-right: var(--ssc-gutter);
+        align-items: start;
+    }
+    .t-images[data-layout="side"] .t-image[data-role="front"] { order: 1; }
+    .t-images[data-layout="side"] .t-image[data-role="thumb"] { order: 2; }
+    .t-images[data-layout="side"] .t-image[data-role="front"] .t-caption { padding-right: 0; }
+    .t-images[data-layout="side"] .t-image[data-role="front"] .t-frame { aspect-ratio: var(--t-front-ratio, var(--t-stack-ratio)); max-height: var(--t-slot); }
+
+    /* A wide image takes the whole width, with the thumbnail below it. */
+    .t-images[data-layout="below"],
+    .t-images[data-layout="thumbs"] {
+        display: flex;
+        flex-direction: column;
+    }
+    .t-images[data-layout="below"] .t-image[data-role="front"] { order: 1; }
+    .t-images[data-layout="below"] .t-image[data-role="thumb"] { order: 2; }
+    .t-images[data-layout="below"] .t-image[data-role="thumb"],
+    .t-images[data-layout="thumbs"] .t-image {
+        display: grid;
+        grid-template-columns: var(--t-thumb) minmax(0, 1fr);
+        column-gap: var(--ssc-space-4);
+        padding: 0 var(--ssc-gutter);
+    }
+    .t-images[data-layout="thumbs"] { gap: var(--ssc-space-4); }
+    .t-images[data-layout="thumbs"] .t-save { display: none; }
+    .t-images[data-layout="thumbs"] .t-swap { display: none; }
+    .t-images[data-layout="thumbs"] .t-caption { padding: 0; }
+    .t-images[data-layout="below"] .t-image[data-role="thumb"] .t-swap { grid-column: 2; grid-row: 1; align-self: center; }
+    .t-images[data-layout="below"] .t-image[data-role="thumb"] .t-caption { grid-column: 1 / -1; }
+    .t-images[data-layout="below"] .t-image[data-role="front"] .t-frame { aspect-ratio: var(--t-front-ratio, 1); max-height: var(--t-slot); }
+
+    .t-image[data-role="thumb"] .t-frame,
+    .t-images[data-layout="thumbs"] .t-frame { height: var(--t-thumb); }
+
+    /* One flat column, so each state can order its parts. */
+    .t-main, .t-side { display: contents; }
+    .t-head { display: block; order: 5; }
+    .t-head .ssc-title {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+    }
+    #t-focus { order: 1; }
+    .t-images { order: 2; }
+    #t-progress { order: 3; }
+    #t-now { order: 4; }
+    .t-night { order: 6; }
+    #t-plan { order: 7; }
+    #t-details { order: 8; }
+
+    /* A day screen leads with the sentence and the plan, and the pier follows. */
+    .t-page[data-hero="plan"] #t-now { order: 1; }
+    .t-page[data-hero="plan"] .t-head { order: 2; }
+    .t-page[data-hero="plan"] .t-night { order: 3; }
+    .t-page[data-hero="plan"] #t-plan { order: 4; }
+    .t-page[data-hero="plan"] .t-images { order: 5; }
+    .t-page[data-hero="plan"] #t-details { order: 6; }
+    .t-page[data-hero="plan"] #t-stack { display: none; }
+}
+
+/* Regular and wide: both images whole, sharing exact top and bottom edges. */
+@media (min-width: 768px) {
+    .t-page {
+        --t-content: min(100vw, var(--ssc-max-width));
+        --t-h: min(
+            calc(100svh - 240px),
+            640px,
+            calc((var(--t-content) - var(--ssc-gutter) * 2 - var(--ssc-gap)) / (var(--t-stack-ratio) + var(--t-pier-ratio)))
+        );
+    }
+    .t-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding-top: var(--ssc-space-5);
+    }
+    .t-images { display: flex; gap: var(--ssc-gap); }
+    .t-image { flex: none; }
+    #t-stack { width: calc(var(--t-h) * var(--t-stack-ratio)); }
+    #t-pier { width: calc(var(--t-h) * var(--t-pier-ratio)); }
+    .t-frame { height: var(--t-h); }
+    .t-page[data-hero="stack"] #t-stack .t-caption,
+    .t-page[data-hero="pier"] #t-pier .t-caption { color: var(--ssc-text-1); }
+}
+
+@media (min-width: 1200px) {
+    .t-page {
+        --t-h: min(
+            calc(100svh - 240px),
+            640px,
+            calc((var(--t-content) - var(--ssc-gutter) * 2 - var(--t-rail) - var(--ssc-gap) * 2) / (var(--t-stack-ratio) + var(--t-pier-ratio)))
+        );
+        --t-rail: 340px;
+    }
+    .t-main { flex-direction: row; align-items: stretch; }
+    .t-images { flex: none; align-self: flex-start; }
+    .t-side { flex: 1; min-width: var(--t-rail); }
+}
+
+.t-action { display: flex; flex-direction: column; gap: var(--ssc-space-3); }
+.t-action .ssc-button[data-kind="plain"] { align-self: flex-start; }
+
+.t-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ssc-space-1) var(--ssc-space-4);
+    font-size: var(--ssc-text-footnote);
+    color: var(--ssc-text-2);
+}
+.t-step { display: inline-flex; align-items: center; gap: var(--ssc-space-1); }
+.t-step[data-state="active"] { color: var(--ssc-text-1); font-weight: var(--ssc-weight-strong); }
+.t-step[data-state="failed"],
+.t-step[data-state="blocked"] { color: var(--ssc-red); font-weight: var(--ssc-weight-strong); }
+
+.t-details__summary {
+    display: flex;
+    align-items: center;
+    gap: var(--ssc-space-2);
+    min-height: var(--ssc-touch);
+    color: var(--ssc-accent);
+    font-weight: var(--ssc-weight-strong);
+    cursor: pointer;
+    list-style: none;
+}
+.t-details__summary::-webkit-details-marker { display: none; }
+.t-details[open] .t-details__summary .ssc-icon { transform: rotate(180deg); }
+
+/* Autofocus curve: SVG on the canvas, so its text follows the theme. */
+#t-focus:empty { display: none; }
+.t-focus__plot {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: var(--ssc-canvas);
+    border-radius: var(--ssc-radius-image);
+}
+.t-focus__plot text {
+    fill: var(--ssc-text-2);
+    font-size: var(--ssc-text-footnote);
+    font-variant-numeric: tabular-nums;
+}
+.t-focus__grid { stroke: var(--ssc-separator); stroke-width: 1; }
+.t-focus__line { fill: none; stroke: var(--ssc-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.t-focus__fit { fill: none; stroke: var(--ssc-text-3); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.t-focus__dot { fill: var(--ssc-accent); }
+.t-focus__final { fill: var(--ssc-text-1); }
+.t-focus__missing { stroke: var(--ssc-orange); stroke-width: 2; stroke-linecap: round; }
+.t-focus__hit { fill: transparent; }
+.t-focus__summary { font-weight: var(--ssc-weight-strong); margin-top: var(--ssc-space-3); }
+
+@media (prefers-reduced-motion: reduce) {
+    .t-frame img, .ssc-button { transition: none; }
+}
+[data-theme="red"] .t-frame img { transition: none; }
+
+/* After the layout rules above, which set display on figures. No empty panel. */
+.t-image[hidden] { display: none; }

@@ -15,9 +15,9 @@
     --ssc-separator: rgba(255, 255, 255, 0.1);
     --ssc-fill-1: rgba(255, 255, 255, 0.07);
     --ssc-fill-2: rgba(255, 255, 255, 0.12);
-    --ssc-accent: #5fa4f8;
+    --ssc-accent: var(--ssc-webui-accent, #5fa4f8);
     --ssc-accent-tint: #1c2a3c;
-    --ssc-on-accent: #000000;
+    --ssc-on-accent: var(--ssc-webui-on-accent, #000000);
     --ssc-green: #3ec46d;
     --ssc-orange: #f0a030;
     --ssc-red: #ff6259;
@@ -46,9 +46,9 @@
     --ssc-separator: rgba(60, 60, 67, 0.18);
     --ssc-fill-1: rgba(118, 118, 128, 0.12);
     --ssc-fill-2: rgba(118, 118, 128, 0.2);
-    --ssc-accent: #0a62c9;
+    --ssc-accent: var(--ssc-webui-accent, #0a62c9);
     --ssc-accent-tint: #e3edf8;
-    --ssc-on-accent: #ffffff;
+    --ssc-on-accent: var(--ssc-webui-on-accent, #ffffff);
     --ssc-green: #1a7f37;
     --ssc-orange: #a85400;
     --ssc-red: #c1271d;
@@ -97,7 +97,7 @@
 }
 
 :root {
-    --ssc-font: system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --ssc-font: var(--ssc-webui-font, system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
 
     /* Sizes in rem: 24, 20, 28, 17, 15, 16, 13, 12px. */
     --ssc-text-title: 1.5rem;
@@ -130,10 +130,27 @@
     --ssc-radius-control: 8px;
     --ssc-radius-sheet: 14px;
     --ssc-radius-image: 0;
+    --ssc-radius-bar: 2px;
+    --ssc-radius-full: 50%;
 
     --ssc-control-height: 44px;
     --ssc-bar-height: 44px;
     --ssc-tabbar-height: 50px;
+    --ssc-touch: 44px;
+    --ssc-stop-height: 48px;
+    --ssc-sheet-button: 50px;
+    --ssc-band-height: 64px;
+    --ssc-night-height: 8px;
+    --ssc-night-height-hero: 24px;
+    --ssc-night-marker: 20px;
+
+    /* Images always sit on black, even in Day. The scrim is the only shadow. */
+    --ssc-image-backing: #000000;
+    --ssc-scrim: rgba(0, 0, 0, 0.5);
+
+    --ssc-motion-press: 100ms;
+    --ssc-motion-sheet: 240ms;
+    --ssc-motion-image: 600ms;
 }
 
 @media (min-width: 768px) {
@@ -143,6 +160,7 @@
         --ssc-text-input: 0.9375rem;
         --ssc-gutter: var(--ssc-space-6);
         --ssc-radius-image: 4px;
+        --ssc-night-height: 12px;
     }
 }
 
@@ -154,7 +172,18 @@
 
 /* Red has low contrast by nature, so its small text is larger. */
 [data-theme="red"] {
+    --ssc-motion-press: 0ms;
+    --ssc-motion-sheet: 100ms;
+    --ssc-motion-image: 0ms;
     --ssc-text-body: 1rem;
     --ssc-text-footnote: 0.9375rem;
     --ssc-text-caption: 0.8125rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --ssc-motion-press: 0ms;
+        --ssc-motion-sheet: 100ms;
+        --ssc-motion-image: 0ms;
+    }
 }

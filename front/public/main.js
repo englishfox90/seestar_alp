@@ -333,13 +333,16 @@ try {
 }
 
 async function toggleuitheme() {
-    //update the current page
-    if (document.documentElement.getAttribute('data-bs-theme') == 'dark') {
-        document.documentElement.setAttribute('data-bs-theme','light')
+    //update the current page. The switch sets this device to Day or Night,
+    //unless the device is in Red, which the switch leaves alone.
+    const nextBs = document.documentElement.getAttribute('data-bs-theme') == 'dark' ? 'light' : 'dark';
+    if (window.sscTheme) {
+        if (window.sscTheme.mode() !== 'red') {
+            window.sscTheme.set(nextBs == 'light' ? 'day' : 'night');
+        }
     } else {
-        document.documentElement.setAttribute('data-bs-theme','dark')
+        document.documentElement.setAttribute('data-bs-theme', nextBs)
     }
-    window.sscTheme?.sync();
 
     //update the config
     try{

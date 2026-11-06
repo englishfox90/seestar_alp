@@ -1,53 +1,53 @@
 {% extends 'base.html' %}
 
 {% block header %}
-  <div class="container mt-3">
-    <p class="h1">{% block title %}Raspberry Pi System{% endblock %}</p>
+  <div class="page-hero">
+    <div>
+      <h1 class="page-title">{% block title %}Raspberry Pi System{% endblock %}</h1>
+      <p class="page-subtitle">Restart services or power off the Raspberry Pi</p>
+    </div>
   </div>
 {% endblock %}
 
 {% block content %}
   {% if platform != "raspberry_pi" %}
-    <div class="container mt-3">
-      <p>This page is not available for your platform</p>
+    <div class="panel-card">
+      <p class="mb-0">This page is not available for your platform</p>
     </div>
   {% elif display != None %}
-  <div class="container mt-3">
-    <p>{{ display }}</p>
-  </div>
+    <div class="panel-card">
+      <p class="mb-0">{{ display }}</p>
+    </div>
   {% else %}
-  <div class="col">
-    <div class="row">
-      <form method="post" action="{{ action }}">
-        <input type="hidden" name="command" value="restart_alp">
-        <button type="submit" class="btn btn-primary" style="width:250px">Restart SSC/Alp service</button>
-      </form>
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-md-6 col-lg-3">
+        <form method="post" action="{{ action }}">
+          <input type="hidden" name="command" value="restart_alp">
+          <button type="submit" class="btn btn-secondary w-100">Restart SSC/Alp service</button>
+        </form>
+      </div>
+      <div class="col-12 col-md-6 col-lg-3">
+        <form method="post" action="{{ action }}">
+          <input type="hidden" name="command" value="restart_indi">
+          <button type="submit" class="btn btn-secondary w-100">Restart INDI service</button>
+        </form>
+      </div>
+      <div class="col-12 col-md-6 col-lg-3">
+        <form method="post" action="{{ action }}">
+          <input type="hidden" name="command" value="reboot_rpi">
+          <button type="submit" class="btn btn-secondary w-100">Reboot Rpi</button>
+        </form>
+      </div>
+      <div class="col-12 col-md-6 col-lg-3">
+        <form method="post" action="{{ action }}">
+          <input type="hidden" name="command" value="shutdown_rpi">
+          <button type="submit" class="btn btn-secondary w-100">Shutdown Rpi</button>
+        </form>
+      </div>
     </div>
-    <p>
-    <div class="row">
-      <form method="post" action="{{ action }}">
-        <input type="hidden" name="command" value="restart_indi">
-        <button type="submit" class="btn btn-primary" style="width:250px">Restart INDI service</button>
-      </form>
-    </div>
-    <p>
-    <div class="row">
-      <form method="post" action="{{ action }}">
-        <input type="hidden" name="command" value="reboot_rpi">
-        <button type="submit" class="btn btn-primary" style="width:250px">Reboot Rpi</button>
-      </form>
-    </div>
-    <p>
-    <div class="row">
-      <form method="post" action="{{ action }}">
-        <input type="hidden" name="command" value="shutdown_rpi">
-        <button type="submit" class="btn btn-primary" style="width:250px">Shutdown Rpi</button>
-      </form>
-    </div>
-  </div>
   {% endif %}
 
-  <footer class="bg-body-tertiary text-center mt-3">
+  <footer class="footer-meta">
     Version: {{ version }} | Last updated: {{ now }}
   </footer>
 

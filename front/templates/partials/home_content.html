@@ -6,55 +6,40 @@
             {% set wifi_pct_raw = ((wifi_dbm + 90) * 100 / 40)|int %}
             {% set wifi_pct = (wifi_pct_raw if wifi_pct_raw > 0 else 0) if wifi_pct_raw < 100 else 100 %}
             {% if wifi_dbm >= -69 %}
-                <div class="stat-value text-success">
-                    {{ value }}
-                    <div class="metric-bar" style="--metric-value: {{ wifi_pct }}%;"></div>
-                </div>
+                {% set tone = "text-success" %}
             {% elif (wifi_dbm <= -70) and (wifi_dbm >= -79) %}
-                <div class="stat-value text-warning">
-                    {{ value }}
-                    <div class="metric-bar" style="--metric-value: {{ wifi_pct }}%;"></div>
-                </div>
+                {% set tone = "text-warning" %}
             {% else %}
-                <div class="stat-value text-danger">
-                    {{ value }}
-                    <div class="metric-bar" style="--metric-value: {{ wifi_pct }}%;"></div>
-                </div>
+                {% set tone = "text-danger" %}
             {% endif %}
+            <div class="stat-value {{ tone }}">
+                {{ value }}
+                <div class="metric-bar" style="--metric-value: {{ wifi_pct }}%;"></div>
+            </div>
         {% elif key == "Free Storage" %}
             {% if (value[:2]|int <= 5) or (value.split(" ")[1] != "GB") %}
-                <div class="stat-value text-danger">
-                    {{ value }}
-                    <div class="metric-bar" style="--metric-value: {{ value[:2]|int if value[:2]|int < 100 else 100 }}%;"></div>
-                </div>
+                {% set tone = "text-danger" %}
             {% elif (value[:2]|int <= 10) and (value[:2]|int >= 6) %}
-                <div class="stat-value text-warning">
-                    {{ value }}
-                    <div class="metric-bar" style="--metric-value: {{ value[:2]|int if value[:2]|int < 100 else 100 }}%;"></div>
-                </div>
+                {% set tone = "text-warning" %}
             {% else %}
-                <div class="stat-value text-success">
-                    {{ value }}
-                    <div class="metric-bar" style="--metric-value: {{ value[:2]|int if value[:2]|int < 100 else 100 }}%;"></div>
-                </div>
+                {% set tone = "text-success" %}
             {% endif %}
+            <div class="stat-value {{ tone }}">
+                {{ value }}
+                <div class="metric-bar" style="--metric-value: {{ value[:2]|int if value[:2]|int < 100 else 100 }}%;"></div>
+            </div>
         {% elif key == "Battery %" %}
             {% if value|int <= 5 %}
-                <div class="stat-value text-danger">
-                    {{ value }}
-                    <div class="metric-bar" style="--metric-value: {{ value|int if value|int < 100 else 100 }}%;"></div>
-                </div>
+                {% set tone = "text-danger" %}
             {% elif (value|int <= 15) and (value|int > 6) %}
-                <div class="stat-value text-warning">
-                    {{ value }}
-                    <div class="metric-bar" style="--metric-value: {{ value|int if value|int < 100 else 100 }}%;"></div>
-                </div>
+                {% set tone = "text-warning" %}
             {% else %}
-                <div class="stat-value text-success">
-                    {{ value }}
-                    <div class="metric-bar" style="--metric-value: {{ value|int if value|int < 100 else 100 }}%;"></div>
-                </div>
+                {% set tone = "text-success" %}
             {% endif %}
+            <div class="stat-value {{ tone }}">
+                {{ value }}
+                <div class="metric-bar" style="--metric-value: {{ value|int if value|int < 100 else 100 }}%;"></div>
+            </div>
         {% elif key == "SNR" %}
             <div class="stat-value">
                 {{ value }}

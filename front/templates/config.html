@@ -1,22 +1,17 @@
 {% extends 'base.html' %}
 
 {% block header %}
-<div class="container mt-3">
-	<p class="h1">{% block title %}SSC Config{% endblock %}</p>
+<div class="page-hero">
+	<div>
+		<h1 class="page-title">{% block title %}SSC Config{% endblock %}</h1>
+		<p class="page-subtitle">Settings from config.toml. Some only take effect after SSC restarts.</p>
+	</div>
 </div>
 {% endblock %}
 
 {% block content %}
 
-<div class="container mt-3">
-	<p>The following settings represent the settings in config.toml - NOTE that
-		some settings only take effect upon restarting SSC<br>
-		<small class="form-text text-muted">
-			Hover mouse over input sections to get descriptions of what the setting is
-			for and default values.
-		</small>
-	</p>
-</div>
+<p class="panel-muted">Hover over an input section to see what the setting is for and its default.</p>
 
 <form method="post" action="{{ root_path }}/config" class="bordered-form">
 	{{ config.render_config_html() }}
@@ -25,7 +20,7 @@
 	</div>
 </form>
 
-<footer class="bg-body-tertiary text-center mt-3">
+<footer class="footer-meta">
 	Version: {{ version }}
 </footer>
 {% endblock %}

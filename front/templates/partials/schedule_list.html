@@ -1,5 +1,5 @@
 {% for item in schedule.list %}
-  <div class="row border-bottom py-2 text-start position-relative {% if current_item['schedule_item_id'] == item['schedule_item_id'] %}bg-primary{% endif %}">
+  <div class="row g-2 border-bottom py-2 text-start position-relative {% if current_item['schedule_item_id'] == item['schedule_item_id'] %}schedule-row-current{% endif %}">
     <div class="col-auto d-flex align-items-center">
       <input type="checkbox" class="form-check-input"
              name="selected_items" value="{{ item['schedule_item_id'] }}">
@@ -10,7 +10,7 @@
           <div class="accordion-item">
             <div class="accordion-header" id="heading{{ item['schedule_item_id'] }}">
               <button
-                class="btn btn-link fw-bold text-white text-decoration-none text-start w-100"
+                class="btn btn-link fw-semibold text-decoration-none text-start w-100"
                 type="button"
                 data-bs-toggle="collapse"
                 data-bs-target="#collapse{{ item['schedule_item_id'] }}"
@@ -18,29 +18,29 @@
                 aria-controls="collapse{{ item['schedule_item_id'] }}">
                 <div class="row w-100">
                   <!-- First Column: Target Name -->
-                  <div class="col-2 align-self-start text-break">{{ item["params"]["target_name"] }}</div>
+                  <div class="col-12 col-md-2 align-self-start text-break">{{ item["params"]["target_name"] }}</div>
 
                   <!-- Second Column: RA and DEC -->
-                  <div class="col-2 align-self-start">
+                  <div class="col-6 col-md-2 align-self-start">
                     <p class="mt-0 mb-0">RA: {{ item["params"]["ra"] }}</p>
                     <p class="mt-0 mb-0">DEC: {{ item["params"]["dec"] }}</p>
                   </div>
 
                   <!-- Third Column: RA & DEC Numbers (if applicable) -->
                   {% if item["params"]["ra_num"] > 1 or item["params"]["dec_num"] > 1 %}
-                    <div class="col align-self-start">
+                    <div class="col-6 col-md align-self-start">
                       <p class="mt-0 mb-0">RA: {{ item["params"]["ra_num"] }}</p>
                       <p class="mt-0 mb-0">DEC: {{ item["params"]["dec_num"] }}</p>
                     </div>
-                    <div class="col align-self-start">{{ item["params"]["panel_overlap_percent"] }}</div>
+                    <div class="col-6 col-md align-self-start"><span class="d-md-none schedule-cell-label">Overlap</span> {{ item["params"]["panel_overlap_percent"] }}</div>
                   {% else %}
-                    <div class="col align-self-start">-</div>
-                    <div class="col align-self-start">-</div>
+                    <div class="col-6 col-md align-self-start">-</div>
+                    <div class="col-6 col-md align-self-start">-</div>
                   {% endif %}
 
                   <!-- Fourth Column: J2000 Checkbox -->
-                  <div class="col align-self-start">
-                    {% if item["params"]["is_j2000"] == True %}
+                  <div class="col-6 col-md align-self-start">
+                    <span class="d-md-none schedule-cell-label">J2000</span> {% if item["params"]["is_j2000"] == True %}
                       <div class="form-check-inline">
                         <input class="form-check-input" type="checkbox" id="isJ2000_{{ item['id'] }}" checked disabled>
                       </div>
@@ -52,17 +52,17 @@
                   </div>
 
                   <!-- Fifth Column: Panel Time -->
-                  <div class="col align-self-start">
-                    {{ seconds_to_hms(item["params"]["panel_time_sec"]) }} ea.
+                  <div class="col-6 col-md align-self-start">
+                    <span class="d-md-none schedule-cell-label">Exposure</span> {{ seconds_to_hms(item["params"]["panel_time_sec"]) }} ea.
                     <br><small class="text-muted" title="Acquisition only; excludes slewing, autofocus, and retries">Total: {{ seconds_to_hms(item["params"]["panel_time_sec"] * mosaic_panel_count(item["params"])) }}</small>
                   </div>
 
                   <!-- Sixth Column: Gain -->
-                  <div class="col align-self-start">{{ item["params"]["gain"] }}</div>
+                  <div class="col-6 col-md align-self-start"><span class="d-md-none schedule-cell-label">Gain</span> {{ item["params"]["gain"] }}</div>
 
                   <!-- Seventh Column: LP Filter Checkbox -->
-                  <div class="col align-self-start">
-                    {% if item["params"]["is_use_lp_filter"] == True %}
+                  <div class="col-6 col-md align-self-start">
+                    <span class="d-md-none schedule-cell-label">LP filter</span> {% if item["params"]["is_use_lp_filter"] == True %}
                       <div class="form-check-inline">
                         <input class="form-check-input" type="checkbox" id="isUseLPFilter_{{ item['id'] }}" checked disabled>
                       </div>
@@ -74,8 +74,8 @@
                   </div>
 
                   <!-- Eighth Column: Auto Focus Checkbox -->
-                  <div class="col align-self-start">
-                    {% if item["params"]["is_use_autofocus"] == True %}
+                  <div class="col-6 col-md align-self-start">
+                    <span class="d-md-none schedule-cell-label">Autofocus</span> {% if item["params"]["is_use_autofocus"] == True %}
                       <div class="form-check-inline">
                         <input class="form-check-input" type="checkbox" id="isUseAutoFocus_{{ item['id'] }}" checked disabled>
                       </div>
@@ -87,7 +87,7 @@
                   </div>
 
                   <!-- Ninth Column: Selected Panels -->
-                  <div class="col-2 align-self-start text-break">{{ item["params"]["selected_panels"] }}</div>
+                  <div class="col-12 col-md-2 align-self-start text-break"><span class="d-md-none schedule-cell-label">Selected panels</span> {{ item["params"]["selected_panels"] }}</div>
                 </div>
               </button>
             </div>
@@ -142,29 +142,29 @@
           <!-- Not the current item, display static content instead -->
                 <div class="row w-100">
                   <!-- First Column: Target Name -->
-                  <div class="col-2 align-self-start text-break">{{ item["params"]["target_name"] }}</div>
+                  <div class="col-12 col-md-2 align-self-start text-break">{{ item["params"]["target_name"] }}</div>
 
                   <!-- Second Column: RA and DEC -->
-                  <div class="col-2 align-self-start">
+                  <div class="col-6 col-md-2 align-self-start">
                     <p class="mt-0 mb-0">RA: {{ item["params"]["ra"] }}</p>
                     <p class="mt-0 mb-0">DEC: {{ item["params"]["dec"] }}</p>
                   </div>
 
                   <!-- Third Column: RA & DEC Numbers (if applicable) -->
                   {% if item["params"]["ra_num"] > 1 or item["params"]["dec_num"] > 1 %}
-                    <div class="col align-self-start">
+                    <div class="col-6 col-md align-self-start">
                       <p class="mt-0 mb-0">RA: {{ item["params"]["ra_num"] }}</p>
                       <p class="mt-0 mb-0">DEC: {{ item["params"]["dec_num"] }}</p>
                     </div>
-                    <div class="col align-self-start">{{ item["params"]["panel_overlap_percent"] }}</div>
+                    <div class="col-6 col-md align-self-start"><span class="d-md-none schedule-cell-label">Overlap</span> {{ item["params"]["panel_overlap_percent"] }}</div>
                   {% else %}
-                    <div class="col align-self-start">-</div>
-                    <div class="col align-self-start">-</div>
+                    <div class="col-6 col-md align-self-start">-</div>
+                    <div class="col-6 col-md align-self-start">-</div>
                   {% endif %}
 
                   <!-- Fourth Column: J2000 Checkbox -->
-                  <div class="col align-self-start">
-                    {% if item["params"]["is_j2000"] == True %}
+                  <div class="col-6 col-md align-self-start">
+                    <span class="d-md-none schedule-cell-label">J2000</span> {% if item["params"]["is_j2000"] == True %}
                       <div class="form-check-inline">
                         <input class="form-check-input" type="checkbox" id="isJ2000_{{ item['id'] }}" checked disabled>
                       </div>
@@ -176,17 +176,17 @@
                   </div>
 
                   <!-- Fifth Column: Panel Time -->
-                  <div class="col align-self-start">
-                    {{ seconds_to_hms(item["params"]["panel_time_sec"]) }} ea.
+                  <div class="col-6 col-md align-self-start">
+                    <span class="d-md-none schedule-cell-label">Exposure</span> {{ seconds_to_hms(item["params"]["panel_time_sec"]) }} ea.
                     <br><small class="text-muted" title="Acquisition only; excludes slewing, autofocus, and retries">Total: {{ seconds_to_hms(item["params"]["panel_time_sec"] * mosaic_panel_count(item["params"])) }}</small>
                   </div>
 
                   <!-- Sixth Column: Gain -->
-                  <div class="col align-self-start">{{ item["params"]["gain"] }}</div>
+                  <div class="col-6 col-md align-self-start"><span class="d-md-none schedule-cell-label">Gain</span> {{ item["params"]["gain"] }}</div>
 
                   <!-- Seventh Column: LP Filter Checkbox -->
-                  <div class="col align-self-start">
-                    {% if item["params"]["is_use_lp_filter"] == True %}
+                  <div class="col-6 col-md align-self-start">
+                    <span class="d-md-none schedule-cell-label">LP filter</span> {% if item["params"]["is_use_lp_filter"] == True %}
                       <div class="form-check-inline">
                         <input class="form-check-input" type="checkbox" id="isUseLPFilter_{{ item['id'] }}" checked disabled>
                       </div>
@@ -198,8 +198,8 @@
                   </div>
 
                   <!-- Eighth Column: Auto Focus Checkbox -->
-                  <div class="col align-self-start">
-                    {% if item["params"]["is_use_autofocus"] == True %}
+                  <div class="col-6 col-md align-self-start">
+                    <span class="d-md-none schedule-cell-label">Autofocus</span> {% if item["params"]["is_use_autofocus"] == True %}
                       <div class="form-check-inline">
                         <input class="form-check-input" type="checkbox" id="isUseAutoFocus_{{ item['id'] }}" checked disabled>
                       </div>
@@ -211,7 +211,7 @@
                   </div>
 
                   <!-- Ninth Column: Selected Panels -->
-                  <div class="col-2 align-self-start text-break">{{ item["params"]["selected_panels"] }}</div>
+                  <div class="col-12 col-md-2 align-self-start text-break"><span class="d-md-none schedule-cell-label">Selected panels</span> {{ item["params"]["selected_panels"] }}</div>
           </div>
         {% endif %}
       {% elif item["action"] == 'start_framed_mosaic' %}
@@ -219,15 +219,15 @@
           <div class="accordion-item">
             <div class="accordion-header" id="heading{{ item['schedule_item_id'] }}">
               <button
-                class="btn btn-link fw-bold text-white text-decoration-none text-start w-100"
+                class="btn btn-link fw-semibold text-decoration-none text-start w-100"
                 type="button"
                 data-bs-toggle="collapse"
                 data-bs-target="#collapse{{ item['schedule_item_id'] }}"
                 aria-expanded="{% if open_accordion_id == 'collapse' ~ item['schedule_item_id'] %}true{% else %}false{% endif %}"
                 aria-controls="collapse{{ item['schedule_item_id'] }}">
                 <div class="row w-100">
-                  <div class="col-2 align-self-start text-break">{{ item["params"]["target_name"] }}</div>
-                  <div class="col-2 align-self-start">
+                  <div class="col-12 col-md-2 align-self-start text-break">{{ item["params"]["target_name"] }}</div>
+                  <div class="col-6 col-md-2 align-self-start">
                     <p class="mt-0 mb-0">RA: {{ item["params"]["ra"] }}</p>
                     <p class="mt-0 mb-0">DEC: {{ item["params"]["dec"] }}</p>
                   </div>
@@ -238,10 +238,10 @@
                        cells, matching start_mosaic's two cells in this same
                        position (RA/DEC panels, overlap%), to keep the total
                        column count aligned with the shared header row. -->
-                  <div class="col align-self-start">Scale: {{ item["params"]["mosaic_scale"] }}x</div>
-                  <div class="col align-self-start">Angle: {{ item["params"]["mosaic_angle"] }}&deg;</div>
-                  <div class="col align-self-start">
-                    {% if item["params"]["is_j2000"] == True %}
+                  <div class="col-6 col-md align-self-start">Scale: {{ item["params"]["mosaic_scale"] }}x</div>
+                  <div class="col-6 col-md align-self-start">Angle: {{ item["params"]["mosaic_angle"] }}&deg;</div>
+                  <div class="col-6 col-md align-self-start">
+                    <span class="d-md-none schedule-cell-label">J2000</span> {% if item["params"]["is_j2000"] == True %}
                       <div class="form-check-inline">
                         <input class="form-check-input" type="checkbox" id="isJ2000_{{ item['id'] }}" checked disabled>
                       </div>
@@ -251,10 +251,10 @@
                       </div>
                     {% endif %}
                   </div>
-                  <div class="col align-self-start">{{ seconds_to_hms(item["params"]["panel_time_sec"]) }}</div>
-                  <div class="col align-self-start">{{ item["params"]["gain"] }}</div>
-                  <div class="col align-self-start">
-                    {% if item["params"]["is_use_lp_filter"] == True %}
+                  <div class="col-6 col-md align-self-start"><span class="d-md-none schedule-cell-label">Exposure</span> {{ seconds_to_hms(item["params"]["panel_time_sec"]) }}</div>
+                  <div class="col-6 col-md align-self-start"><span class="d-md-none schedule-cell-label">Gain</span> {{ item["params"]["gain"] }}</div>
+                  <div class="col-6 col-md align-self-start">
+                    <span class="d-md-none schedule-cell-label">LP filter</span> {% if item["params"]["is_use_lp_filter"] == True %}
                       <div class="form-check-inline">
                         <input class="form-check-input" type="checkbox" id="isUseLPFilter_{{ item['id'] }}" checked disabled>
                       </div>
@@ -264,8 +264,8 @@
                       </div>
                     {% endif %}
                   </div>
-                  <div class="col align-self-start">
-                    {% if item["params"]["is_use_autofocus"] == True %}
+                  <div class="col-6 col-md align-self-start">
+                    <span class="d-md-none schedule-cell-label">Autofocus</span> {% if item["params"]["is_use_autofocus"] == True %}
                       <div class="form-check-inline">
                         <input class="form-check-input" type="checkbox" id="isUseAutoFocus_{{ item['id'] }}" checked disabled>
                       </div>
@@ -275,7 +275,7 @@
                       </div>
                     {% endif %}
                   </div>
-                  <div class="col-2 align-self-start text-break">-</div>
+                  <div class="col-12 col-md-2 align-self-start text-break"><span class="d-md-none schedule-cell-label">Selected panels</span> -</div>
                 </div>
               </button>
             </div>
@@ -303,8 +303,8 @@
           </div>
         {% else %}
           <div class="row w-100">
-            <div class="col-2 align-self-start text-break">{{ item["params"]["target_name"] }}</div>
-            <div class="col-2 align-self-start">
+            <div class="col-12 col-md-2 align-self-start text-break">{{ item["params"]["target_name"] }}</div>
+            <div class="col-6 col-md-2 align-self-start">
               <p class="mt-0 mb-0">RA: {{ item["params"]["ra"] }}</p>
               <p class="mt-0 mb-0">DEC: {{ item["params"]["dec"] }}</p>
             </div>
@@ -315,10 +315,10 @@
                  matching start_mosaic's two cells in this same position
                  (RA/DEC panels, overlap%), to keep the total column count
                  aligned with the shared header row. -->
-            <div class="col align-self-start">Scale: {{ item["params"]["mosaic_scale"] }}x</div>
-            <div class="col align-self-start">Angle: {{ item["params"]["mosaic_angle"] }}&deg;</div>
-            <div class="col align-self-start">
-              {% if item["params"]["is_j2000"] == True %}
+            <div class="col-6 col-md align-self-start">Scale: {{ item["params"]["mosaic_scale"] }}x</div>
+            <div class="col-6 col-md align-self-start">Angle: {{ item["params"]["mosaic_angle"] }}&deg;</div>
+            <div class="col-6 col-md align-self-start">
+              <span class="d-md-none schedule-cell-label">J2000</span> {% if item["params"]["is_j2000"] == True %}
                 <div class="form-check-inline">
                   <input class="form-check-input" type="checkbox" id="isJ2000_{{ item['id'] }}" checked disabled>
                 </div>
@@ -328,10 +328,10 @@
                 </div>
               {% endif %}
             </div>
-            <div class="col align-self-start">{{ seconds_to_hms(item["params"]["panel_time_sec"]) }}</div>
-            <div class="col align-self-start">{{ item["params"]["gain"] }}</div>
-            <div class="col align-self-start">
-              {% if item["params"]["is_use_lp_filter"] == True %}
+            <div class="col-6 col-md align-self-start"><span class="d-md-none schedule-cell-label">Exposure</span> {{ seconds_to_hms(item["params"]["panel_time_sec"]) }}</div>
+            <div class="col-6 col-md align-self-start"><span class="d-md-none schedule-cell-label">Gain</span> {{ item["params"]["gain"] }}</div>
+            <div class="col-6 col-md align-self-start">
+              <span class="d-md-none schedule-cell-label">LP filter</span> {% if item["params"]["is_use_lp_filter"] == True %}
                 <div class="form-check-inline">
                   <input class="form-check-input" type="checkbox" id="isUseLPFilter_{{ item['id'] }}" checked disabled>
                 </div>
@@ -341,8 +341,8 @@
                 </div>
               {% endif %}
             </div>
-            <div class="col align-self-start">
-              {% if item["params"]["is_use_autofocus"] == True %}
+            <div class="col-6 col-md align-self-start">
+              <span class="d-md-none schedule-cell-label">Autofocus</span> {% if item["params"]["is_use_autofocus"] == True %}
                 <div class="form-check-inline">
                   <input class="form-check-input" type="checkbox" id="isUseAutoFocus_{{ item['id'] }}" checked disabled>
                 </div>
@@ -352,7 +352,7 @@
                 </div>
               {% endif %}
             </div>
-            <div class="col-2 align-self-start text-break">-</div>
+            <div class="col-12 col-md-2 align-self-start text-break"><span class="d-md-none schedule-cell-label">Selected panels</span> -</div>
           </div>
         {% endif %}
       {% else %}
@@ -377,13 +377,13 @@
           {% elif item["action"] == 'action_set_exposure' %}
             {% set exp_ms = item["params"]["exp"] %}
             {% set exp_s = exp_ms / 1000 %}
-            Exposure: {{ exp_s|int if exp_s == exp_s|int else exp_int }}s
+            Exposure: {{ exp_s|int if exp_s == exp_s|int else exp_s }}s
           {% elif item["action"] == 'start_up_sequence' %}
-            <div class="col-2 align-self-start">Startup</div>
+            <div class="col-12 col-md-2 align-self-start">Startup</div>
             <div class="col align-self-start">
-              <p class="mt-0 mb-0">polar_align: {{ item["params"]["3ppa"] }}</p>
-              <p class="mt-0 mb-0">auto_focus: {{ item["params"]["auto_focus"] }}</p>
-              <p class="mt-0 mb-0">dark_frames: {{ item["params"]["dark_frames"] }}</p>
+              <p class="mt-0 mb-0">Polar align: {{ item["params"]["3ppa"] }}</p>
+              <p class="mt-0 mb-0">Autofocus: {{ item["params"]["auto_focus"] }}</p>
+              <p class="mt-0 mb-0">Dark frames: {{ item["params"]["dark_frames"] }}</p>
             </div>
           {% elif item["action"] == 'adjust_focus' %}
             Adjust Focus: {{ item["params"]["steps"] }} steps

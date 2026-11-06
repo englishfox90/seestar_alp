@@ -1,0 +1,10 @@
+{% import 'ssc/ui.html' as ui %}
+{% set tones = {"text-success": "ok", "text-warning": "attention", "text-danger": "danger"} %}
+{% if rows %}
+  {% for item in rows %}
+  {{ ui.row(item.key, item.value, tones.get(item.tone, "")) }}
+  {% if item.bar is not none %}{{ ui.bar(item.bar) }}{% endif %}
+  {% endfor %}
+{% else %}
+  {{ ui.notice("attention", "Scope is offline") }}
+{% endif %}

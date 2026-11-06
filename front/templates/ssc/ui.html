@@ -1,0 +1,110 @@
+{# SSC components. Rules: front/DESIGN.md sections 6 and 9. Text is escaped here,
+   because this template environment does not autoescape. #}
+
+{% macro icon(name, size=24) -%}
+<svg class="ssc-icon" aria-hidden="true" width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+{%- if name == "tonight" %}<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"/>
+{%- elif name == "targets" %}<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/>
+{%- elif name == "live" %}<rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M10 9.5v5l4-2.5-4-2.5Z"/>
+{%- elif name == "roof" %}<path d="M3.5 12 12 4.5l8.5 7.5M6.5 10v9.5h11V10"/>
+{%- elif name == "more" %}<circle cx="5.5" cy="12" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="18.5" cy="12" r="1.25"/>
+{%- elif name == "warning" %}<path d="M12 4 2.8 20h18.4L12 4ZM12 10v4.5M12 17.5v.01"/>
+{%- elif name == "info" %}<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.01"/>
+{%- elif name == "check" %}<path d="m5 12.5 4.5 4.5L19 7.5"/>
+{%- elif name == "chevron" %}<path d="m9.5 5.5 6.5 6.5-6.5 6.5"/>
+{%- elif name == "down" %}<path d="m5.5 9.5 6.5 6.5 6.5-6.5"/>
+{%- elif name == "stop" %}<rect x="6" y="6" width="12" height="12" rx="1.5"/>
+{%- endif %}</svg>
+{%- endmacro %}
+
+{# One status: an icon or dot and a word, so it reads without colour. #}
+{% macro status(tone, text) -%}
+<span class="ssc-status" data-tone="{{ tone }}">
+  {%- if tone in ("danger", "attention") %}{{ icon("warning", 16) }}{% else %}<span class="ssc-status__dot"></span>{% endif -%}
+  <span>{{ text|e }}</span>
+</span>
+{%- endmacro %}
+
+{% macro button(label, kind="secondary", type="button", attrs="") -%}
+<button class="ssc-button" data-kind="{{ kind }}" type="{{ type }}" {{ attrs }}>{{ label|e }}</button>
+{%- endmacro %}
+
+{% macro link_action(label, href) -%}
+<a class="ssc-button" data-kind="plain" href="{{ href|e }}">{{ label|e }}</a>
+{%- endmacro %}
+
+{% macro stop_action(action) -%}
+{% if action.stopping %}
+<button class="ssc-button ssc-stop" type="button" disabled>Stopping&hellip;</button>
+<p class="ssc-footnote">Stop requested {{ action.since|e }}, waiting for the scope.</p>
+{% else %}
+<button class="ssc-button ssc-stop" type="button" data-open-sheet="t-stop-sheet">Stop &amp; park</button>
+{% endif %}
+{%- endmacro %}
+
+{% macro row(label, value, tone="") -%}
+<div class="ssc-row"{% if tone %} data-tone="{{ tone }}"{% endif %}>
+  <span class="ssc-row__label">{{ label|e }}</span>
+  <span class="ssc-row__value">{% if tone in ("danger", "attention") %}{{ icon("warning", 16) }} {% endif %}{{ value|e }}</span>
+</div>
+{%- endmacro %}
+
+{% macro metric(item) -%}
+<div class="ssc-metric">
+  <span class="ssc-metric__label">{{ item.label|e }}</span>
+  <span class="ssc-metric__value">{{ item.value|e }}{% if item.unit %} <span class="ssc-metric__unit">{{ item.unit|e }}</span>{% endif %}</span>
+  <span class="ssc-metric__hint">{{ item.hint|e }}</span>
+</div>
+{%- endmacro %}
+
+{% macro notice(tone, text) -%}
+<p class="ssc-notice" data-tone="{{ tone }}">{{ icon("warning" if tone == "attention" else "info", 20) }}<span>{{ text|e }}</span></p>
+{%- endmacro %}
+
+{% macro band(item, href) -%}
+<a class="ssc-band" href="{{ href|e }}">
+  {{ icon("warning", 24) }}
+  <span class="ssc-band__text">
+    <span class="ssc-band__headline">{{ item.headline|e }}</span>
+    {% if item.line %}<span class="ssc-band__line">{{ item.line|e }}</span>{% endif %}
+  </span>
+  {{ icon("chevron", 20) }}
+</a>
+{%- endmacro %}
+
+{% macro bar(value) -%}
+<div class="ssc-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"{% if value is not none %} aria-valuenow="{{ value }}"{% endif %}>
+  {%- if value is not none %}<span class="ssc-bar__fill" style="--value: {{ value }}%"></span>{% endif -%}
+</div>
+{%- endmacro %}
+
+{% macro night_line(data) -%}
+<div class="ssc-night" role="img" aria-label="{{ data.label|e }}">
+{% if data.available %}
+  <div class="ssc-night__track">
+    {% if data.dark %}<span class="ssc-night__dark" style="--start: {{ data.dark.start }}%; --end: {{ data.dark.end }}%"></span>{% endif %}
+    {% for block in data.blocks %}<span class="ssc-night__block" data-state="{{ block.state }}" style="--start: {{ block.start }}%; --end: {{ block.end }}%"></span>{% endfor %}
+    {% if data.now is not none %}<span class="ssc-night__now" style="--at: {{ data.now }}%"></span>{% endif %}
+  </div>
+  {% if data.blocks|selectattr("tier")|list %}
+  <div class="ssc-night__labels">
+    {% for block in data.blocks if block.tier %}<span class="ssc-night__label" data-tier="{{ block.tier }}" style="--start: {{ block.start }}%; --end: {{ block.end }}%">{{ block.name|e }}</span>{% endfor %}
+  </div>
+  {% endif %}
+  <div class="ssc-night__ends"><span>{{ data.sunset|e }}</span><span>{{ data.sunrise|e }}</span></div>
+{% else %}
+  <div class="ssc-night__track"></div>
+  <p class="ssc-footnote">{{ data.label|e }}</p>
+{% endif %}
+</div>
+{%- endmacro %}
+
+{# A native dialog. It sits outside polled regions, so a poll can't close it. #}
+{% macro sheet(id, title) -%}
+<dialog class="ssc-sheet" id="{{ id }}" aria-labelledby="{{ id }}-title">
+  <div class="ssc-sheet__body">
+    <h2 class="ssc-sheet__title" id="{{ id }}-title">{{ title|e }}</h2>
+    {{ caller() }}
+  </div>
+</dialog>
+{%- endmacro %}

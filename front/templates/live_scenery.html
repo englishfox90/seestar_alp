@@ -3,7 +3,6 @@
 {% block header %}
   <div class="page-hero">
     <div>
-      <p class="page-kicker">Capture</p>
       <h1 class="page-title">{% block title %}Live View - Scenery{% endblock %}</h1>
       <p class="page-subtitle">{{ telescope["name"] }} ({{ telescope["ip_address"] }})</p>
     </div>
@@ -18,7 +17,7 @@
 
     <aside class="live-sidebar">
       <div class="live-side-card">
-        <div class="live-video-heading h3 mb-0">
+        <h2 class="live-video-heading mb-0">
           <span>Video</span>
           <button type="button"
                   id="liveRotateButton"
@@ -30,7 +29,7 @@
               <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 7.083.5.5 0 1 1 .908.418A6 6 0 1 1 8 2V.5a.5.5 0 0 1 .854-.354l2 2a.5.5 0 0 1 0 .708l-2 2A.5.5 0 0 1 8 4.5z"/>
             </svg>
           </button>
-        </div>
+        </h2>
       </div>
 
       <div class="live-side-card">

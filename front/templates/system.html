@@ -1,18 +1,21 @@
 {% extends 'base.html' %}
 
 {% block header %}
-    <div class="container mt-3">
-        <p class="h1">{% block title %}System{% endblock %}</p>
+    <div class="page-hero">
+        <div>
+            <h1 class="page-title">{% block title %}System{% endblock %}</h1>
+            <p class="page-subtitle">Background threads and when they last ran</p>
+        </div>
     </div>
 {% endblock %}
 
 {% block content %}
 
-    <div class="container mt-3">
-        <div class="row fw-bold border-bottom py-1 text-start">
+    <div class="panel-card">
+        <div class="row border-bottom py-1 text-start panel-muted">
             <div class="col">Thread</div>
-            <div class="col">Running?</div>
-            <div class="col">Last Loop</div>
+            <div class="col">Running</div>
+            <div class="col">Last loop</div>
         </div>
         {% for thread in threads %}
             <div class="row border-bottom py-2 text-start">
@@ -23,7 +26,7 @@
         {% endfor %}
     </div>
 
-    <footer class="bg-body-tertiary text-center mt-3">
+    <footer class="footer-meta">
         Version: {{ version }} | Last updated: {{ now }}
     </footer>
 

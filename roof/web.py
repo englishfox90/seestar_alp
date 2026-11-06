@@ -5,8 +5,9 @@ from urllib.parse import urlparse
 import falcon
 
 from roof import config as roof_config
-from roof import dashboard, focus, schedule_tools
+from roof import dashboard, focus, schedule_tools, tonight
 from roof.automation import get_automation
+from roof.sun import sun_altitude_deg
 
 
 def _front():
@@ -85,6 +86,19 @@ class RoofBadge:
         )
 
 
+class RoofSun:
+    """Sun altitude for the browser's Auto theme. Reads config only; never touches the scope."""
+
+    @staticmethod
+    def on_get(req, resp):
+        settings = roof_config.load()
+        resp.set_header("Cache-Control", "no-store")
+        resp.media = {
+            "altitude_deg": round(sun_altitude_deg(settings.lat, settings.lon), 2),
+            "known_location": not (settings.lat == 0 and settings.lon == 0),
+        }
+
+
 class _Action:
     redirect_to = "roof"
 
@@ -95,7 +109,11 @@ class _Action:
         front = _front()
         if message:
             front.flash(resp, message)
-        front.redirect(f"/{telescope_id}/{cls.redirect_to}")
+        front.redirect(f"/{telescope_id}/{cls.destination(req)}")
+
+    @classmethod
+    def destination(cls, req):
+        return cls.redirect_to
 
 
 class RoofSelect(_Action):
@@ -126,10 +144,21 @@ class RoofStart(_Action):
 
 
 class RoofStop(_Action):
+    """Tonight sends return_to=dashboard and shows the stop in its own state."""
+
     @staticmethod
-    def act(req):
+    def _from_tonight(req):
+        return _form(req).get("return_to") == "dashboard"
+
+    @classmethod
+    def destination(cls, req):
+        return "dashboard" if cls._from_tonight(req) else cls.redirect_to
+
+    @classmethod
+    def act(cls, req):
         get_automation().request("stop")
-        return "Stop + Park requested; see the log below."
+        tonight.note_stop_requested()
+        return None if cls._from_tonight(req) else "Stop + Park requested; see the log below."
 
 
 class RoofCapture(_Action):
@@ -176,7 +205,7 @@ class DefaultDeviceMiddleware:
 
 def install(app):
     """Add the routes and start the automation thread."""
-    from roof import queue_web  # it builds on this module's page helpers
+    from roof import night_web, queue_web  # queue_web builds on this module's page helpers
 
     app.add_middleware(DefaultDeviceMiddleware(app._router))
     pages = {
@@ -188,11 +217,14 @@ def install(app):
         "roof/stop": RoofStop,
         "roof/capture": RoofCapture,
         **dashboard.PAGES,
+        **tonight.PAGES,
         **queue_web.PAGES,
+        **night_web.PAGES,
     }
     for path, resource in pages.items():
         app.add_route(f"/{path}", resource())
         app.add_route(f"/{{telescope_id:int}}/{path}", resource())
     app.add_route("/roof/badge", RoofBadge())
+    app.add_route("/roof/sun", RoofSun())
     focus.listen()
     get_automation().start()

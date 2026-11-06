@@ -1,6 +1,7 @@
 """The /dashboard page: what it shows, and when it asks the scope for an image."""
 
 import json
+import re
 from types import SimpleNamespace
 
 import falcon
@@ -372,23 +373,29 @@ def client(monkeypatch):
     return falcon.testing.TestClient(app)
 
 
-def test_page_polls_its_fragments_and_is_read_only(client, monkeypatch):
+def _page(client, monkeypatch):
     monkeypatch.setattr(front_app, "get_context", lambda *a: {"root": "/1", "telescope": {}, "telescopes": []})
-    html = client.simulate_get("/1/dashboard").text
-    assert 'hx-get="/1/dashboard/live"' in html
-    assert 'hx-get="/1/dashboard/device"' in html
-    assert 'hx-get="/1/dashboard/tracker"' in html
-    assert html.index("dash-tracker") < html.index("Latest image")
-    assert "every 15s [!document.hidden]" in html
+    return client.simulate_get("/1/dashboard").content.decode()
+
+
+def test_page_polls_its_state_and_only_posts_stop(client, monkeypatch):
+    html = _page(client, monkeypatch)
+    assert 'hx-get="/1/tonight/state"' in html
+    assert 'hx-get="/1/tonight/focus"' in html
+    assert 'hx-get="/1/tonight/hardware"' in html
+    assert "every 5s [!document.hidden]" in html
     assert 'hx-sync="this:drop"' in html
-    assert 'id="dash-session"' in html
-    assert html.index("Latest image") < html.index('id="dash-session"')
-    assert 'method="post"' not in html.split('id="dash-live"')[1]
+    assert "no-htmx-fx" in html
+    # Read-only apart from one route: Stop & park.
+    assert re.findall(r'<form[^>]*method="post"[^>]*action="([^"]+)"', html) == ["/1/roof/stop"]
+    assert html.lower().count("<form") == 1
+    assert "hx-post" not in html
 
 
-def test_nav_links_to_the_dashboard():
+def test_nav_calls_the_dashboard_route_tonight():
     html = front_app.fetch_template("nav.html").render(root="/1", telescope={})
-    assert 'href="/1/dashboard"' in html
+    assert '<a class="nav-link" href="/1/dashboard">Tonight</a>' in html
+    assert "Dashboard" not in html
 
 
 def test_live_fragment_shows_the_session(client):
@@ -805,8 +812,45 @@ def test_pier_endpoints(client, sentinel, monkeypatch):
     assert full.content == sentinel.content
 
 
-def test_dashboard_page_has_the_pier_panel_hidden_until_an_image_loads(client, monkeypatch):
-    monkeypatch.setattr(front_app, "get_context", lambda *a: {"root": "/1", "telescope": {}, "telescopes": []})
-    html = client.simulate_get("/1/dashboard").text
-    assert 'id="dash-pier" hidden' in html
-    assert html.index("Latest image") < html.index('id="dash-pier"') < html.index('id="dash-session"')
+def test_no_image_means_no_panel(client, monkeypatch):
+    html = _page(client, monkeypatch)
+    assert 'id="t-stack" data-name="stack" data-role="thumb" hidden' in html
+    assert 'id="t-pier" data-name="pier" data-role="thumb" hidden' in html
+
+
+def test_image_fetch_follows_the_loop_when_the_devices_view_is_stale(client, monkeypatch):
+    # Tonight doesn't poll get_view_state, so the device's copy stays empty.
+    imager = FakeImager({})
+    status = {**STATUS, "view_state": "working", "view_stage": "Stack", "view_target": "IC 1805", "stacked": 3, "dropped": 0}
+    automation = SimpleNamespace(status=lambda: status)
+    monkeypatch.setattr(dashboard, "get_automation", lambda: automation)
+    monkeypatch.setattr(dashboard, "_imager", lambda telescope_id: imager)
+    monkeypatch.setattr(dashboard.roof_config, "load", lambda: SimpleNamespace(device_num=1))
+    client.simulate_get("/1/dashboard/image.json")
+    assert imager.requests == 1
+    client.simulate_get("/1/dashboard/image.json")
+    assert imager.requests == 1, "the existing rate limit still applies"
+
+
+@pytest.mark.parametrize(
+    "status",
+    [{"stacked": 3, "loop_stale": True}, {"view_state": "working"}],
+)
+def test_cached_view_gives_way_when_the_loop_cannot_say(monkeypatch, status):
+    monkeypatch.setattr(dashboard.roof_config, "load", lambda: SimpleNamespace(device_num=1))
+    assert dashboard.cached_view(1, status) is None
+
+
+def test_cached_view_is_only_for_the_automations_scope(monkeypatch):
+    monkeypatch.setattr(dashboard.roof_config, "load", lambda: SimpleNamespace(device_num=1))
+    assert dashboard.cached_view(2, {"stacked": 3}) is None
+
+
+def test_image_times_come_from_the_observatory(client, monkeypatch):
+    import pytz
+
+    monkeypatch.setattr(front_app, "site_timezone", lambda: pytz.timezone("Asia/Tokyo"))
+    # 2026-11-05 13:14 UTC is 22:14 in Tokyo.
+    assert dashboard.site_clock(1793970840) == "22:14"
+    image = {"frame": 1, "target": "x", "stacked": 1, "captured_at": 1793970840, "snr": None}
+    assert dashboard._image_meta(image)["captured_clock"] == "22:14"

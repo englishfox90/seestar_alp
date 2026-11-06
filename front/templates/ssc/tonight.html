@@ -1,0 +1,77 @@
+{% extends 'ssc/shell.html' %}
+{% import 'ssc/tonight_parts.html' as parts %}
+{% import 'ssc/ui.html' as ui %}
+
+{% block title %}Tonight{% endblock %}
+
+{% block content %}
+<main class="ssc-page t-page" id="tonight" data-state="{{ state.key }}" data-hero="{{ state.hero }}" data-dim="{{ "1" if state.dim else "0" }}"
+      data-root="{{ root_path }}{{ page_root }}">
+  <header class="t-head">
+    <h1 class="ssc-title">Tonight</h1>
+    <p class="t-updated" id="t-updated" role="status" data-tone="neutral"><span id="t-updated-word">Updated</span> <span id="t-updated-time">{{ updated|e }}</span></p>
+  </header>
+
+  {% for message in ((flashed_messages or []) + (messages or []))|unique %}{{ ui.notice("neutral", message) }}{% endfor %}
+  <div id="t-auth" class="t-stack no-htmx-fx" hx-get="{{ root_path }}{{ auth_url }}" hx-trigger="every 15s [!document.hidden]" hx-sync="this:drop" hx-swap="innerHTML">{% if needs_auth_warning %}{% include 'ssc/auth_notice.html' %}{% endif %}</div>
+  <div id="t-bands" class="t-stack no-htmx-fx">{{ parts.bands(state, root)|trim }}</div>
+
+  <div class="t-main">
+    <section class="t-images" id="t-images" data-layout="{{ first_layout.layout }}" aria-label="Images">
+      <figure class="t-image" id="t-stack" data-name="stack" data-role="{{ "front" if first_layout.front == "stack" else "thumb" }}"{% if not images.stack %} hidden{% endif %}>
+        <a class="t-frame" href="{{ root_path }}{{ page_root }}/image.jpg?full=true" target="_blank" rel="noopener" aria-label="Open the stack at full size">
+          {% if images.stack %}<img src="{{ root_path }}{{ page_root }}/image.jpg?v={{ images.stack.frame }}" alt="Latest stacked image">{% endif %}
+        </a>
+        <figcaption class="t-caption">
+          <span id="t-stack-caption" role="status"></span>
+          <a class="t-save" href="{{ root_path }}{{ page_root }}/image.jpg?full=true">Save full size</a>
+        </figcaption>
+        <button class="t-swap" type="button" data-swap="stack">Show stack</button>
+      </figure>
+      <figure class="t-image" id="t-pier" data-name="pier" data-role="{{ "front" if first_layout.front == "pier" else "thumb" }}"{% if not images.pier %} hidden{% endif %}>
+        <a class="t-frame" href="{{ root_path }}{{ page_root }}/pier.jpg?full=true" target="_blank" rel="noopener" aria-label="Open the pier camera at full size">
+          {% if images.pier %}<img src="{{ root_path }}{{ page_root }}/pier.jpg?v={{ images.pier.frame|e }}" alt="Latest pier camera image from PFR Sentinel">{% endif %}
+        </a>
+        <figcaption class="t-caption"><span id="t-pier-caption" role="status"></span></figcaption>
+        <button class="t-swap" type="button" data-swap="pier">Show pier</button>
+      </figure>
+    </section>
+
+    <div class="t-side">
+      <div id="t-focus" class="no-htmx-fx" hx-get="{{ root_path }}{{ focus_url }}" hx-trigger="every 3s [!document.hidden]" hx-sync="this:drop" hx-swap="innerHTML">{% if first_focus %}{% with chart = first_focus %}{% include 'ssc/focus_chart.html' %}{% endwith %}{% endif %}</div>
+      <div id="t-progress" class="t-progress no-htmx-fx">{{ parts.progress(state, steps)|trim }}</div>
+      <div id="t-now" class="t-now no-htmx-fx" hx-get="{{ root_path }}{{ state_url }}" hx-trigger="every 5s [!document.hidden], tonight-refresh" hx-sync="this:drop" hx-swap="innerHTML">
+        {{ parts.now(state, root) }}
+      </div>
+      <div id="t-plan" class="t-plan no-htmx-fx">{{ parts.plan_list(plan, status) }}</div>
+      <details class="t-details" id="t-details">
+        <summary class="t-details__summary">Details{{ ui.icon("down", 16) }}</summary>
+        <div id="t-session-details" class="ssc-group no-htmx-fx">{{ parts.detail_rows(details) }}</div>
+        <h2 class="ssc-section">Hardware</h2>
+        <div id="t-hardware" class="ssc-group no-htmx-fx"
+             hx-get="{{ root_path }}{{ hardware_url }}"
+             hx-trigger="toggle[document.getElementById('t-details').open] from:#t-details, every 30s [!document.hidden &amp;&amp; document.getElementById('t-details').open]"
+             hx-sync="this:drop" hx-swap="innerHTML"><p class="ssc-footnote">Loads when opened.</p></div>
+        <a class="ssc-button" data-kind="plain" href="{{ root }}/roof">Roof controls and log</a>
+      </details>
+    </div>
+  </div>
+
+  <section id="t-night" class="t-night no-htmx-fx" aria-label="Night Line">{{ ui.night_line(line) }}</section>
+</main>
+
+{% call ui.sheet("t-stop-sheet", "Stop & park?") %}
+  <p class="ssc-sheet__text">The scope stops imaging and closes its arm. Automation then holds until Start on the Roof page or the next night.{% if status.dry_run %} This is a dry run, so the scope will not move.{% endif %}</p>
+  <p class="ssc-sheet__error" id="t-stop-error" role="alert" hidden></p>
+  <form id="t-stop-form" method="post" action="{{ root_path }}{{ stop_url }}">
+    <input type="hidden" name="return_to" value="dashboard">
+    <button class="ssc-button ssc-stop" data-solid="1" type="submit" id="t-stop-confirm">Stop &amp; park</button>
+  </form>
+  <button class="ssc-button" data-kind="secondary" data-tall="1" type="button" data-close-sheet autofocus>Keep imaging</button>
+{% endcall %}
+{% endblock %}
+
+{% block scripts %}
+<script>window.sscTonight = {{ {"stack": images.stack, "pier": images.pier}|tojson }};</script>
+<script src="{{ root_path }}/public/ssc/tonight.js"></script>
+{% endblock %}

@@ -161,6 +161,25 @@ describe("main.js", () => {
     expect(globalThis.fetch.mock.calls[0][0]).toContain("/toggleuitheme");
   });
 
+  it("toggleuitheme sets the device mode through sscTheme unless it is red", async () => {
+    document.documentElement.setAttribute("data-bs-theme", "dark");
+    globalThis.fetch.mockResolvedValue({ ok: true });
+    const set = vi.fn();
+    window.sscTheme = { mode: () => "auto", set };
+
+    await window.toggleuitheme();
+    expect(set).toHaveBeenCalledWith("day");
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+    window.sscTheme = { mode: () => "red", set };
+    set.mockClear();
+    await window.toggleuitheme();
+    expect(set).not.toHaveBeenCalled();
+    expect(document.documentElement.getAttribute("data-bs-theme")).toBe("dark");
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    delete window.sscTheme;
+  });
+
   it("NewCheckboxChange toggles hidden value string", () => {
     const hidden = document.createElement("input");
     hidden.id = "hidden-toggle";

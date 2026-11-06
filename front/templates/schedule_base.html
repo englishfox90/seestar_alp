@@ -3,27 +3,36 @@
 {% block header %}
     <div class="page-hero">
         <div>
-            <p class="page-kicker">Automation</p>
             <h1 class="page-title">{% block title %}Schedule Page{% endblock %}</h1>
             <p class="page-subtitle">{{ telescope["name"] }} ({{ telescope["ip_address"] }})</p>
         </div>
     </div>
+    <style>
+        .schedule-row-current {
+            background: var(--ssc-fill-1);
+        }
+        .schedule-row-current .btn-link {
+            color: var(--ssc-text-1);
+        }
+        .schedule-cell-label {
+            color: var(--ssc-text-2);
+            font-size: var(--ssc-text-footnote);
+        }
+    </style>
 {% endblock %}
 
 {% block content %}
   <div class="panel-card">
-    <h2 class="panel-title mb-3">Current Schedule</h2>
+    <h2 class="panel-title mb-3">Current schedule</h2>
 
     <div id="schedule-status" class="mb-3">
-      <div class="panel-card panel-card-tight mb-0">
-        <span id="state_span"> {% include 'partials/schedule_state.html' %}</span>
-      </div>
+      <span id="state_span"> {% include 'partials/schedule_state.html' %}</span>
     </div>
 
     <form id="scheduleForm" action="{{ root }}/schedule/delete" method="post" enctype="application/x-www-form-urlencoded">
 
-      <div id="schedule-head" class="panel-card panel-card-tight">
-        <div class="row fw-bold border-bottom py-1 text-start">
+      <div id="schedule-head" class="d-none d-md-block">
+        <div class="row fw-semibold border-bottom py-1 text-start">
           <div class="col-2 align-self-start">Target</div>
           <div class="col-2 align-self-start">Param</div>
           <div class="col align-self-start">Panels</div>
@@ -33,39 +42,40 @@
           <div class="col align-self-start">Gain</div>
           <div class="col align-self-start">LP</div>
           <div class="col align-self-start">AF</div>
-          <div class="col-2 align-self-start">Selected Panels</div>
+          <div class="col-2 align-self-start">Selected panels</div>
         </div>
       </div>
 
-      <div id="schedule-body" class="panel-card panel-card-tight mt-3">
+      <div id="schedule-body" class="mb-3">
         {% include 'partials/schedule_list.html' %}
       </div>
 
-      <div id="schedule-buttons-top" class="panel-card panel-card-tight mt-3">
-        <div class="action-row">
+      <div id="schedule-buttons-top" class="mb-3">
+        <div class="action-row d-flex flex-wrap">
           {% if schedule.list %}
             <button type="submit" class="btn btn-danger" name="action" value="delete" title="Delete the selected schedule item">Delete</button>
-            <button type="submit" class="btn btn-primary" name="action" value="append" formaction="{{ root }}/schedule/{{ tab }}" title="Add a schedule item to bottom of schedule">Append</button>
+            <button type="submit" class="btn btn-secondary" name="action" value="append" formaction="{{ root }}/schedule/{{ tab }}" title="Add a schedule item to bottom of schedule">Append</button>
             <button type="submit" class="btn btn-secondary" name="action" value="insert" formaction="{{ root }}/schedule/{{ tab }}" title="Insert a schedule item before the selected item">Insert</button>
           {% else %}
-            <button type="submit" class="btn btn-primary" name="action" value="append" formaction="{{ root }}/schedule/{{ tab }}" title="Add a schedule item to bottom of schedule">Add</button>
+            <button type="submit" class="btn btn-secondary" name="action" value="append" formaction="{{ root }}/schedule/{{ tab }}" title="Add a schedule item to bottom of schedule">Add</button>
           {% endif %}
         </div>
       </div>
 
 
-      <p class="panel-muted mt-3">Pick an item to schedule, then submit to add it.</p>
+      <h2 class="panel-title mb-2">Add an item</h2>
+      <p class="panel-muted mb-3">Pick an item to schedule, then submit to add it.</p>
 
       {% include 'partials/schedule_tab_header.html' with context %}
 
-      <div class="tab-content panel-card">
+      <div class="tab-content mb-3">
         <div class="tab-pane fade show active" role="tabpanel" aria-labelledby="auto-focus-tab">
           {% block schedule_tab_content %}{% endblock %}
         </div>
       </div>
 
-      <div id="schedule-buttons-bottom" class="panel-card panel-card-tight mt-3">
-        <div class="action-row">
+      <div id="schedule-buttons-bottom">
+        <div class="action-row d-flex flex-wrap">
           {% if schedule.list %}
             <button type="submit" class="btn btn-danger" name="action" value="delete" title="Delete the selected schedule item">Delete</button>
             <button type="submit" class="btn btn-primary" name="action" value="append" formaction="{{ root }}/schedule/{{ tab }}" title="Add a schedule item to bottom of schedule">Append</button>

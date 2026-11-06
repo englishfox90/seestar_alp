@@ -1,0 +1,27 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+    -webkit-text-size-adjust: 100%;
+    background: var(--ssc-canvas);
+}
+
+body {
+    margin: 0;
+    background: var(--ssc-canvas);
+    color: var(--ssc-text-1);
+    font-family: var(--ssc-font);
+    font-size: var(--ssc-text-body);
+    font-weight: var(--ssc-weight-regular);
+    line-height: 1.34;
+}
+
+h1, h2, p, figure, ol, ul { margin: 0; padding: 0; }
+ol, ul { list-style: none; }
+a { color: var(--ssc-accent); text-decoration: none; }
+img { display: block; }
+[hidden] { display: none; }
+
+:focus-visible {
+    outline: 2px solid var(--ssc-accent);
+    outline-offset: 2px;
+}

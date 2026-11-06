@@ -1,3 +1,4 @@
+{% import 'ssc/nav_links.html' as nav_links with context %}
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container">
         <div class="dropdown app-scope">
@@ -26,7 +27,7 @@
         <div class="collapse navbar-collapse" id="navbarSupportedContent">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ root }}/dashboard">Dashboard</a>
+                    <a class="nav-link" href="{{ root }}/dashboard">Tonight</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="{{ root }}/targets">Targets</a>
@@ -40,25 +41,9 @@
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">More</a>
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdown">
-                        <li><a class="dropdown-item" href="{{ root }}/">Home</a></li>
-                        <li><a class="dropdown-item" href="{{ root }}/startup">Startup</a></li>
-                        <li><a class="dropdown-item" href="{{ root }}/command">Commands</a></li>
-                        <li><a class="dropdown-item" href="{{ root }}/guestmode">Guest Mode</a></li>
-                        <li><a class="dropdown-item" href="{{ root }}/goto">Goto</a></li>
-                        <li><a class="dropdown-item" href="{{ root }}/image">Image</a></li>
-                        <li><a class="dropdown-item" href="{{ root }}/mosaic">Mosaic</a></li>
-                        <li><a class="dropdown-item" href="{{ root }}/framed_mosaic">Framed Mosaic</a></li>
-                        {% if experimental %}
-                        <li><a class="dropdown-item" href="{{ root }}/planning">Planning</a></li>
-                        {% endif %}
-                        <li><a class="dropdown-item" href="{{ root }}/schedule">Schedule</a></li>
-                        <li><a class="dropdown-item" href="{{ root }}/settings">Settings</a></li>
-                        <li><a class="dropdown-item" href="{{ root}}/config">SSC Config</a></li>
-                        <li><a class="dropdown-item" href="{{ root }}/stats">Stats</a></li>
-                        {% if platform == "raspberry_pi" %}
-                        <li><a class="dropdown-item" href="{{ root }}/platform-rpi">Platform</a></li>
-                        {% endif %}
-                        <li><a class="dropdown-item" href="{{ root }}/support">Support</a></li>
+                        {% for link in nav_links.more %}
+                        <li><a class="dropdown-item" href="{{ link.href }}">{{ link.label }}</a></li>
+                        {% endfor %}
                         <li><button class="dropdown-item" type="button" onclick="sscTheme.toggleRed()">Red night mode</button></li>
                     </ul>
                 </li>
@@ -80,7 +65,7 @@
 <nav class="app-tabbar" aria-label="Main">
     <a class="app-tab" href="{{ root }}/dashboard">
         <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13a7 7 0 1 1 14 0M10 13l3.5-4.5"></path></svg>
-        Dashboard
+        Tonight
     </a>
     <a class="app-tab" href="{{ root }}/targets">
         <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"></circle><circle cx="10" cy="10" r="2.5"></circle></svg>

@@ -1,0 +1,61 @@
+/* Bars, and the one page edge. Tab bar on phones, nav in the top bar from 768px. */
+.ssc-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--ssc-bar);
+    backdrop-filter: var(--ssc-bar-filter);
+    -webkit-backdrop-filter: var(--ssc-bar-filter);
+    border-bottom: 1px solid var(--ssc-separator);
+    padding-top: env(safe-area-inset-top);
+}
+
+.ssc-topbar__inner {
+    display: flex;
+    align-items: center;
+    gap: var(--ssc-space-4);
+    min-height: var(--ssc-bar-height);
+    max-width: var(--ssc-max-width);
+    margin: 0 auto;
+    padding: 0 var(--ssc-gutter);
+}
+
+.ssc-topbar__status {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--ssc-space-1) var(--ssc-space-4);
+    margin-left: auto;
+    color: var(--ssc-text-1);
+}
+
+.ssc-widenav { display: none; }
+
+.ssc-tabbar {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 20;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    background: var(--ssc-bar);
+    backdrop-filter: var(--ssc-bar-filter);
+    -webkit-backdrop-filter: var(--ssc-bar-filter);
+    border-top: 1px solid var(--ssc-separator);
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+.ssc-page {
+    max-width: var(--ssc-max-width);
+    margin: 0 auto;
+    padding: 0 var(--ssc-gutter) calc(var(--ssc-tabbar-height) + env(safe-area-inset-bottom) + var(--ssc-space-6));
+}
+
+@media (min-width: 768px) {
+    .ssc-widenav {
+        display: flex;
+        align-items: center;
+        gap: var(--ssc-space-2);
+    }
+    .ssc-tabbar { display: none; }
+    .ssc-page { padding-bottom: var(--ssc-space-7); }
+}

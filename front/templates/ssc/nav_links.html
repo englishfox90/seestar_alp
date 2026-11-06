@@ -1,0 +1,22 @@
+{# The destinations, shared by the legacy nav.html and the shell's nav.html. #}
+{% set primary = [
+    {"label": "Tonight", "href": root ~ "/dashboard", "icon": "tonight"},
+    {"label": "Targets", "href": root ~ "/targets", "icon": "targets"},
+    {"label": "Live", "href": root ~ "/live", "icon": "live"},
+    {"label": "Roof", "href": root ~ "/roof", "icon": "roof"},
+] %}
+{% set more = [{"label": "Home", "href": root ~ "/"},
+    {"label": "Startup", "href": root ~ "/startup"},
+    {"label": "Commands", "href": root ~ "/command"},
+    {"label": "Guest Mode", "href": root ~ "/guestmode"},
+    {"label": "Goto", "href": root ~ "/goto"},
+    {"label": "Image", "href": root ~ "/image"},
+    {"label": "Mosaic", "href": root ~ "/mosaic"},
+    {"label": "Framed Mosaic", "href": root ~ "/framed_mosaic"}]
+    + ([{"label": "Planning", "href": root ~ "/planning"}] if experimental else [])
+    + [{"label": "Schedule", "href": root ~ "/schedule"},
+    {"label": "Settings", "href": root ~ "/settings"},
+    {"label": "SSC Config", "href": root ~ "/config"},
+    {"label": "Stats", "href": root ~ "/stats"}]
+    + ([{"label": "Platform", "href": root ~ "/platform-rpi"}] if platform == "raspberry_pi" else [])
+    + [{"label": "Support", "href": root ~ "/support"}] %}

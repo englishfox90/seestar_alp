@@ -1,9 +1,12 @@
 {% extends 'base.html' %}
 
 {% block header %}
-    <div class="container mt-3">
-		<p class="h1">{% block title %}Commands{% endblock %}</p>
-	</div>
+    <div class="page-hero">
+        <div>
+            <h1 class="page-title">{% block title %}Commands{% endblock %}</h1>
+            <p class="page-subtitle">Send commands directly to the telescope</p>
+        </div>
+    </div>
 {% endblock %}
 
 {% block content %}
@@ -12,7 +15,7 @@
 			<div class="acordion" id="eventStatusAccordion">
 				<div class="accordion-item">
 					<h2 class="accordion-header" id="headingOne">
-						<button class="accordion-button fs-5 fw-bold" type="button"
+						<button class="accordion-button" type="button"
 								data-bs-toggle="collapse"
 								data-bs-target="#eventStatusDiv"
 								aria-expanded="true"
@@ -33,23 +36,19 @@
 				</div>
 			</div>
 		</div>
-		<div class="container mt-3">
-			<p class="h3">Select a command to execute</p>
-		</div>
-		<div class="container mt-3">
-			{% include 'do_command.html' with context %}
-		</div>
+		<h2 class="panel-title mb-3">Select a command to execute</h2>
+		{% include 'do_command.html' with context %}
 
 		<script>
 			const confirm = {{ confirm|tojson }};
 		</script>
 
 	{% else %}
-		<div class="container mt-3">
-			<p>You are currently in offline mode</p>
+		<div class="panel-card">
+			<p class="mb-0">You are currently in offline mode</p>
 		</div>
 	{% endif %}
-	<footer class="bg-body-tertiary text-center mt-3">
+	<footer class="footer-meta">
 		Version: {{ version }}
 	</footer>
 {% endblock %}

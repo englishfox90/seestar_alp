@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+{# The shell for new screens. No Bootstrap CSS or JS, and no Bootstrap classes.
+   data-bs-theme stays only because theme.js reads the server's day or night from it. #}
+<html lang="en" data-bs-theme="{{ webui_theme }}"{% if root_path %} data-root-path="{{ root_path }}"{% endif %}{% if webui_accent_color or webui_font_family %} style="{% if webui_accent_color %}--ssc-webui-accent: {{ webui_accent_color|e }};{% if on_accent %} --ssc-webui-on-accent: {{ on_accent }};{% endif %}{% endif %}{% if webui_font_family %} --ssc-webui-font: {{ webui_font_family|e }};{% endif %}"{% endif %}>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="black">
+  <title>{% block title %}{% endblock %} - SSC</title>
+  <script src="{{ root_path }}/public/ssc/theme.js"></script>
+  <link rel="icon" type="image/x-icon" href="{{ root_path }}/public/favicon.ico">
+  <link rel="stylesheet" href="{{ root_path }}/public/ssc/ssc.css">
+  <script src="{{ root_path }}/public/htmx.min.js"></script>
+</head>
+<body>
+{% set current_href = root ~ "/" ~ partial_path %}
+{% include 'ssc/nav.html' %}
+{% block content %}{% endblock %}
+<script src="{{ root_path }}/public/ssc/shell.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

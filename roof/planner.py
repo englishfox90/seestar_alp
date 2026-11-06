@@ -22,6 +22,8 @@ from roof.sun import night_key, sun_altitude_deg
 STEP_S = 300
 # Parking for a gap this long beats leaving the arm open; the automation replans after.
 PARK_GAP_S = 1800
+# Sun's centre at apparent sunset: refraction plus its radius.
+SUN_HORIZON_DEG = -0.833
 
 
 @dataclass(frozen=True)
@@ -82,6 +84,38 @@ def night_noon(key: str, lon: float) -> float:
     """Solar noon that opens the night named ``key`` (see sun.night_key)."""
     day = datetime.fromisoformat(key).replace(tzinfo=timezone.utc)
     return (day + timedelta(hours=12 - lon / 15.0)).timestamp()
+
+
+def night_times(key: str, lat: float, lon: float, sun_max_deg: float) -> dict:
+    """Sunset, sunrise and the dark window of one night, as timestamps or None.
+
+    The dark window samples the sun exactly as _Night does, so it matches the plan.
+    """
+    noon = night_noon(key, lon)
+    altitudes = [
+        (noon + k * STEP_S, sun_altitude_deg(lat, lon, datetime.fromtimestamp(noon + k * STEP_S, timezone.utc)))
+        for k in range(int(86400 / STEP_S) + 1)
+    ]
+    dark = []
+    for when, altitude in altitudes:
+        if altitude < sun_max_deg:
+            dark.append(when)
+        elif dark:
+            break
+    sunset = sunrise = None
+    for (t0, a0), (t1, a1) in zip(altitudes, altitudes[1:]):
+        crossing = t0 + (a0 - SUN_HORIZON_DEG) / (a0 - a1) * (t1 - t0) if a0 != a1 else t0
+        if sunset is None and a0 >= SUN_HORIZON_DEG > a1:
+            sunset = crossing
+        elif sunset is not None and a0 < SUN_HORIZON_DEG <= a1:
+            sunrise = crossing
+            break
+    return {
+        "sunset": sunset,
+        "sunrise": sunrise,
+        "dark_start": dark[0] if dark else None,
+        "dark_end": dark[-1] + STEP_S if dark else None,
+    }
 
 
 class _Night:

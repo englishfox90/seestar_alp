@@ -1,0 +1,33 @@
+{% if chart %}
+<div class="t-focus">
+  <svg class="t-focus__plot" viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-label="{{ chart.summary|e }}">
+    <text x="{{ chart.left }}" y="18">Focus metric, lower is sharper</text>
+    {% for tick in chart.y_ticks %}
+      <line class="t-focus__grid" x1="{{ chart.left }}" x2="{{ chart.right }}" y1="{{ tick.y }}" y2="{{ tick.y }}"></line>
+      <text x="{{ chart.left - 8 }}" y="{{ tick.y + 4 }}" text-anchor="end">{{ tick.label }}</text>
+    {% endfor %}
+    {% for tick in chart.x_ticks %}
+      <text x="{{ tick.x }}" y="{{ chart.bottom + 18 }}" text-anchor="middle">{{ tick.label }}</text>
+    {% endfor %}
+    {% if chart.x_ticks %}<text x="{{ (chart.left + chart.right) / 2 }}" y="{{ chart.height - 8 }}" text-anchor="middle">Focuser step</text>{% endif %}
+    {% for fit in chart.fit %}<polyline class="t-focus__fit" points="{{ fit }}"></polyline>{% endfor %}
+    {% for line in chart.lines %}<polyline class="t-focus__line" points="{{ line }}"></polyline>{% endfor %}
+    {% for mark in chart.missing %}
+      <line class="t-focus__missing" x1="{{ mark.x }}" x2="{{ mark.x }}" y1="{{ chart.bottom - 7 }}" y2="{{ chart.bottom }}"></line>
+      <circle class="t-focus__hit" cx="{{ mark.x }}" cy="{{ chart.bottom - 4 }}" r="10"><title>Step {{ mark.step }}: no reading</title></circle>
+    {% endfor %}
+    {% for point in chart.readings %}
+      <circle class="t-focus__dot" cx="{{ point.x }}" cy="{{ point.y }}" r="4"></circle>
+      <circle class="t-focus__hit" cx="{{ point.x }}" cy="{{ point.y }}" r="10"><title>Step {{ point.step }}: metric {{ point.metric }}</title></circle>
+    {% endfor %}
+    {% if chart.final %}
+      <circle class="t-focus__final" cx="{{ chart.final.x }}" cy="{{ chart.final.y }}" r="6"></circle>
+      <circle class="t-focus__hit" cx="{{ chart.final.x }}" cy="{{ chart.final.y }}" r="12"><title>Settled at step {{ chart.final.step }}: metric {{ chart.final.metric }}</title></circle>
+    {% endif %}
+  </svg>
+  <p class="t-focus__summary" role="status">{{ chart.summary|e }}</p>
+  {% for note in chart.notes %}
+    <p class="ssc-footnote">{{ note.text|e }}</p>
+  {% endfor %}
+</div>
+{% endif %}

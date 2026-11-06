@@ -27,6 +27,7 @@ from roof import planner, schedule_tools
 from roof import sentinel
 from roof.queue import FramingEstimates, TargetQueue
 from roof.dew import DewMonitor
+from roof.night_history import NightHistory
 from roof.scope import DryRunScope, RealScope, ScopeState
 from roof.sessions import SessionLog
 from roof.sun import night_key, sun_altitude_deg
@@ -68,6 +69,7 @@ class RoofAutomation:
         session_log=None,
         plan_targets=None,
         framing_estimates=None,
+        night_history=None,
     ):
         self._load_settings = load_settings
         self._read_safety = read_safety or (
@@ -132,6 +134,7 @@ class RoofAutomation:
         self._last_tick = 0.0
         self._started_at = clock()
         self._session_log = session_log
+        self._night_history = night_history
         self._plan_targets = plan_targets or (lambda s, now: (False, "no target list"))
         self._framing_estimates = framing_estimates
         self._list_note = ""
@@ -139,6 +142,7 @@ class RoofAutomation:
         self._list_runs = 0
         self._list_runs_night = ""
         self._launched_at = 0.0
+        self._last_connected_at = None  # only ever reported
 
         # Survives an ALP restart: a held or finished night must stay that way.
         self._hold_night = ""
@@ -248,6 +252,7 @@ class RoofAutomation:
         if safety.safe != self._was_safe:
             self._log(f"roof {'SAFE' if safety.safe else 'UNSAFE'} ({safety.detail})")
             self._was_safe = safety.safe
+            self._record_roof(safety, now, s)
         if dark != self._was_dark:
             sun_text = "unknown" if sun is None else f"{sun:.1f} deg"
             self._log(f"{'dark' if dark else 'not dark'} (sun {sun_text}, limit {s.sun_max_deg})")
@@ -784,6 +789,15 @@ class RoofAutomation:
         else:
             self._heater_on = on
 
+    def _record_roof(self, safety, now, s):
+        """Bookkeeping only: a failure here must never stop the safety loop."""
+        if self._night_history is None:
+            return
+        try:
+            self._night_history.record(safety, night_key(now, s.lon), now)
+        except Exception as e:
+            self._logger.warning("could not record the roof history: %s", e)
+
     def _record_stack(self, state, night, now):
         """Bookkeeping only: a failure here must never stop the safety loop."""
         if self._session_log is None:
@@ -907,6 +921,8 @@ class RoofAutomation:
 
     def _publish(self, s, safety, sun, dark, night, state, now):
         foreign = self._foreign(state)
+        if state.connected:
+            self._last_connected_at = now
         resume = self._resume if self._resume.get("night") == night else {}
         snapshot = {
             "enabled": s.enabled,
@@ -935,6 +951,14 @@ class RoofAutomation:
             "view_stage": state.view_stage,
             "plan_state": state.plan_state,
             "mosaic_scale": state.mosaic_scale,
+            # Read here anyway, so a page can show the stack without asking the scope.
+            "view_target": state.view_target,
+            "stacked": state.stacked,
+            "dropped": state.dropped,
+            "exposure_s": state.exposure_s,
+            "stack_lapse_s": state.stack_lapse_s,
+            "gain": state.gain,
+            "last_connected_at": self._last_connected_at,
             "foreign": foreign,
             "override_roof": self._override_roof,
             "held": self._hold_night == night,
@@ -987,6 +1011,10 @@ def session_log() -> SessionLog | None:
     return get_automation()._session_log
 
 
+def night_history() -> NightHistory | None:
+    return get_automation()._night_history
+
+
 def get_automation() -> RoofAutomation:
     """The process-wide automation, created on first use."""
     global _instance
@@ -1012,6 +1040,7 @@ def get_automation() -> RoofAutomation:
             state_path=os.path.join(base, "roof_state.json"),
             logger=logger,
             session_log=log,
+            night_history=NightHistory(os.path.join(base, "roof_night_history.json")),
             framing_estimates=FramingEstimates(os.path.join(base, "roof_framing.json")),
             plan_targets=lambda s, now: planner.write_night_plan(
                 s, targets.all(), log, now, schedule_tools.schedule_dir()

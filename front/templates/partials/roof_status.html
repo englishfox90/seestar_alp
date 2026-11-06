@@ -9,27 +9,27 @@
 <div class="alert alert-info">A session started elsewhere is running. Automation will leave it alone, and will still park if the roof reads unsafe.</div>
 {% endif %}
 <div class="card mb-3"><div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
-  <div class="h4 mb-0">{{ status.headline or "Starting up" }}</div>
+  <h2 class="mb-0">{{ status.headline or "Starting up" }}</h2>
   <div class="small text-body-secondary">
-    Service {% if status.loop_stale %}<span class="badge text-bg-danger">NOT RESPONDING</span>{% else %}<span class="badge text-bg-success">RUNNING</span>{% endif %}
+    Service {% if status.loop_stale %}<span class="badge text-bg-danger">Not responding</span>{% else %}<span class="badge text-bg-success">Running</span>{% endif %}
     {% if status.uptime_s is defined %}&nbsp;up {{ (status.uptime_s // 3600)|int }}h {{ ((status.uptime_s % 3600) // 60)|int }}m{% endif %}
     {% if status.loop_age_s is not none %}, checked {{ status.loop_age_s|int }}s ago{% endif %}
   </div>
 </div></div>
 <div class="row g-3 mb-3">
-  <div class="col-md-4"><div class="card h-100"><div class="card-header">Roof</div><div class="card-body">
-    <p class="h4">{% if status.safe %}<span class="badge text-bg-success">SAFE</span>{% else %}<span class="badge text-bg-danger">UNSAFE</span>{% endif %}</p>
+  <div class="col-md-4"><div class="card h-100"><h2 class="card-header mb-0">Roof</h2><div class="card-body">
+    <p class="mb-2">{% if status.safe %}<span class="badge text-bg-success">Safe</span>{% else %}<span class="badge text-bg-danger">Unsafe</span>{% endif %}</p>
     <div class="small text-body-secondary">{{ status.safety_detail }}</div>
   </div></div></div>
-  <div class="col-md-4"><div class="card h-100"><div class="card-header">Sky</div><div class="card-body">
-    <p class="h4">{% if status.dark %}<span class="badge text-bg-success">DARK</span>{% else %}<span class="badge text-bg-secondary">NOT DARK</span>{% endif %}</p>
+  <div class="col-md-4"><div class="card h-100"><h2 class="card-header mb-0">Sky</h2><div class="card-body">
+    <p class="mb-2">{% if status.dark %}<span class="badge text-bg-success">Dark</span>{% else %}<span class="badge text-bg-secondary">Not dark</span>{% endif %}</p>
     <div class="small text-body-secondary">Sun {% if status.sun_deg is none %}unknown (no site lat/long){% else %}{{ "%.1f"|format(status.sun_deg) }}&deg;{% endif %}, limit {{ status.sun_max_deg }}&deg;</div>
   </div></div></div>
-  <div class="col-md-4"><div class="card h-100"><div class="card-header">Scope{% if status.scope_name %}: {{ status.scope_name }}{% endif %}</div><div class="card-body">
+  <div class="col-md-4"><div class="card h-100"><h2 class="card-header mb-0">Scope{% if status.scope_name %}: {{ status.scope_name }}{% endif %}</h2><div class="card-body">
     {% if not status.connected %}
-      <p class="h4"><span class="badge text-bg-danger">NOT CONNECTED</span></p>
+      <p class="mb-2"><span class="badge text-bg-danger">Not connected</span></p>
     {% else %}
-      <p class="h4">{% if status.parked is none %}<span class="badge text-bg-warning">UNKNOWN</span>{% elif status.parked %}<span class="badge text-bg-secondary">PARKED</span>{% else %}<span class="badge text-bg-primary">ARM OPEN</span>{% endif %}</p>
+      <p class="mb-2">{% if status.parked is none %}<span class="badge text-bg-warning">Unknown</span>{% elif status.parked %}<span class="badge text-bg-secondary">Parked</span>{% else %}<span class="badge text-bg-secondary">Arm open</span>{% endif %}</p>
       <div class="small text-body-secondary">
         Scheduler: {{ status.sched_state }}{% if status.target_index %}, target {{ status.target_index }} of {{ status.target_total }}{% elif status.target_total is not defined and status.item_number %}, item {{ status.item_number }} of {{ status.item_count }}{% endif %}<br>
         Target: {{ status.target or "none" }}<br>
@@ -53,15 +53,15 @@
 </p>
 {% endif %}
 {% if status.targets %}
-<div class="card mb-3"><div class="card-header">Targets{% if status.min_target_alt_deg %} (minimum {{ status.min_target_alt_deg }}&deg;){% endif %}</div><div class="card-body">
+<div class="card mb-3"><h2 class="card-header mb-0">Targets{% if status.min_target_alt_deg %} (minimum {{ status.min_target_alt_deg }}&deg;){% endif %}</h2><div class="card-body">
   <table class="table table-sm mb-0"><tbody>
     {% for t in status.targets %}
-      <tr><td>{{ t.name }}</td><td>{{ t.kind }}</td><td>{% if t.altitude is none %}unknown{% else %}{{ "%.1f"|format(t.altitude) }}&deg;{% endif %}</td><td>{% if t.ok %}<span class="badge text-bg-success">OK</span>{% else %}<span class="badge text-bg-secondary">TOO LOW</span>{% endif %}</td></tr>
+      <tr><td>{{ t.name }}</td><td>{{ t.kind }}</td><td>{% if t.altitude is none %}unknown{% else %}{{ "%.1f"|format(t.altitude) }}&deg;{% endif %}</td><td>{% if t.ok %}<span class="badge text-bg-success">OK</span>{% else %}<span class="badge text-bg-secondary">Too low</span>{% endif %}</td></tr>
     {% endfor %}
   </tbody></table>
 </div></div>
 {% endif %}
-<div class="card"><div class="card-header">Log</div><div class="card-body">
-  <pre class="small mb-0" style="max-height: 20rem; overflow-y: auto;">{% for line in status.log|reverse %}{{ line }}
+<div class="card"><h2 class="card-header mb-0">Log</h2><div class="card-body">
+  <pre class="small mb-0 roof-log">{% for line in status.log|reverse %}{{ line }}
 {% endfor %}</pre>
 </div></div>

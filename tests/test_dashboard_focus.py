@@ -270,11 +270,19 @@ def test_fragment_never_asks_the_scope(client, monkeypatch):
     assert client.simulate_get("/1/dashboard/focus").status == falcon.HTTP_200
 
 
-def test_dashboard_page_polls_for_the_curve_inside_the_image_panel(client, monkeypatch):
+def test_tonight_polls_for_the_curve(client, monkeypatch):
     monkeypatch.setattr(
         front_app, "get_context", lambda *a: {"root": "/1", "telescope": {}, "telescopes": []}
     )
     text = client.simulate_get("/1/dashboard").text
-    assert 'hx-get="/1/dashboard/focus"' in text
-    slot = text.index("dash-image-slot\"")
-    assert slot < text.index('id="dash-focus"') < text.index("dash-image-view\"")
+    assert 'hx-get="/1/tonight/focus"' in text
+    assert text.index('id="t-images"') < text.index('id="t-focus"')
+
+
+def test_tonight_focus_is_empty_with_no_run_and_never_asks_the_scope(client, monkeypatch):
+    def fail(*a, **kw):
+        raise AssertionError("the focus fragment must not message the scope")
+
+    monkeypatch.setattr(front_app, "method_sync", fail)
+    monkeypatch.setattr(front_app, "do_action_device", fail)
+    assert client.simulate_get("/9/tonight/focus").text == ""

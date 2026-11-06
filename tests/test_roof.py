@@ -72,6 +72,8 @@ class FakeScope:
 
 
 class Rig:
+    night_history = None
+
     def __init__(self, tmp_path, **settings):
         self.dir = tmp_path / "schedule"
         self.dir.mkdir(exist_ok=True)
@@ -114,6 +116,7 @@ class Rig:
             target_altitude=lambda params, lat, lon, when: self.alts.get(
                 params.get("target_name"), 60.0
             ),
+            night_history=self.night_history,
         )
 
     def write(self, name, items):
@@ -521,6 +524,22 @@ def test_manual_start_refuses_over_a_foreign_session(rig):
     rig.auto.request("start")
     rig.tick()
     assert rig.scope.calls == []
+
+
+def test_second_stop_press_repeats_the_park_and_resets_its_attempts(rig):
+    """Not harmless, which is why Tonight disables its button once pressed."""
+    rig.settle_and_start()
+    rig.auto.request("stop")
+    rig.tick()
+    assert rig.auto.phase == PARKING
+    first = rig.scope.calls.count("park")
+    rig.tick(61)  # no confirmation yet, so a second park attempt
+    assert rig.auto._park_attempts == 2
+    rig.auto.request("stop")
+    rig.tick()
+    assert rig.scope.calls.count("stop_view") == 2
+    assert rig.scope.calls.count("park") == first + 2
+    assert rig.auto._park_attempts == 1, "the count toward PARK NOT CONFIRMED restarts"
 
 
 def test_scheduler_stopped_elsewhere_holds_instead_of_restarting(rig):

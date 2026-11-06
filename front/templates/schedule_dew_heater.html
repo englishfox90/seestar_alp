@@ -1,15 +1,11 @@
 {% extends 'schedule_base.html' %}
 
 {% block schedule_tab_content %}
-	<div class="card border-primary mb-3">
-    <div class="card-body">
-      <div class="mb-3">
-        <div id="dewHeaterHelp" class="form-text">Dew Heater (0 = off)</div>
-      </div>
-
-		  <input type="range" min="0" max="100" value="90" class="slider" name="dewHeaterValue" id="dewHeaterValue" oninput="rangeValue.innerText = this.value">
-        <label for="dewHeaterValue" id="rangeValue">90</label>
-      </input>
+  <div>
+    <div class="d-flex justify-content-between align-items-baseline">
+      <div id="dewHeaterHelp" class="form-label">Dew heater (0 = off)</div>
+      <label for="dewHeaterValue" id="rangeValue">90</label>
     </div>
+    <input type="range" min="0" max="100" value="90" class="slider form-range" name="dewHeaterValue" id="dewHeaterValue" oninput="rangeValue.innerText = this.value">
   </div>
 {% endblock %}

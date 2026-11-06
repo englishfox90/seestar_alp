@@ -94,3 +94,5 @@ Upstream files touched: one hook in `FrontMain.start` (`front/app.py`), and in
 - `planner.py`: picks targets for a night (`python -m roof.planner --nights 7`)
 - `dashboard.py`: `/dashboard`, including tonight's plan and goal progress from the list
 - `sessions.py`: what was actually stacked, kept in `roof_sessions.json`
+- `night_history.py`: when the roof read safe or unsafe, kept in `roof_night_history.json`
+- `night_web.py`: read-only roof history, morning summary and inline image routes

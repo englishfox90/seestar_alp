@@ -35,10 +35,10 @@ The design language and framework for the whole web UI. The owner approved this 
 Follow section 10 of the specification from step 2.
 
 - [ ] Static prototype of the Tonight states on the real phone in all three themes, including Red, then owner sign-off
-- [ ] Shell, macros, four destinations and redirects
-- [ ] Tonight: `/tonight/state`, state mapping, Stop with confirm, Night Line
+- [ ] Four destinations and redirects. The shell and macros exist, limited to what Tonight needs.
+- [x] Tonight: `/tonight/state`, state mapping, Stop with confirm, Night Line, at `/dashboard`. Pier thumbnail is 120px wide. Inline icons and plain htmx swaps until Phosphor and idiomorph are vendored. Not yet tested on an iPhone.
 - [ ] Plan: Targets as rows on phones, Automation, retire the Roof page
-- [ ] Per-device Day and Night with Auto from the sun's altitude. Day and Night still follow the server switch for now.
+- [x] Per-device Day, Night, Red and Auto from the sun's altitude (`/roof/sun`). The control for it is built separately.
 - [ ] Phosphor icons and idiomorph, vendored
 - [ ] Settings and Schedule rows, Live controls
 - [ ] Roof history, Morning card, image viewer, a start that respects the roof

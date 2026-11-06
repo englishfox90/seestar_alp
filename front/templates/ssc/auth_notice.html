@@ -1,0 +1,4 @@
+{% import 'ssc/ui.html' as ui %}
+{% if needs_auth_warning %}
+{{ ui.notice("attention", "Authentication required. Firmware 7.32+ needs it and this device is not authenticated, so most commands will fail. Run seestar-proxy and connect with the Seestar app, or set interop_pem in config.toml.") }}
+{% endif %}

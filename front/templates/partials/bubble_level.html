@@ -3,9 +3,9 @@
         position: relative;
         width: 300px;
         height: 300px;
-        border: 2px solid rgba(255, 255, 255, 0.26);
+        border: 2px solid var(--ssc-separator);
         border-radius: 14px;
-        background: rgba(3, 8, 18, 0.68);
+        background: var(--ssc-canvas);
     }
 
     #bubble_ball {
@@ -15,9 +15,8 @@
         width: 20px;
         height: 20px;
         border-radius: 50%;
-        background: radial-gradient(circle at 30% 30%, #78f8bd, #16a085 68%);
-        border: 1px solid rgba(255, 255, 255, 0.35);
-        box-shadow: 0 0 16px rgba(22, 160, 133, 0.55);
+        background: var(--ssc-green);
+        border: 1px solid var(--ssc-text-1);
         z-index: 10;
     }
 
@@ -25,7 +24,7 @@
     #bubble_level::before {
         content: "";
         position: absolute;
-        background: rgba(255, 255, 255, 0.32);
+        background: var(--ssc-text-3);
         border-radius: 2px;
         pointer-events: none;
     }
@@ -44,18 +43,18 @@
 
     .bubble-level-readout {
         margin-top: 0.75rem;
-        font-size: 0.9rem;
+        font-size: var(--ssc-text-body);
         opacity: 0.9;
     }
 
     .bubble-level-readout .value {
         font-variant-numeric: tabular-nums;
-        font-weight: 600;
+        font-weight: var(--ssc-weight-strong);
     }
 </style>
 
 <button type="button" class="btn btn-secondary float-end js-bubble-level-open">
-    Show Bubble Level
+    Show bubble level
 </button>
 
 <!-- Based on https://developer.mozilla.org/en-US/docs/Web/API/Device_orientation_events/Detecting_device_orientation -->

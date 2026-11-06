@@ -1,63 +1,56 @@
-<div class="container mt-3">
+<div id="schedule-state" class="row g-3 align-items-end">
 
-  <div id="schedule-state" class="d-flex justify-content-between">
+  <div class="col-12 col-md">
     {% if client_master and online %}
-      <div  class="p-2">
-        <div class="container mb-3">
-          <div>State: {{ state }}</div>
-          <div>
+      <div class="d-flex flex-wrap align-items-center gap-3">
+        <div>State: {{ state }}</div>
+        <div class="d-flex gap-2">
+          <button
+            hx-post="{{root}}/schedule/state"
+            hx-swap="outerHTML"
+            hx-target="#schedule-state"
+            hx-vals='{"action": "toggle"}'
+            {% if state == "working" %}
+              class="btn btn-danger">
+            {% else %}
+              class="btn btn-primary">
+            {% endif %}
+            {% if state == "stopped" or state == "complete" %}
+              Start
+            {% else %}
+              Stop
+            {% endif %}
+          </button>
+          {% if state == "working" %}
             <button
               hx-post="{{root}}/schedule/state"
               hx-swap="outerHTML"
               hx-target="#schedule-state"
-              hx-vals='{"action": "toggle"}'
-              {% if state == "working" %}
-                class="btn btn-danger">
-              {% else %}
-                class="btn btn-success">
-              {% endif %}
-              {% if state == "stopped" or state == "complete" %}
-                Start
-              {% else %}
-                Stop
-              {% endif %}
+              hx-vals='{"action": "skip"}'
+              class="btn btn-secondary">
+              Skip
             </button>
-            {% if state == "working" %}
-              <button
-                hx-post="{{root}}/schedule/state"
-                hx-swap="outerHTML"
-                hx-target="#schedule-state"
-                hx-vals='{"action": "skip"}'
-                class="btn btn-secondary">
-                Skip
-              </button>
-            {% endif %}
-          </div>
+          {% endif %}
         </div>
       </div>
     {% elif not client_master %}
-      <div class="p-2">
-        <p>You are currently in guest mode. You can release this in the Advanced->Guest Mode of the SeeStar app.</p>
-        <p>See the <a href="https://github.com/smart-underworld/seestar_alp/wiki/Guest-Mode">Guest Mode</a> wiki page for details</p>
-      </div>
+      <p class="mb-2">You are currently in guest mode. You can release this in the Advanced->Guest Mode of the SeeStar app.</p>
+      <p class="mb-0">See the <a href="https://github.com/smart-underworld/seestar_alp/wiki/Guest-Mode">Guest Mode</a> wiki page for details</p>
     {% else %}
-      <div class="p-2">
-        <p>You are currently in offline mode</p>
-      </div>
+      <p class="mb-0">You are currently in offline mode</p>
     {% endif %}
+  </div>
 
-  <div class="p-2">
-    <div class="container mb-3">
-      <label for="actionSelector" class="form-label">Schedule Actions:</label>
-      <select class="form-select app-select" id="actionSelector" onchange="handleAction()">
-        <option value="">--Select an Action--</option>
-        <option value="clear">Clear Schedule</option>
-        <option value="import">Import Schedule</option>
-        <option value="upload">Upload Schedule</option>
-        <option value="export">Export Schedule</option>
-        <option value="download">Download Schedule</option>
-      </select>
-    </div>
+  <div class="col-12 col-md-5 col-lg-4">
+    <label for="actionSelector" class="form-label">Schedule actions</label>
+    <select class="form-select app-select" id="actionSelector" onchange="handleAction()">
+      <option value="">--Select an Action--</option>
+      <option value="clear">Clear Schedule</option>
+      <option value="import">Import Schedule</option>
+      <option value="upload">Upload Schedule</option>
+      <option value="export">Export Schedule</option>
+      <option value="download">Download Schedule</option>
+    </select>
   </div>
 
 </div>
@@ -66,7 +59,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="actionModalLabel">Schedule Action</h5>
+                <h2 class="modal-title" id="actionModalLabel">Schedule action</h2>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="formContainer">
@@ -115,7 +108,7 @@
             "import": `
                 <form action="{{ root }}/schedule/import" method="post">
                     <div class="mb-3">
-                        <label class="form-label">Select a File:</label>
+                        <label class="form-label">Select a file</label>
                         <select class="form-select app-select" name="schedule_file" required>
                             <option value="" disabled selected>Select a File</option>
                             {% for file in files %}
@@ -129,7 +122,7 @@
             "upload": `
                 <form action="{{ root }}/schedule/upload" method="post" enctype="multipart/form-data">
                     <div class="mb-3">
-                        <label class="form-label">Upload File:</label>
+                        <label class="form-label">Upload file</label>
                         <input type="file" class="form-control" name="schedule_file" accept=".csv,.json" required>
                     </div>
                     <button type="submit" class="btn btn-primary">Upload</button>
@@ -138,7 +131,7 @@
             "export": `
                 <form action="{{ root }}/schedule/export" method="post">
                     <div class="mb-3">
-                        <label class="form-label">Filename:</label>
+                        <label class="form-label">Filename</label>
                         <input type="text" class="form-control" name="filename" placeholder="Filename" required>
                     </div>
                     <button type="submit" class="btn btn-primary">Export</button>
@@ -147,7 +140,7 @@
             "download": `
                 <form action="{{ root }}/schedule/download" method="post">
                     <div class="mb-3">
-                        <label class="form-label">Filename:</label>
+                        <label class="form-label">Filename</label>
                         <input type="text" class="form-control" name="filename" placeholder="Filename" required>
                     </div>
                     <button type="submit" class="btn btn-primary">Download</button>

@@ -2,7 +2,7 @@
     <script src="https://astrosphericcloudstorage.blob.core.windows.net/embed/astrosphericembed.js"></script>
 {% endblock %}
 <!-- This puts it's self in an iframe with a hard coded max width of 924px. https://www.astrospheric.com/embed/ -->
-<div id="AstrosphericEmbedContainer" style="width: 100%;"></div>
+<div id="AstrosphericEmbedContainer" class="w-100"></div>
 <script type="text/javascript">
     // Initialize the control
     m_AstrosphericEmbed.Create("AstrosphericEmbedContainer", {{ config_lat }}, {{ config_long }});

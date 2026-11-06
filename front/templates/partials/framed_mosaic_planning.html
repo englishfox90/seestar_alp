@@ -5,34 +5,34 @@
     <script type="text/javascript" src="{{ root_path }}/public/framed_mosaic.js"></script>
 {% endblock %}
 <div>
-    <fieldset class="border rounded-3 mb-3 pb-3">
+    <fieldset class="border rounded-3 mb-3 p-3 pt-0">
         <legend class="float-none w-auto">
-           <h5>Controls</h5>
+           <h2 class="mb-0">Controls</h2>
         </legend>
-        <div class="planning-controls-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.6rem 0.75rem; align-items: end; padding: 0 0.75rem;">
-            <div>
+        <div class="row g-3 align-items-end">
+            <div class="col-12 col-sm-6 col-lg">
                 <label for="framed_mosaic_search_text" class="form-label">Search</label>
                 <input type="text" class="form-control" id="framed_mosaic_search_text" value="M31">
             </div>
-            <div>
-                <label for="framed_mosaic_search_button" class="form-label">Find Target</label>
-                <button type="button" id="framed_mosaic_search_button" class="btn btn-primary" title="Search for object." onclick="update_framed_mosaic()">
+            <div class="col-12 col-sm-6 col-lg">
+                <label for="framed_mosaic_search_button" class="form-label">Find target</label>
+                <button type="button" id="framed_mosaic_search_button" class="btn btn-secondary" title="Search for object." onclick="update_framed_mosaic()">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16">
                         <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
                     </svg>
                 </button>
             </div>
-            <div>
+            <div class="col-12 col-sm-6 col-lg">
                 <label for="framed_mosaic_scale" class="form-label">Scale (<span id="framed_mosaic_scale_display">1.0</span>x)</label>
                 <input type="range" class="form-range" id="framed_mosaic_scale" min="1.0" max="4.0" step="0.1" value="1.0" oninput="update_framed_mosaic()">
             </div>
-            <div>
+            <div class="col-12 col-sm-6 col-lg">
                 <label for="framed_mosaic_angle" class="form-label">Angle (<span id="framed_mosaic_angle_display">0</span>&deg;)</label>
                 <input type="range" class="form-range" id="framed_mosaic_angle" min="-90" max="90" step="1" value="0" oninput="update_framed_mosaic()">
             </div>
-            <div>
-                <label for="open_framed_mosaic_schedule_modal_btn" class="form-label">Send to Schedule</label>
-                <button type="button" id="open_framed_mosaic_schedule_modal_btn" class="btn btn-primary" title="Send to Schedule">
+            <div class="col-12 col-sm-6 col-lg">
+                <label for="open_framed_mosaic_schedule_modal_btn" class="form-label">Send to schedule</label>
+                <button type="button" id="open_framed_mosaic_schedule_modal_btn" class="btn btn-primary" title="Send to schedule">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-journal-arrow-up" viewBox="0 0 16 16">
                         <path fill-rule="evenodd" d="M8 11a.5.5 0 0 0 .5-.5V6.707l1.146 1.147a.5.5 0 0 0 .708-.708l-2-2a.5.5 0 0 0-.708 0l-2 2a.5.5 0 1 0 .708.708L7.5 6.707V10.5a.5.5 0 0 0 .5.5"/>
                         <path d="M3 0h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2v-1h1v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v1H1V2a2 2 0 0 1 2-2"/>
@@ -50,16 +50,16 @@
     <form method="post" action="{{ root_path }}/{{ telescope['device_num'] }}/schedule/framed_mosaic">
         <div class="card border-primary mb-3">
             <div class="card-body">
-                <h5 class="card-title">Target</h5>
+                <h2 class="card-title">Target</h2>
                 <div class="mb-3 row">
                     <div class="col">
-                        <label for="fm_targetName" class="form-label">Target Name</label>
+                        <label for="fm_targetName" class="form-label">Target name</label>
                         <input type="text" class="form-control" id="fm_targetName" name="targetName" required>
                     </div>
                 </div>
                 <div class="mb-3 row">
                     <div class="col">
-                        <label for="fm_ra" class="form-label">Right Ascension</label>
+                        <label for="fm_ra" class="form-label">Right ascension</label>
                         <input type="text" class="form-control" id="fm_ra" name="ra" required>
                     </div>
                     <div class="col">
@@ -79,7 +79,7 @@
         </div>
         <div class="card border-primary mb-3">
             <div class="card-body">
-                <h5 class="card-title">Exposure</h5>
+                <h2 class="card-title">Exposure</h2>
                 <div class="mb-3">
                     <label for="fm_panelTime" class="form-label">Acquisition Time</label>
                     <input type="text" class="form-control" id="fm_panelTime" name="panelTime" value="1h" required>
@@ -91,6 +91,6 @@
             </div>
         </div>
         <button type="submit" class="btn btn-primary">Submit</button>
-        <button type="button" class="btn btn-primary float-end" id="close_framed_mosaic_schedule_modal_btn">Close</button>
+        <button type="button" class="btn btn-secondary float-end" id="close_framed_mosaic_schedule_modal_btn">Close</button>
     </form>
 </dialog>

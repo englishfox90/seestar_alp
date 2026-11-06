@@ -1,6 +1,6 @@
-"""The /dashboard page: one read-only view of the session, image and hardware.
+"""The fragments and images behind the Tonight page (roof/tonight.py).
 
-Nothing here commands the scope. The only message it can send is
+Nothing here commands the scope. The only message the image routes can send is
 get_stacked_img on the imaging port, which reads the current stack, and only
 while a browser is polling for the image. The autofocus curve only listens.
 The pier camera comes from PFR Sentinel, not the scope.
@@ -145,8 +145,12 @@ def goal_text(target, log) -> str:
     return text
 
 
-def _clock(timestamp) -> str:
-    return datetime.fromtimestamp(timestamp).strftime("%H:%M")
+def site_clock(timestamp) -> str:
+    """Observatory time, 24-hour with no seconds. The browser's zone may differ."""
+    return datetime.fromtimestamp(timestamp, _front().site_timezone()).strftime("%H:%M")
+
+
+_clock = site_clock
 
 
 def _list_summary(status, targets, log, settings, now) -> dict | None:
@@ -181,6 +185,8 @@ def target_list_plan(status, session, targets, log, settings, now, altitude=None
                 "ok": True,  # the planner chose its time, so being low now doesn't matter
                 "progress": progress,
                 "when": f"{_clock(block['start'])} to {_clock(block['end'])}",
+                "start": block["start"],
+                "end": block["end"],
                 "goal": goal_text(target, log) if target else None,
             }
         )
@@ -496,8 +502,7 @@ class ImageStore:
         self._received_at_request = None
         self._pending = None
 
-    def _maybe_request(self, imager):
-        view = imager.device.view_state
+    def _maybe_request(self, imager, view):
         if not is_stacking(view) or not imager.comm.is_connected():
             return
         stacked = view["Stack"].get("stacked_frame") or 0
@@ -514,7 +519,7 @@ class ImageStore:
             self._received_at_request = received
             self._pending = {"target": view.get("target_name"), "stacked": stacked}
 
-    def _render(self, imager):
+    def _render(self, imager, view):
         frame = imager.comm.received_frame()
         if frame == self._rendered_frame:
             return
@@ -533,7 +538,7 @@ class ImageStore:
             size = (PREVIEW_WIDTH, round(height * PREVIEW_WIDTH / width))
             preview = cv2.resize(image, size, interpolation=cv2.INTER_AREA)
 
-        view = imager.device.view_state or {}
+        view = view or {}
         made = self._pending or {
             "target": view.get("target_name"),
             "stacked": pydash.get(view, "Stack.stacked_frame"),
@@ -550,13 +555,18 @@ class ImageStore:
         self._rendered_frame = frame
         self._pending = None
 
-    def latest(self, imager, fetch=False):
-        """Return the newest image; with fetch, also ask the scope for a newer one."""
+    def latest(self, imager, fetch=False, view=None):
+        """Return the newest image; with fetch, also ask the scope for a newer one.
+
+        ``view`` is the scope's current view when the caller has a fresher one than
+        the device's, which only changes when something asks for get_view_state.
+        """
         with self._lock:
             if imager is not None:
+                view = view or imager.device.view_state
                 if fetch:
-                    self._maybe_request(imager)
-                self._render(imager)
+                    self._maybe_request(imager, view)
+                self._render(imager, view)
             return self._image
 
 
@@ -611,7 +621,28 @@ def _image_meta(image) -> dict:
         "target": image["target"],
         "stacked": image["stacked"],
         "captured_at": image["captured_at"],
+        "captured_clock": site_clock(image["captured_at"]),
         "snr": image["snr"],
+    }
+
+
+def cached_view(telescope_id, status):
+    """The view as the automation loop last read it, or None if it can't say.
+
+    Tonight doesn't poll get_view_state, so the device's copy goes stale. The loop
+    reads the scope anyway, so using its reading adds no messages.
+    """
+    try:
+        same_scope = roof_config.load().device_num == telescope_id
+    except Exception:
+        return None
+    if not same_scope or status.get("loop_stale") or "stacked" not in status:
+        return None
+    return {
+        "state": status.get("view_state"),
+        "stage": status.get("view_stage"),
+        "target_name": status.get("view_target"),
+        "Stack": {"stacked_frame": status.get("stacked"), "dropped_frame": status.get("dropped")},
     }
 
 
@@ -635,6 +666,11 @@ class PierStore:
             if self._checked_at is None or now - self._checked_at >= PIER_FETCH_INTERVAL_S:
                 self._checked_at = now
                 self._online = self._fetch(image_url, status_url, now)
+            return self._image
+
+    def peek(self) -> dict | None:
+        """The image already held, without fetching."""
+        with self._lock:
             return self._image
 
     @property
@@ -686,20 +722,11 @@ def _pier_image():
     return _pier_store.latest(settings.pier_image_url, settings.pier_status_url)
 
 
-class DashboardPage:
-    @staticmethod
-    def on_get(req, resp, telescope_id=1):
-        front = _front()
-        context = dict(front.get_context(telescope_id, req))
-        context["partial_path"] = "dashboard"
-        front.render_template(
-            req,
-            resp,
-            "dashboard.html",
-            page_root=f"/{telescope_id}/dashboard",
-            roof_page=f"/{telescope_id}/roof",
-            **context,
-        )
+def pier_meta(image) -> dict:
+    meta = _pier_store.meta(image)
+    if image:
+        meta["captured_clock"] = site_clock(image["captured_at"])
+    return meta
 
 
 class DashboardLive:
@@ -785,7 +812,8 @@ class DashboardImageMeta:
 
     @staticmethod
     def on_get(req, resp, telescope_id=1):
-        image = _store(telescope_id).latest(_imager(telescope_id), fetch=True)
+        view = cached_view(telescope_id, get_automation().status())
+        image = _store(telescope_id).latest(_imager(telescope_id), fetch=True, view=view)
         resp.content_type = "application/json"
         resp.set_header("Cache-Control", "no-store")
         resp.text = json.dumps(_image_meta(image))
@@ -816,7 +844,7 @@ class DashboardPierMeta:
         image = _pier_image()
         resp.content_type = "application/json"
         resp.set_header("Cache-Control", "no-store")
-        resp.text = json.dumps(_pier_store.meta(image))
+        resp.text = json.dumps(pier_meta(image))
 
 
 class DashboardPierImage:
@@ -830,8 +858,8 @@ class DashboardPierImage:
         resp.data = image["full"] if req.get_param_as_bool("full") else image["preview"]
 
 
+# The page itself is in roof/tonight.py.
 PAGES = {
-    "dashboard": DashboardPage,
     "dashboard/live": DashboardLive,
     "dashboard/tracker": DashboardTracker,
     "dashboard/device": DashboardDevice,

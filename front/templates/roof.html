@@ -3,20 +3,31 @@
 {% block title %}Roof{% endblock %}
 
 {% block header %}
-  <div class="container mt-3">
-    <p class="h1">Roof Automation</p>
+  <div class="page-hero">
+    <div>
+      <h1 class="page-title">Roof Automation</h1>
+      <p class="page-subtitle">Controls and live status for the roof-gated imaging session</p>
+    </div>
   </div>
 {% endblock %}
 
 {% block content %}
+  <style>
+    .roof-actions .btn { min-height: var(--ssc-control-height); }
+    .roof-log { max-height: 20rem; overflow-y: auto; }
+    @media (max-width: 575.98px) {
+      .roof-actions form:last-child { flex-basis: 100%; }
+      .roof-actions form:last-child .btn { width: 100%; }
+    }
+  </style>
   {% if settings.dry_run %}
     <div class="alert alert-warning"><strong>Dry run.</strong> Everything below only logs what it would do; no commands reach the scope. To arm it, set <code>dry_run = false</code> under <code>[roof]</code> in config.toml.</div>
   {% else %}
     <div class="alert alert-primary"><strong>Live.</strong> Automation and these buttons command the scope.</div>
   {% endif %}
 
-  <div class="card mb-3"><div class="card-header">Controls</div><div class="card-body">
-    <form method="post" action="{{ root_path }}{{ page_root }}/select" class="row g-2 align-items-center mb-3">
+  <div class="card mb-3"><h2 class="card-header mb-0">Controls</h2><div class="card-body">
+    <form method="post" action="{{ root_path }}{{ page_root }}/select" class="row g-3 align-items-center mb-3">
       <div class="col-auto"><label for="roof-schedule" class="col-form-label">Image from</label></div>
       <div class="col-auto">
         <select id="roof-schedule" name="schedule" class="form-select">
@@ -41,7 +52,7 @@
       {% endfor %}
     {% endfor %}
 
-    <div class="d-flex flex-wrap gap-2 mt-3">
+    <div class="d-flex flex-wrap gap-2 mt-3 roof-actions">
       <form method="post" action="{{ root_path }}{{ page_root }}/enable">
         <input type="hidden" name="enabled" value="{{ 'false' if settings.enabled else 'true' }}">
         <button class="btn {{ 'btn-outline-secondary' if settings.enabled else 'btn-success' }}" type="submit">{{ "Disable automation" if settings.enabled else "Enable automation" }}</button>
@@ -50,11 +61,11 @@
         <button class="btn btn-primary" type="submit">Start</button>
       </form>
       <form method="post" action="{{ root_path }}{{ page_root }}/stop">
-        <button class="btn btn-danger" type="submit">Stop + Park</button>
+        <button class="btn btn-danger" type="submit">Stop &amp; park</button>
       </form>
     </div>
 
-    <form method="post" action="{{ root_path }}{{ page_root }}/capture" class="row g-2 align-items-center mt-3">
+    <form method="post" action="{{ root_path }}{{ page_root }}/capture" class="row g-3 align-items-center mt-3">
       <div class="col-auto"><label for="roof-capture" class="col-form-label">Capture the plan loaded on the scope as</label></div>
       <div class="col-auto"><input id="roof-capture" name="name" class="form-control" placeholder="Plan name" required></div>
       <div class="col-auto"><button class="btn btn-outline-primary" type="submit">Capture</button></div>

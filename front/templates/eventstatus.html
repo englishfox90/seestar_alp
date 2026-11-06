@@ -1,9 +1,5 @@
-<div class="container mt-4">
-    <div class="row">
-        <div class="col-md-12">
-            <h4>Current Status of Devices</h4>
-        </div>
-    </div>
+<div>
+    <h2 class="panel-title mb-3">Current Status of Devices</h2>
 
     {% if results and results|length >0 %}
         {% set has_device_id = results[0].DeviceID is defined %}
@@ -11,14 +7,10 @@
         {% if has_device_id %}
             {% set grouped_results = results | groupby('DeviceID') %}
             {% for device_id, device_events in grouped_results %}
-                <div class="row mb-4">
-                    <div class="col-md-12">
-                        <h5>Device ID: {{ device_id }}</h5>
-                    </div>
-                </div>
-                <div class="row">
+                <h3 class="panel-title mb-2">Device ID: {{ device_id }}</h3>
+                <div class="row g-3 mb-3">
                     {% for event_name in events %}
-                        <div class="col-md-2 mb-3">
+                        <div class="col-6 col-md-4 col-lg-2">
                             {% set event_status = device_events | selectattr('Event', 'equalto', event_name) | first %}
                             {% include 'event_card.html' %}
                         </div>
@@ -26,9 +18,9 @@
                 </div>
             {% endfor %}
         {% else %}
-            <div class="row">
+            <div class="row g-3 mb-3">
                 {% for event_name in events %}
-                    <div class="col-md-2 mb-3">
+                    <div class="col-6 col-md-4 col-lg-2">
                         {% set event_status = results | selectattr('Event', 'equalto', event_name) | first %}
                         {% include 'event_card.html' %}
                     </div>
