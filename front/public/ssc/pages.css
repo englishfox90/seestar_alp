@@ -1,7 +1,7 @@
 /* Tonight. Rules: front/DESIGN.md section 5, T1. */
 .t-page {
-    /* Under the hero stay the caption and the first line of the sentence. */
-    --t-now-reserve: 92px;
+    /* Under the hero stay the caption, the sentence and the Night Line. Check on a real phone. */
+    --t-now-reserve: 170px;
     --t-thumb: 120px;
     --t-stack-ratio: 0.5625;
     --t-pier-ratio: 1;
@@ -151,18 +151,22 @@
 
     #t-focus { order: 1; }
     #t-progress { order: 3; }
-    #t-now { order: 4; }
-    .t-night { order: 6; }
-    #t-plan { order: 7; }
-    #t-details { order: 8; }
+    /* A glance gets the image, the sentence and the night. Metrics and Stop come next. */
+    #t-now { display: contents; }
+    #t-now > * { order: 6; }
+    #t-now > .t-sentence { order: 4; }
+    .t-night { order: 5; }
+    .t-image[data-role="thumb"] { order: 7; }
+    #t-plan { order: 8; }
+    #t-details { order: 9; }
     /* Only an image may touch the bar. */
-    #t-focus, .t-images[data-layout="thumbs"] ~ .t-side #t-now { padding-top: var(--ssc-space-5); }
+    #t-focus, .t-images[data-layout="thumbs"] ~ .t-side #t-now > :first-child + * { padding-top: var(--ssc-space-5); }
 
     /* The night's summary is the point of the morning, ahead of the line. */
     .t-page[data-state="finished"] #t-plan { order: 5; }
 
     /* A day screen leads with the sentence and the plan, and the pier follows. */
-    .t-page[data-hero="plan"] #t-now { order: 1; }
+    .t-page[data-hero="plan"] #t-now > * { order: 1; }
     .t-page[data-hero="plan"] .t-night { order: 3; }
     .t-page[data-hero="plan"] #t-plan { order: 4; }
     .t-page[data-hero="plan"] .t-image { order: 5; }

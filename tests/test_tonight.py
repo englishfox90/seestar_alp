@@ -672,7 +672,7 @@ def test_closures_and_unknown_clip_to_the_axis_or_are_left_out():
     line = tonight.night_line(WINDOW, [], NOW, clock, roof)
     assert len(line["closed"]) == 1 and line["closed"][0]["start"] == 0
     assert line["unknown"][0]["start"] == 0
-    assert f"Roof unknown t{int(sunset - NOW)} to" in line["label"], "the time given is where it's drawn"
+    assert f"No roof record before t{int(sunset + 600 - NOW)}" in line["label"], "the time given is where it's drawn"
 
 
 def test_sensor_silence_is_not_called_a_reading_of_closed():
@@ -726,7 +726,7 @@ def test_state_with_no_history_shows_the_night_so_far_as_unknown(client, monkeyp
     monkeypatch.setattr(tonight, "_window_cache", {})
     html = _get(client, "/1/tonight/state")
     assert html.count('class="ssc-night__unknown"') == 1 and "ssc-night__closed" not in html
-    assert "Roof unknown" in html
+    assert "No roof record" in html
 
 
 # ---- the morning summary ------------------------------------------------------------------------
@@ -866,3 +866,20 @@ def test_viewer_and_sheet_are_outside_the_page_and_load_nothing_until_opened(cli
 def test_viewer_uses_the_inline_routes():
     script = (Path(front_app.__file__).parent / "public" / "ssc" / "tonight.js").read_text()
     assert "/image-view.jpg" in script and "/pier.jpg?full=true" in script
+
+
+def test_touching_gaps_read_as_one_calm_line():
+    words = tonight._roof_words(
+        [], [{"start": 100, "end": 200}, {"start": 200, "end": 300}], lambda t: f"t{int(t)}", night_start=100
+    )
+    assert words == ["No roof record before t300"]
+
+
+def test_skipped_targets_collapse_behind_a_count():
+    from jinja2 import Environment, FileSystemLoader
+
+    env = Environment(loader=FileSystemLoader("front/templates"))
+    html = env.get_template("ssc/tonight_parts.html").module.plan_list(
+        {"rows": [], "skipped": [{"name": "M 42", "why": "other targets scored higher"}]}, {}, {}
+    )
+    assert "1 not tonight" in html and "<details" in html

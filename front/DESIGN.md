@@ -57,6 +57,7 @@ The design language and framework for the whole web UI. The owner approved this 
 
 ## Decision log
 
+- **2026-11-06:** Final design review: the language is done. Phone Tonight now puts the Night Line directly under the sentence, because a glance has to show the night. Image corners are 0 everywhere. Schedule and Live stay on Bootstrap unless they earn the move.
 - **2026-11-05:** Keep htmx and server templates. New screens get their own shell without Bootstrap, and legacy pages stay on it.
 - **2026-11-05:** The first mockup, with glass panels and teal and coral accents, was rejected as AI-looking. The second, with system colours, was approved and then overturned in part by the design review.
 - **2026-11-05:** Images are never cropped by the UI, except the pier thumbnail's sky circle.
@@ -65,22 +66,13 @@ The design language and framework for the whole web UI. The owner approved this 
 
 ## Design specification
 
-**Evidence**
-- **Rendered, Chrome on Windows:** the mockup (overview zoom only), plus dashboard, schedule, settings and mosaic at 430px, and framed mosaic at desktop width.
-- **Images:** I opened the stack in Chrome. Chrome could not open `127.0.0.1:8085`, so I fetched the pier image with curl from this Mac. `/1/dashboard/pier.jpg` returns 404 until the server restarts.
-- **Not seen:** nothing on an iPhone, and no stacking or unsafe state. Night and Red are computed, not rendered, so test them on the phone before committing.
-- **Corrections to my last report:**
-  - A CSS `filter` on the root element does not create a containing block, so my objection was wrong. The mockup's filter is on a div, which is the real issue.
-  - I sketched a title over the image. That is withdrawn, for the reasons in principle 2.
-  - `#0071e3` is superseded by the tokens below.
-
 **What the images dictate**
 - **Stack:** 720×1280, stars edge to edge, mean luminance 40/255. Thin text over it fails.
 - **Pier:** 2048×2048 fisheye, mean 52, peak 255. Burned-in text fills all four corners, including a bright red timestamp. At 344px that text is about 4px tall, and at 550px about 7px. It is decoration except in the viewer.
 
 ### 1. Principles
 1. **The image is the only colour.** UI stays neutral. Colour appears only for interaction and status.
-2. **Nothing sits on an image.** Captions and controls go beside or below it. Images are never cropped, except the pier porthole.
+2. **Nothing sits on an image.** Captions and controls go beside or below it. Images are never cropped.
 3. **Every state has one sentence and at most one action.** No fact is said twice.
 4. **Status works without colour.** Icon, word and position must carry it, because Red mode has no hues.
 5. **Light is a cost.** Each lit pixel must earn its place after dark, so Night avoids large bright fills.
@@ -107,7 +99,7 @@ It needs no network, gives San Francisco on the owner's phone, and is the lighte
 | Caption, tab label | 12/16 | 12/16 | 400, 600 | 0 |
 
 - **Overturned:** 34px titles (the owner said things are oversized), weight 700, and 11px captions (too small at night).
-- **Inputs are 16px on phones** because iOS Safari zooms focused fields smaller than that. Current inputs are 15px.
+- **Inputs are 16px on phones** because iOS Safari zooms focused fields smaller than that.
 - **Numbers:** `font-variant-numeric: tabular-nums` on values, times and metrics. Units are 15px at 400 weight.
 - **Red mode:** body 16/22, footnote 15/20, caption 13/18, and no 400 weight under 16px.
 
@@ -159,9 +151,10 @@ Red cannot meet AA: pure `#ff0000` on black tops out at 5.25:1. That is why Red 
 - Tokens alone do not guarantee that, because legacy pages, canvases and images leak.
 - Use a floor on every page:
 ```css
-html[data-theme=red]{filter:grayscale(1) brightness(.7)}
-html[data-theme=red] body::after{content:"";position:fixed;inset:0;z-index:2147483647;
+/* Multiplying by pure red leaves only the red channel. A filter on html would grey this overlay too. */
+html[data-theme="red"] body::after{content:"";position:fixed;inset:0;z-index:2147483647;
   background:#f00;mix-blend-mode:multiply;pointer-events:none}
+html[data-theme="red"] img,html[data-theme="red"] canvas,html[data-theme="red"] video{filter:brightness(.7)}
 ```
 - This zeroes green and blue beneath it, including on legacy pages.
 - **Limits:**
@@ -184,7 +177,7 @@ html[data-theme=red] body::after{content:"";position:fixed;inset:0;z-index:21474
 - **Levels:** canvas, surface, raised (sheets and menus). No shadows, except a sheet scrim of `rgba(0,0,0,.5)`.
 - **Glass:** only the top bar and tab bar, at `saturate(1.4) blur(20px)` with 88% opacity. Over stars, low opacity reads as noise. Red is fully opaque.
 - **Tab bar: overturned, now docked.** The 28px floating pill wastes 32px of width, sits over images, and is the most trend-bound element in the mockup. Use a full-width bar of 50px plus safe area, with a hairline top.
-- **Radii:** 10 panels, 8 controls, 14 sheet top, 4 images on desktop, 0 images on phone, 50% only for the porthole and dots. Kept because 12+ reads as soft and consumer, and 6 reads as a developer tool, and because the owner asked for smaller corners.
+- **Radii:** 10 panels, 8 controls, 14 sheet top, 0 images, 50% only for dots. Kept because 12+ reads as soft and consumer, and 6 reads as a developer tool, and because the owner asked for smaller corners.
 - **Images:** black backing, `contain`, no border, no text on top. Caption sits below on a 13px line. Stale images use `opacity:.55` plus a stale caption. Night: `brightness(.85)`.
 
 ### 5. Layout framework
@@ -270,7 +263,7 @@ I did not render Console, System, Search, Position, Config, Image, Planning, Pla
 | Tab bar | 4 items, icon 24, label 12, regular or fill icon when active | active | `.app-tabbar` |
 | Wide nav | Same 4 items, height 44, weight 600 when active | active | `.navbar-nav` |
 | Image viewer | Full screen on black, pinch and pan, close 44, metadata below, pure black in Night | loading, stale, failed | new |
-| Porthole | 64 circle in black margin, 1px separator ring. Crop to the sky circle (center near 58% 49%, set by CSS variable, may need adjusting if the camera moves) | stale, offline, hidden | new |
+| Pier thumbnail | At least 120 wide on phones, whole image, tap to swap with the stack. Desktop shows both images in full, sharing top and bottom edges | stale, offline, hidden | new |
 | Metric | Label 13 above, value 28, unit 15. Maximum 3, never in a tile grid | stale shows "—" | `.focus-value` |
 | Bar | Height 4, radius 2, fill-2 track | value, split (kept and dropped) | `.progress`, `.metric-bar` |
 | Chart | SVG, 1px grid, 2px line, tabular labels 13, no legend box, direct labels | empty, partial | focus SVG |
@@ -305,12 +298,12 @@ Minimum touch target is 44 everywhere, including small buttons on touch.
 
 | State | Hero | Treatment | Sentence | Action |
 |---|---|---|---|---|
-| Day, idle | Night Line at 24px height, plan rows | Stack hidden. Porthole shows pier | "Starts 18:12 with NGC 6992" | Edit plan (plain) |
+| Day, idle | Night Line at 24px height, plan rows | Stack hidden. Pier thumbnail | "Starts 18:12 with NGC 6992" | Edit plan (plain) |
 | Waiting for dark | Pier | Sky-first, stack thumbnail | "Waiting for dark, sun −9°" | none |
 | Opening, slewing | Pier, compact steps 13px below | No motion except cross-fade | "Moving to NGC 6992" | Stop |
 | Autofocus | Focus curve, full slot | 2px accent line on black | "Focusing, position 1172" | Stop |
 | Darks | Last image at .55, bar 4px | Bar is the only accent | "Taking darks, 40%" | Stop |
-| Stacking | Stack plus porthole | Metrics: earned, kept, of goal | "Stacking NGC 6992" | Stop in the scroll area |
+| Stacking | Stack plus pier thumbnail | Metrics: earned, kept, of goal | "Stacking NGC 6992" | Stop in the scroll area |
 | Parked, held | Last image at .55 | No green | "Held. 7 h of dark left" | Link to Plan › Automation |
 | Finished | Morning card, last image | Hours gained per target | "Finished. 6.2 h earned" | none |
 | Roof unsafe | Pier, danger band on top | Only solid red on screen | "Roof unsafe. Parking" | none while parking |

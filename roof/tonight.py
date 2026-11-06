@@ -464,7 +464,18 @@ def roof_status(status) -> list:
     return lines
 
 
-def _roof_words(closed, unknown, clock) -> list:
+def _merge_spans(spans) -> list:
+    """Spans that touch read as one. Restarts otherwise split a gap into several."""
+    merged = []
+    for span in sorted(spans, key=lambda s: s["start"]):
+        if merged and span["start"] <= merged[-1]["end"]:
+            merged[-1] = {**merged[-1], "end": max(merged[-1]["end"], span["end"])}
+        else:
+            merged.append(dict(span))
+    return merged
+
+
+def _roof_words(closed, unknown, clock, night_start=None) -> list:
     """The roof's record in words, one string per fact."""
     words = []
     for period in closed:
@@ -473,8 +484,12 @@ def _roof_words(closed, unknown, clock) -> list:
             words.append(f"{what} since {clock(period['start'])}")
         else:
             words.append(f"{what} {clock(period['start'])} to {clock(period['end'])}")
-    for span in unknown:
-        words.append(f"Roof unknown {clock(span['start'])} to {clock(span['end'])}")
+    for span in _merge_spans(unknown):
+        # Not a fault: nothing was recording, and the top bar says what the roof is now.
+        if span["start"] == night_start:
+            words.append(f"No roof record before {clock(span['end'])}")
+        else:
+            words.append(f"No roof record {clock(span['start'])} to {clock(span['end'])}")
     return words
 
 
@@ -496,7 +511,7 @@ def _roof_layers(roof, sunset, sunrise, now, percent, clock) -> dict:
         span = clip(period["start"], period["end"])
         if span:
             unknown.append({"start": span[0], "end": span[1]})
-    words = _roof_words(closed, unknown, clock)
+    words = _roof_words(closed, unknown, clock, sunset)
     note = words
     # Few enough to read on a phone. The label keeps every one.
     if len(closed) > ROOF_NOTE_PERIODS:

@@ -67,7 +67,12 @@
   {% elif status.uses_target_list and not plan.error %}
     <p class="ssc-footnote">Nothing on the target list can be imaged for the rest of this night.</p>
   {% endif %}
-  {% for item in plan.skipped %}<p class="ssc-footnote">{{ item.name|e }}: {{ item.why|e }}</p>{% endfor %}
+  {% if plan.skipped %}
+  <details class="t-details t-skipped">
+    <summary class="t-details__summary">{{ plan.skipped|length }} not tonight{{ ui.icon("down", 16) }}</summary>
+    {% for item in plan.skipped %}<p class="ssc-footnote">{{ item.name|e }}: {{ item.why|e }}</p>{% endfor %}
+  </details>
+  {% endif %}
 {% endmacro %}
 
 {% macro detail_rows(rows) %}
