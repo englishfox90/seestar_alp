@@ -593,6 +593,7 @@ def test_dry_run_sends_nothing_to_the_real_device_and_walks_transitions(tmp_path
         device_name = "x"
         schedule = {"state": "stopped", "list": [], "item_number": 0}
         scheduler_thread = None
+        framing_status = None
         sent = []
 
         def send_message_param_sync(self, data):
@@ -1290,3 +1291,116 @@ def test_dew_turned_off_after_a_restart_while_parked_only(dew_rig):
     dew_rig.set_scope(parked=False)
     dew_rig.tick(10)
     assert _heater_calls(dew_rig) == []  # arm open, maybe someone else's session
+
+
+def _guard(seq, state, note="", item=1):
+    return {"seq": seq, "state": state, "item_number": item, "target_name": "A", "note": note}
+
+
+def test_guard_retrying_then_restored_stays_visible_and_changes_no_decision(rig):
+    rig.write("Good.json", [_framed("A"), _framed("B")])
+    rig.settle_and_start()
+    calls = list(rig.scope.calls)
+    rig.set_scope(
+        view_stage="Stack",
+        mosaic_scale=1.0,
+        item_number=1,
+        framing=_guard(1, "retrying", "A is stacking at scale 1, not the planned 1.7; retrying once"),
+    )
+    rig.tick(10)
+    assert rig.auto.status()["alarm"].endswith("retrying once")
+    # Not overwritten by the backstop, which waits for the retry's outcome.
+    rig.tick(10)
+    assert rig.auto.status()["alarm"].endswith("retrying once")
+    rig.set_scope(
+        mosaic_scale=1.7,
+        framing=_guard(2, "restored", "A lost its framing, and one retry restored scale 1.7"),
+    )
+    rig.tick(10)
+    assert "one retry restored" in rig.auto.status()["alarm"]
+    assert any("framing confirmed" in line for line in rig.auto.status()["log"])
+    assert rig.auto.phase == IMAGING
+    assert rig.scope.calls == calls
+
+
+def test_guard_skip_on_the_last_item_stays_on_tonight_after_the_park(rig):
+    rig.write("Good.json", [_framed("A")])
+    rig.settle_and_start()
+    note = "A skipped: asked for scale 1.7 angle 67, and after one retry it would not hold"
+    rig.set_scope(view_stage="", item_number=0, sched_state="complete", framing=_guard(1, "skipped", note))
+    rig.tick(10)
+    assert rig.auto.status()["alarm"] == note
+    # The finish parks as it always does, with the same stop sequence.
+    assert rig.stop_calls() == ["clear_view_plan", "stop_scheduler", "stop_view", "park"]
+    rig.set_scope(parked=True)
+    rig.tick(10)
+    assert rig.auto.phase == IDLE
+    assert rig.auto.status()["alarm"] == note
+    assert sum(note in line for line in rig.auto.status()["log"]) == 1
+
+
+def test_guard_skip_keeps_the_plan_ended_early_message(rig):
+    rig.settings = replace(rig.settings, schedule=schedule_tools.TARGET_LIST)
+    rig.auto._active_schedule = schedule_tools.TARGET_LIST
+    rig.auto._active_items = [_framed("A")]
+    rig.auto._launched_at = rig.now
+    rig.auto.phase = IMAGING
+    rig.set_scope(connected=True, parked=False, sched_state="complete", framing=_guard(1, "skipped", "A skipped."))
+    rig.tick(1)
+    alarm = rig.auto.status()["alarm"]
+    assert alarm.startswith("A skipped.") and "ended well before its time" in alarm
+
+
+def test_guard_skip_on_an_item_is_not_overwritten_by_the_backstop(rig):
+    rig.write("Good.json", [_framed("A"), _framed("B")])
+    rig.settle_and_start()
+    rig.set_scope(view_stage="Stack", mosaic_scale=1.0, item_number=1, framing=_guard(1, "skipped", "A skipped."))
+    rig.tick(10)
+    rig.tick(10)
+    assert rig.auto.status()["alarm"] == "A skipped."
+    # Reported once, not again on later ticks.
+    assert sum("ALARM: A skipped." in line for line in rig.auto.status()["log"]) == 1
+
+
+def test_backstop_says_still_wrong_when_the_guard_passed_but_it_changed_later(rig):
+    rig.write("Good.json", [_framed("A")])
+    rig.settle_and_start()
+    rig.set_scope(view_stage="Stack", mosaic_scale=1.0, item_number=1, framing=_guard(1, "held"))
+    rig.tick(10)
+    alarm = rig.auto.status()["alarm"]
+    assert "not the planned 1.7" in alarm and "still wrong" in alarm
+
+
+def test_backstop_message_is_unchanged_with_no_guard_outcome(rig):
+    rig.write("Good.json", [_framed("A")])
+    rig.settle_and_start()
+    rig.set_scope(view_stage="Stack", mosaic_scale=1.0, item_number=1)
+    rig.tick(10)
+    assert rig.auto.status()["alarm"] == "A is stacking at scale 1, not the planned 1.7"
+
+
+def test_guard_outcome_is_ignored_for_an_adopted_session(rig):
+    rig.write("Good.json", [_framed("A")])
+    rig.settle_and_start()
+    rig.auto._adopted = True
+    rig.set_scope(framing=_guard(1, "skipped", "A skipped."))
+    rig.tick(10)
+    assert rig.auto.status()["alarm"] == ""
+
+
+def test_real_scope_passes_the_guard_outcome_and_dry_run_drops_it():
+    outcome = _guard(1, "skipped", "A skipped.")
+
+    class Dev:
+        is_connected = True
+        device_name = "x"
+        schedule = {"state": "stopped", "list": [], "item_number": 0}
+        scheduler_thread = None
+        framing_status = outcome
+
+        def send_message_param_sync(self, data):
+            return {"result": {}}
+
+    real = RealScope(lambda: Dev())
+    assert real.read().framing == outcome
+    assert DryRunScope(real).read().framing is None

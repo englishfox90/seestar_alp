@@ -33,6 +33,7 @@ class ScopeState:
     stack_lapse_s: float = 0.0
     mosaic_estimate_h: float | None = None  # the firmware's time for this framing
     gain: int | None = None
+    framing: dict | None = None  # the device's framing guard: its latest outcome
 
 
 def _failed(res) -> str | None:
@@ -74,6 +75,7 @@ class RealScope:
             item_count=len(items),
             target=target,
             busy=self.busy(),
+            framing=getattr(dev, "framing_status", None),
         )
         device_state = self._rpc(dev, "get_device_state")
         mount = device_state.get("mount")
@@ -226,6 +228,7 @@ class DryRunScope:
             item_number=self._item,
             item_count=self._count or real.item_count,
             busy=False,
+            framing=None,
         )
 
     def busy(self):

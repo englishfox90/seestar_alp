@@ -23,6 +23,7 @@ docs/refs
 alpycadevice.code-workspace
 skeletons/AlpycaDeviceSkeletons.code-workspace
 alpyca.log*
+roof_framing_diag.log
 docker/config.toml
 docker/getopts_long
 front/twilight_times.json
