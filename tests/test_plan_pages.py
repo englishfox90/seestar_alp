@@ -391,3 +391,10 @@ def test_plan_css_is_loaded_and_hidden_beats_its_layout_classes():
     assert '@import url("plan.css") layer(pages);' in (public / "ssc.css").read_text()
     # target_sky.js shows the add or the save form by toggling hidden on .plan-stack elements.
     assert ".plan-page [hidden] { display: none; }" in (public / "plan.css").read_text()
+
+
+def test_held_outranks_a_waiting_headline_so_it_matches_tonight(rig):
+    rig.status = {**IMAGING, "held": True, "headline": "waiting: roof must read safe for 120s"}
+    html = _get(rig, "/1/roof")
+    assert "Held until Start or the next night" in html
+    assert "roof must read safe" not in html.split("plan-sentence", 1)[1][:80]

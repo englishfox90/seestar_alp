@@ -7,7 +7,8 @@
 {% if status.override_roof %}{{ ui.band({"headline": "Manual start is ignoring the roof", "line": "It will not park for the roof until the roof next reads safe."}, "#roof-log") }}
 {% elif status.connected and status.safe is false and status.parked is false %}{{ ui.band({"headline": "Roof unsafe, scope not parked", "line": status.safety_detail}, "#roof-log") }}{% endif %}
 {% if status.foreign %}{{ ui.notice("neutral", "A session started elsewhere is running. Automation will leave it alone, and will still park if the roof reads unsafe.") }}{% endif %}
-<p class="plan-sentence">{{ (status.headline or "Starting up")|e }}</p>
+{# Held outranks "waiting": it's what will stop a start, whatever else clears first. Matches Tonight. #}
+<p class="plan-sentence">{% if status.held %}Held until Start or the next night{% else %}{{ (status.headline or "Starting up")|e }}{% endif %}</p>
 <div class="plan-rows">
   {% set roof_tone = "ok" if status.safe else ("neutral" if status.parked is true else ("danger" if status.parked is false else "attention")) %}
   {% call parts.status_row("Roof", roof_tone, "Safe" if status.safe else "Unsafe") %}<span class="ssc-row__sub">{{ status.safety_detail|e }}</span>{% endcall %}

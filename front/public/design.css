@@ -829,6 +829,49 @@ img#liveViewImg {
     min-height: var(--ssc-control-height);
 }
 
+/* Bootstrap sizes these relative to their parent, which makes a stray in-between size. */
+code {
+    font-size: inherit;
+}
+
+.accordion-button {
+    min-height: var(--ssc-control-height);
+}
+
+/* Config's selects use an old class that Bootstrap 5 no longer styles. */
+.custom-select {
+    min-height: var(--ssc-control-height);
+    padding: 0 var(--ssc-space-4);
+    border: 1px solid transparent;
+    border-radius: var(--ds-radius-small);
+    background-color: var(--ds-fill);
+    color: var(--ui-body);
+    font-size: var(--ssc-text-input);
+}
+
+/* Small checkboxes and sliders are too fine for fingers at the pier. */
+@media (pointer: coarse) {
+    .form-check {
+        display: flex;
+        align-items: center;
+        gap: var(--ssc-space-3);
+        min-height: var(--ssc-control-height);
+        padding-left: 0;
+    }
+
+    .form-check .form-check-input {
+        flex: none;
+        float: none;
+        width: 22px;
+        height: 22px;
+        margin: 0;
+    }
+
+    .form-range {
+        height: var(--ssc-control-height);
+    }
+}
+
 /* ---- Small screens ----------------------------------------------------- */
 
 @media (max-width: 768px) {
