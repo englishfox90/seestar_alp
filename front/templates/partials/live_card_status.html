@@ -1,7 +1,12 @@
-<div hx-ext="sse" sse-connect="{{ imager_root }}/live/status">
-  <div sse-swap="message"></div>
-  <div sse-swap="statusUpdate" class="d-none"></div>
-  <div sse-swap="liveViewModeChange" class="d-none"></div>
-  <div sse-swap="capture_status" class="d-none"></div>
-  <div sse-swap="zoom" class="d-none"></div>
-</div>
+<section class="live-group">
+  <h2 class="live-section-title">Status</h2>
+  <div class="live-side-card">
+    <div hx-ext="sse" sse-connect="{{ imager_root }}/live/status">
+      <div sse-swap="message"></div>
+      <div sse-swap="statusUpdate" class="d-none"></div>
+      <div sse-swap="liveViewModeChange" class="d-none"></div>
+      <div sse-swap="capture_status" class="d-none"></div>
+      <div sse-swap="zoom" class="d-none"></div>
+    </div>
+  </div>
+</section>

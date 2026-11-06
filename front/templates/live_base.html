@@ -1,5 +1,9 @@
 {% extends 'base.html' %}
 
+{% block html_header %}
+  <link href="{{ root_path }}/public/ssc/live.css" rel="stylesheet">
+{% endblock %}
+
 {% block content %}
   {% if client_master and online %}
     <script>
@@ -180,13 +184,13 @@
       {% block live_content %}{% endblock %}
     </div>
 
-    <div class="live-quickbar">
+    <div class="live-quickbar" role="group" aria-label="Quick actions">
       <button class="btn btn-outline-danger" hx-delete="{{ root }}/live/mode" hx-swap="none"
               hx-confirm="Stop current imaging or schedule item?">Stop</button>
-      <button class="btn btn-outline-primary" hx-post="{{ root }}/live/record" hx-swap="none">Record</button>
-      <button class="btn btn-outline-primary" hx-post="{{ root }}/command" hx-swap="none"
-              hx-vals='{"command": "start_auto_focus"}'>Auto Focus</button>
-      <button class="btn btn-outline-primary" hx-post="{{ root }}/live/zoom" hx-swap="none"
+      <button class="btn btn-outline-secondary" hx-post="{{ root }}/live/record" hx-swap="none">Record</button>
+      <button class="btn btn-outline-secondary" hx-post="{{ root }}/command" hx-swap="none"
+              hx-vals='{"command": "start_auto_focus"}'>Auto focus</button>
+      <button class="btn btn-outline-secondary" hx-post="{{ root }}/live/zoom" hx-swap="none"
               hx-vals='{"zoom": 0}'>1x</button>
     </div>
 

@@ -1,28 +1,17 @@
-<div class="live-video-controls-wrap mb-3">
-  <form>
-    <div class="live-video-controls-row py-1 align-items-center">
-      <h2 class="live-video-heading mb-0">
-        <span>Video</span>
-        <button type="button"
-                id="liveRotateButton"
-                class="btn btn-outline-primary btn-sm live-rotate-btn"
-                aria-label="Rotate live view"
-                title="Rotate live view 90 degrees"
-                onclick="rotateLiveView()">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-            <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 7.083.5.5 0 1 1 .908.418A6 6 0 1 1 8 2V.5a.5.5 0 0 1 .854-.354l2 2a.5.5 0 0 1 0 .708l-2 2A.5.5 0 0 1 8 4.5z"/>
-          </svg>
-        </button>
-      </h2>
+<section class="live-group">
+  <h2 class="live-section-title">Video recording</h2>
+  <div class="live-side-card">
+    <form class="live-fields">
       <div id="recordButtonContent"
            hx-get="{{ root }}/live/video"
            hx-trigger="load, every 2s, sse:video_record_status"
            hx-swap="innerHTML"
            class="live-video-record no-htmx-fx">
-        Loading event status...
+        Loading&hellip;
       </div>
-      <div class="live-video-timelapse">
-        <select id='timelapse' name='timelapse' class="form-select" aria-label="Speed">
+      <div class="live-field live-video-timelapse">
+        <label for="timelapse" class="form-label">Speed</label>
+        <select id='timelapse' name='timelapse' class="form-select">
           <option value="0" selected>Normal speed</option>
           <option value="1">Timelapse 1 sec</option>
           <option value="2">Timelapse 2 sec</option>
@@ -33,13 +22,13 @@
           <option value="60">Timelapse 60 sec</option>
         </select>
       </div>
-      <div id="raw" class="form-check form-switch live-video-raw">
-        <input class="form-check-input" type="checkbox" role="switch" id="rawCheckbox" name="raw">
+      <div id="raw" class="form-check form-switch live-switch live-video-raw">
         <label class="form-check-label" for="rawCheckbox">Raw</label>
+        <input class="form-check-input" type="checkbox" role="switch" id="rawCheckbox" name="raw">
       </div>
-      <div id="capture_status" class="live-capture-status">
-        Capture status
+      <div id="capture_status" class="live-capture-status" aria-live="polite">
+        Waiting for capture status
       </div>
-    </div>
-  </form>
-</div>
+    </form>
+  </div>
+</section>

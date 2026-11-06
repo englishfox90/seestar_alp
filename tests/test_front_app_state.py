@@ -2607,7 +2607,7 @@ def test_live_wide_cam_get_returns_toggle_for_s30(monkeypatch):
     resp = client.simulate_get("/1/live/wide-cam")
     assert resp.status_code == 200
     assert "wide-cam-toggle" in resp.text
-    assert "Wide Camera" in resp.text
+    assert "wide camera" in resp.text.lower()
 
 
 def test_live_wide_cam_get_shows_checked_when_enabled(monkeypatch):

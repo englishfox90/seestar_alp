@@ -1,23 +1,12 @@
-<div class="d-grid gap-3">
-  <div>
-    {% include 'partials/live_controls_record.html' with context %}
-    {#    {% include 'partials/live_controls_goto.html' with context %}#}
-  </div>
-
-  <div>
-    {% include 'partials/live_controls_focus.html' with context %}
-  </div>
-
-  <div class="d-flex flex-wrap">
-    {% include 'partials/live_controls_exposure.html' with context %}
-  </div>
-
-  {% if experimental %}
-  <div id="wide-cam-control"
-       class="no-htmx-fx"
-       hx-get="{{ root }}/live/wide-cam"
-       hx-trigger="load"
-       hx-swap="innerHTML">
-  </div>
-  {% endif %}
+{% include 'partials/live_controls_record.html' with context %}
+{# {% include 'partials/live_controls_goto.html' with context %} #}
+{% include 'partials/live_controls_focus.html' with context %}
+{% include 'partials/live_controls_exposure.html' with context %}
+{% if experimental %}
+<div id="wide-cam-control"
+     class="no-htmx-fx"
+     hx-get="{{ root }}/live/wide-cam"
+     hx-trigger="load"
+     hx-swap="innerHTML">
 </div>
+{% endif %}

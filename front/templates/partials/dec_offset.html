@@ -1,7 +1,42 @@
 <style>
+  /* Dialog colours come from the theme, so it reads in Day, Night and Red. */
+  .ssc-dec-dialog {
+    --bs-modal-width: 400px;
+  }
+
+  .ssc-dec-content {
+    background: var(--ssc-raised);
+    color: var(--ssc-text-1);
+  }
+
+  .ssc-dec-content .modal-header,
+  .ssc-dec-content .modal-footer {
+    border-color: var(--ssc-separator);
+  }
+
+  .ssc-dec-content .btn-close {
+    width: var(--ssc-touch);
+    height: var(--ssc-touch);
+    padding: 0;
+    margin: 0 0 0 auto;
+    background-size: 1rem;
+  }
+
+  .ssc-dec-content .modal-footer .btn {
+    min-height: var(--ssc-sheet-button);
+    flex: 1 1 auto;
+  }
+
+  .ssc-dec-body {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 0;
+  }
+
   #dec-offset-container {
     position: relative;
-    width: 400px;
+    width: min(400px, 100%);
     height: 344px;
     padding: 0;
     border: none;
@@ -10,6 +45,12 @@
 
   #dec-offset-container label {
     position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--ssc-space-2);
+    min-width: var(--ssc-touch);
+    min-height: var(--ssc-touch);
     cursor: pointer;
     color: var(--ssc-text-1);
     font-weight: var(--ssc-weight-strong);
@@ -35,7 +76,9 @@
   }
 
   #dec-offset-container input[type="radio"] {
-    margin-right: 6px;
+    margin: 0;
+    width: 1.25rem;
+    height: 1.25rem;
   }
 
   #dec-offset-arrow {
@@ -78,18 +121,21 @@
       `
       <div class="modal fade" id="decOffsetModal" tabindex="-1"
            aria-labelledby="decOffsetModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered" role="document" style="max-width: 400px; width: 400px;">
-          <div class="modal-content bg-dark text-white" style="height: 400px; overflow: visible;">
+        <div class="modal-dialog modal-dialog-centered ssc-dec-dialog" role="document">
+          <div class="modal-content ssc-dec-content">
             <div class="modal-header">
-              <h5 class="modal-title" id="decOffsetModalLabel">DEC Offset</h5>
-              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+              <h5 class="modal-title" id="decOffsetModalLabel">DEC offset</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body p-0 d-flex justify-content-center align-items-start" style="height: calc(400px - 56px); position: relative; overflow: visible;">
+            <div class="modal-body ssc-dec-body">
               <div id="dec-offset-container">
                 <img id="dec-offset-arrow" src="{{ root_path }}/public/S50.png" class="dec-offset-arc-image" />
                 <div class="dec-offset-direction-label dec-offset-left-label">← South</div>
                 <div class="dec-offset-direction-label dec-offset-right-label">North →</div>
               </div>
+            </div>
+            <div class="modal-footer ssc-dec-footer">
+              <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Done</button>
             </div>
           </div>
         </div>
