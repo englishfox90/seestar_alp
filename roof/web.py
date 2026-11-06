@@ -48,6 +48,15 @@ def _schedule_rows():
     return rows
 
 
+def shell_context(context, status=None) -> dict:
+    """What a page on the shell needs beyond get_context: the top bar's status and accent."""
+    status = get_automation().status() if status is None else status
+    return {
+        "roof_lines": tonight.roof_status(status),
+        "on_accent": tonight._on_accent(context.get("webui_accent_color")),
+    }
+
+
 class RoofPage:
     @staticmethod
     def on_get(req, resp, telescope_id=1):
@@ -55,6 +64,7 @@ class RoofPage:
         context = dict(front.get_context(telescope_id, req))
         context["partial_path"] = "roof"
         settings = roof_config.load()
+        status = get_automation().status()
         front.render_template(
             req,
             resp,
@@ -64,8 +74,10 @@ class RoofPage:
             target_list_label=schedule_tools.TARGET_LIST_LABEL,
             targets_url=f"/{telescope_id}/targets",
             settings=settings,
-            status=get_automation().status(),
+            status=status,
+            polled=False,
             page_root=f"/{telescope_id}/roof",
+            **shell_context(context, status),
             **context,
         )
 
@@ -73,8 +85,14 @@ class RoofPage:
 class RoofStatus:
     @staticmethod
     def on_get(req, resp, telescope_id=1):
+        status = get_automation().status()
         _front().render_fragment(
-            req, resp, "partials/roof_status.html", status=get_automation().status()
+            req,
+            resp,
+            "partials/roof_status.html",
+            status=status,
+            polled=True,
+            roof_lines=tonight.roof_status(status),
         )
 
 
@@ -82,7 +100,10 @@ class RoofBadge:
     @staticmethod
     def on_get(req, resp):
         _front().render_fragment(
-            req, resp, "partials/roof_badge.html", status=get_automation().status()
+            req,
+            resp,
+            "partials/roof_badge.html",
+            roof_lines=tonight.roof_status(get_automation().status()),
         )
 
 
