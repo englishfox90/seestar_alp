@@ -63,7 +63,8 @@
     --ssc-orange-rgb: 168, 84, 0;
     --ssc-red-rgb: 193, 39, 29;
     --ssc-canvas-rgb: 245, 245, 247;
-    color-scheme: light;
+    /* "only": Day is a choice, so Safari's Adaptive Dark Mode (27.3) must not darken it. */
+    color-scheme: only light;
 }
 
 [data-theme="red"] {

@@ -56,6 +56,14 @@ def test_tokens_define_every_theme():
         assert f'[data-theme="{theme}"]' in tokens
 
 
+def test_day_opts_out_of_browser_darkening():
+    # Day is the person's choice. Safari 27.3's Adaptive Dark Mode darkens light-only pages,
+    # and "only light" is the standard opt-out.
+    tokens = _strip_comments((SSC / "tokens.css").read_text())
+    day = tokens.split('[data-theme="day"]', 1)[1].split("}", 1)[0]
+    assert "color-scheme: only light;" in day
+
+
 def test_legacy_inline_styles_only_fall():
     for template in (ROOT / "templates").rglob("*.html"):
         name = str(template.relative_to(ROOT / "templates"))
