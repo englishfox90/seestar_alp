@@ -122,12 +122,32 @@ class RoofSun:
         }
 
 
+def _client(req) -> str:
+    """Which device sent a request, for the log: its address, and the kind of browser."""
+    agent = req.get_header("User-Agent") or ""
+    device = next(
+        (name for key, name in (("iPhone", "iPhone"), ("iPad", "iPad"), ("Android", "Android"), ("Macintosh", "Mac"), ("Windows", "Windows")) if key in agent),
+        "unknown device",
+    )
+    browser = next(
+        (name for key, name in (("Edg/", "Edge"), ("CriOS", "Chrome"), ("Chrome/", "Chrome"), ("FxiOS", "Firefox"), ("Firefox/", "Firefox"), ("Safari/", "Safari")) if key in agent),
+        "no browser named" if not agent else "other browser",
+    )
+    if agent and "Safari/" not in agent and device in ("iPhone", "iPad"):
+        browser = "Home Screen app"
+    return f"{req.remote_addr or '?'} ({device}, {browser})"
+
+
 class _Action:
     redirect_to = "roof"
 
     @classmethod
     def on_post(cls, req, resp, telescope_id=1):
         _require_same_origin(req)
+        try:
+            get_automation().note_request(f"web: {cls.__name__.removeprefix('Roof')} from {_client(req)}")
+        except Exception:
+            pass  # a note, never in the way of the action
         message = cls.act(req)
         front = _front()
         if message:

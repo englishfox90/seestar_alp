@@ -1445,3 +1445,100 @@ def test_a_roof_that_closed_before_the_restart_waits_out_the_settle(tmp_path):
     rig.auto = rig.build()
     rig.tick(10)
     assert rig.auto.phase != OPENING
+
+
+# ---- a target the scope is stuck on ---------------------------------------------------
+
+
+def _stacking(rig, **changes):
+    rig.set_scope(sched_state="working", item_number=2, view_stage="Stack", **changes)
+
+
+def test_a_stalled_stack_is_skipped_then_the_run_ended_if_the_skip_does_nothing(rig):
+    from roof.automation import SKIP_WAIT_S, STALL_S
+
+    rig.settle_and_start()
+    _stacking(rig, stacked=5, dropped=0)
+    rig.tick(10)
+    rig.tick(STALL_S - 20)
+    assert "skip_item" not in rig.scope.calls
+    rig.tick(30)
+    assert "skip_item" in rig.scope.calls
+    assert any("no frame finished" in line for line in rig.auto.status()["log"])
+    rig.tick(SKIP_WAIT_S + 1)
+    assert rig.auto.phase == PARKING
+    assert rig.stop_calls()[:2] == ["clear_view_plan", "stop_scheduler"]
+
+
+def test_frames_arriving_keep_the_watchdog_quiet(rig):
+    from roof.automation import STALL_S
+
+    rig.settle_and_start()
+    for n in range(1, 8):
+        _stacking(rig, stacked=n)
+        rig.tick(STALL_S // 2)
+    assert "skip_item" not in rig.scope.calls
+
+
+def test_a_target_that_keeps_no_frames_is_skipped_with_the_reason(rig):
+    rig.settle_and_start()
+    _stacking(rig, stacked=0, dropped=3, drop_reason="star trails")
+    rig.tick(10)
+    assert "skip_item" not in rig.scope.calls
+    _stacking(rig, stacked=0, dropped=10, drop_reason="star trails")
+    rig.tick(10)
+    assert "skip_item" in rig.scope.calls
+    assert any("kept none of its first 10 frames (star trails)" in line for line in rig.auto.status()["log"])
+
+
+def test_a_skip_that_works_lets_the_schedule_carry_on(rig):
+    from roof.automation import SKIP_WAIT_S
+
+    rig.settle_and_start()
+    _stacking(rig, stacked=0, dropped=12)
+    rig.tick(10)
+    rig.set_scope(sched_state="working", item_number=3, stacked=0, dropped=0, view_stage="AutoGoto")
+    rig.tick(SKIP_WAIT_S + 10)
+    assert rig.auto.phase == IMAGING
+
+
+def test_a_target_that_never_starts_stacking_is_skipped(rig):
+    from roof.automation import NEVER_STARTED_S
+
+    rig.settle_and_start()
+    rig.set_scope(sched_state="working", item_number=2, view_stage="AutoFocus")
+    rig.tick(10)
+    rig.tick(NEVER_STARTED_S)
+    assert "skip_item" in rig.scope.calls
+
+
+def test_start_pressed_while_parking_starts_once_parked(rig):
+    rig.settle_and_start()
+    rig.auto.request("stop")
+    rig.tick(1)
+    assert rig.auto.phase == PARKING
+    rig.auto.request("start")
+    rig.tick(1)
+    assert any("starting once the arm is parked" in line for line in rig.auto.status()["log"])
+    rig.set_scope(parked=True, sched_state="stopped")
+    rig.tick(10)
+    rig.tick(1)
+    assert rig.auto.phase == OPENING
+
+
+
+def test_a_control_request_says_which_device_sent_it():
+    from types import SimpleNamespace
+
+    from roof.web import _client
+
+    def req(agent, addr="10.147.17.40"):
+        return SimpleNamespace(remote_addr=addr, get_header=lambda name: agent)
+
+    iphone = "Mozilla/5.0 (iPhone; CPU iPhone OS 27_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.1 Mobile/15E148 Safari/604.1"
+    home = "Mozilla/5.0 (iPhone; CPU iPhone OS 27_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
+    mac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36"
+    assert _client(req(iphone)) == "10.147.17.40 (iPhone, Safari)"
+    assert _client(req(home)) == "10.147.17.40 (iPhone, Home Screen app)"
+    assert _client(req(mac)) == "10.147.17.40 (Mac, Chrome)"
+    assert _client(req("")) == "10.147.17.40 (unknown device, no browser named)"

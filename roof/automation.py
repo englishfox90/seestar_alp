@@ -57,6 +57,13 @@ SAFE_NOTE_S = 60
 # (something in the way, say). After a second failure it waits for the next night.
 FAILED_RETRY_S = 45 * 60
 FAILED_TRIES = 2
+# A target the scope is stuck on: it reports a run but no frame completes, it keeps none
+# of its frames, or it never starts stacking at all. Automation skips it, and if the
+# scheduler doesn't move on, ends the run and plans again without it.
+STALL_S = 10 * 60
+NOTHING_KEPT_FRAMES = 10
+NEVER_STARTED_S = 20 * 60
+SKIP_WAIT_S = 2 * 60
 NEVER_STACKED = "the scope never started stacking it, so it probably could not find it (a failed plate solve, say)"
 HEARTBEAT_S = 1800
 COVERAGE_REVIEW_S = 300
@@ -162,6 +169,10 @@ class RoofAutomation:
         self._failed_targets = {}
         # The roof's safe-since time from before a restart, and when it was last seen safe.
         self._saved_safe_since = None
+        # The current item's progress, for the stall watchdog.
+        self._watch = {}
+        # Start pressed while the arm parked: start once it's down.
+        self._start_after_park = False
         self._safe_seen_at = 0.0
         self._list_runs_night = ""
         self._launched_at = 0.0
@@ -183,6 +194,10 @@ class RoofAutomation:
     def shutdown(self):
         self._stop.set()
         self._wake.set()
+
+    def note_request(self, text: str):
+        """Log where a control request came from, from the web thread."""
+        self._log(text)
 
     def request(self, command: str):
         """Queue 'start', 'stop', or 'schedule_changed' for the loop thread."""
@@ -426,6 +441,9 @@ class RoofAutomation:
             self._alarm, self._alarm_after_park = self._alarm_after_park, ""
             self._log("parked: firmware reports mount closed")
             self._alert("parked")
+            if self._start_after_park:
+                self._start_after_park = False
+                self.request("start")
             return
         if now < self._deadline:
             return
@@ -440,6 +458,7 @@ class RoofAutomation:
             return
         self.phase = IDLE
         self._last_stop_attempt = now
+        self._start_after_park = False
         self._raise_alarm(f"PARK NOT CONFIRMED after {PARK_ATTEMPTS} attempts (mount.close={state.parked})")
 
     def _manual_stop(self, scope, state, night, now):
@@ -454,6 +473,12 @@ class RoofAutomation:
     # ---- starting ---------------------------------------------------------------
 
     def _manual_start(self, scope, s, state, safety, dark, night, now):
+        if self.phase == PARKING:
+            # Most likely pressed after a Stop. Start once the arm is down; the usual
+            # checks run then.
+            self._start_after_park = True
+            self._log("Start pressed while parking; starting once the arm is parked")
+            return
         if not dark:
             self._log("Start refused: it is not dark")
             return
@@ -463,7 +488,7 @@ class RoofAutomation:
         if state.sched_state == "working" or self._foreign(state):
             self._log("Start refused: a session is already running")
             return
-        if self.phase in (OPENING, IMAGING, PARKING):
+        if self.phase in (OPENING, IMAGING):
             self._log(f"Start refused: automation is {self.phase}")
             return
         if self._completed_night == night:
@@ -674,6 +699,7 @@ class RoofAutomation:
         self._skip_asked = 0
         self._framing_checked = 0
         self._run_items = {}
+        self._watch = {}
         self._last_item = start_item
         self._deadline = now + START_GRACE_S
         self._arm_deadline = now + ARM_OPEN_ALARM_S
@@ -729,6 +755,8 @@ class RoofAutomation:
             elif state.parked is False:
                 self._arm_deadline = 0.0
             self._note_item(state)
+            if self._watch_item(scope, state, night, now):
+                return
             self._skip_if_too_low(scope, s, state, now)
             self._check_framing(state)
             return
@@ -809,24 +837,87 @@ class RoofAutomation:
             if seen.get("stacked") or seen.get("low"):
                 continue
             name = self._active_items[number - 1].get("params", {}).get("target_name", "?")
-            why = seen.get("why") or NEVER_STACKED
-            record = self._failed_targets.get(name)
-            if not record or record.get("night") != night:
-                record = {"night": night, "count": 0}
-            record.update(at=now, why=why, count=record["count"] + 1)
-            self._failed_targets[name] = record
             failed.append(name)
-            if record["count"] >= FAILED_TRIES:
-                later = "leaving it out for the rest of tonight"
-            else:
-                retry = datetime.fromtimestamp(now + FAILED_RETRY_S).strftime("%H:%M")
-                later = f"leaving it out until {retry}, then one more try"
-            self._log(f"{name} failed: {why}; {later}")
-            self._alert("target_skipped", name, f"{why[0].upper()}{why[1:]}. {later.capitalize()}.")
+            if not seen.get("handled"):  # the watchdog already said so
+                self._mark_failed(name, seen.get("why") or NEVER_STACKED, night, now)
         self._run_items = {}
         if failed:
             self._save_state()
         return failed
+
+    def _mark_failed(self, name, why, night, now):
+        """Note a failed target so the next plan leaves it out for a while, and say so."""
+        record = self._failed_targets.get(name)
+        if not record or record.get("night") != night:
+            record = {"night": night, "count": 0}
+        record.update(at=now, why=why, count=record["count"] + 1)
+        self._failed_targets[name] = record
+        if record["count"] >= FAILED_TRIES:
+            later = "leaving it out for the rest of tonight"
+        else:
+            retry = datetime.fromtimestamp(now + FAILED_RETRY_S).strftime("%H:%M")
+            later = f"leaving it out until {retry}, then one more try"
+        self._log(f"{name} failed: {why}; {later}")
+        self._alert("target_skipped", name, f"{why[0].upper()}{why[1:]}. {later.capitalize()}.")
+        self._save_state()
+
+    def _watch_item(self, scope, state, night, now) -> bool:
+        """Skip a target the scope is stuck on. True when it ended the run instead."""
+        number = state.item_number
+        items = self._active_items
+        if (
+            self._adopted
+            or not 1 <= number <= len(items)
+            or items[number - 1].get("action") not in schedule_tools.IMAGING_ACTIONS
+        ):
+            self._watch = {}
+            return False
+        frames = (state.stacked or 0) + (state.dropped or 0)
+        watch = self._watch
+        if watch.get("item") != number:
+            self._watch = {"item": number, "frames": frames, "since": now, "began": now, "acted": 0.0}
+            return False
+        if watch["acted"]:
+            if now - watch["acted"] < SKIP_WAIT_S:
+                return False
+            # The skip didn't move the scheduler on. End the run; the next start plans
+            # again without this target, or a schedule resumes after it.
+            watch["acted"] = float("inf")
+            self._log(f"the scheduler stayed on item {number} after the skip; stopping to move on")
+            if self._active_schedule != schedule_tools.TARGET_LIST:
+                self._resume = {"schedule": self._active_schedule, "item": number + 1, "night": night}
+                self._save_state()
+            self._begin_stop(scope, "target stuck", state, night, now, keep_resume=False)
+            return True
+        if watch["acted"] == float("inf"):
+            return False
+        if frames != watch["frames"]:
+            watch["frames"] = frames
+            watch["since"] = now
+        stacking = state.view_stage == "Stack" or frames > 0
+        why = None
+        if state.stacked == 0 and (state.dropped or 0) >= NOTHING_KEPT_FRAMES:
+            reason = f" ({state.drop_reason})" if state.drop_reason else ""
+            why = f"the scope kept none of its first {state.dropped} frames{reason}"
+        elif stacking and now - watch["since"] >= STALL_S:
+            why = f"no frame finished in {STALL_S // 60} minutes"
+        elif not stacking and now - watch["began"] >= NEVER_STARTED_S:
+            why = f"it hadn't started stacking after {NEVER_STARTED_S // 60} minutes"
+        if why is None:
+            return False
+        name = items[number - 1].get("params", {}).get("target_name", "?")
+        if self._active_schedule == schedule_tools.TARGET_LIST:
+            self._mark_failed(name, why, night, now)
+            self._run_items.setdefault(number, {})["handled"] = True
+        else:
+            self._log(f"{name}: {why}; skipping it")
+            self._alert("target_skipped", name, f"{why[0].upper()}{why[1:]}.")
+        watch["acted"] = now
+        self._skip_asked = number
+        failure = self._guard(scope.skip_item)
+        if failure:
+            self._log(f"  skip: {failure}")
+        return False
 
     def _left_out(self, s, now) -> set:
         """Targets the next plan should leave out, after failing tonight."""
