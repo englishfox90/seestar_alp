@@ -25,3 +25,16 @@ img { display: block; }
     outline: 2px solid var(--ssc-accent);
     outline-offset: 2px;
 }
+
+/* No browser tap flash: every control draws its own pressed state. */
+html { -webkit-tap-highlight-color: transparent; }
+
+/* Controls act on a single tap, never zoom, and a long press doesn't select their label.
+   Text people may copy (values, captions, sheets) stays selectable. */
+button, [role="button"], summary, label, .ssc-tab, .ssc-subnav__item, .ssc-widenav__item,
+.ssc-menu__item, .ssc-link-row, .t-swap, .t-frame {
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}

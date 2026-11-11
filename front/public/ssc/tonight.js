@@ -194,7 +194,17 @@
   document.body.addEventListener("htmx:beforeSwap", function (event) {
     const target = event.detail.target;
     if (!target || (target.id !== "t-now" && target.id !== "t-hardware")) return;
-    if (event.detail.xhr.responseText.trim() === "") event.detail.shouldSwap = false;
+    const text = event.detail.xhr.responseText;
+    if (text.trim() === "") {
+      event.detail.shouldSwap = false;
+      return;
+    }
+    // A new state fades in. An ordinary poll swaps in place, because a transition briefly
+    // holds input and would run every five seconds.
+    const next = target.id === "t-now" && /id="t-state-data" data-state="([^"]*)"/.exec(text);
+    if (next && next[1] !== page.dataset.state && document.startViewTransition && !document.hidden) {
+      event.detail.swapOverride = "morph:innerHTML transition:true";
+    }
   });
 
   document.body.addEventListener("htmx:afterSettle", function (event) {

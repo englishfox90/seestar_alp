@@ -19,7 +19,7 @@
     min-height: var(--ssc-bar-height);
     max-width: var(--ssc-max-width);
     margin: 0 auto;
-    padding: 0 var(--ssc-gutter);
+    padding: 0 max(var(--ssc-gutter), env(safe-area-inset-right)) 0 max(var(--ssc-gutter), env(safe-area-inset-left));
 }
 
 /* Roof status. Tonight renders ui.status lines here, and other pages poll /roof/badge. */
@@ -31,6 +31,7 @@
     align-items: center;
     gap: var(--ssc-space-1) var(--ssc-space-4);
     min-height: var(--ssc-touch);
+    max-width: 60%;
     margin-left: auto;
     color: var(--ssc-text-1);
     text-decoration: none;
@@ -46,6 +47,7 @@
 
 /* The scope menu */
 .ssc-menu { position: relative; min-width: 0; }
+.ssc-scope { flex: 1 1 auto; min-width: 8ch; }
 .ssc-menu__summary {
     display: flex;
     align-items: center;
@@ -68,8 +70,9 @@
     z-index: 30;
     min-width: 240px;
     max-width: calc(100vw - var(--ssc-gutter) - var(--ssc-gutter));
-    max-height: 70vh;
+    max-height: 70svh;
     overflow: auto;
+    overscroll-behavior: contain;
     background: var(--ssc-raised);
     border: 1px solid var(--ssc-separator);
     border-radius: var(--ssc-radius-control);
@@ -119,7 +122,7 @@
     backdrop-filter: var(--ssc-bar-filter);
     -webkit-backdrop-filter: var(--ssc-bar-filter);
     border-top: 1px solid var(--ssc-separator);
-    padding-bottom: env(safe-area-inset-bottom);
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 .ssc-tab,
 .ssc-tab:hover {
@@ -208,4 +211,16 @@
         gap: var(--ssc-space-2);
     }
     .ssc-tabbar { display: none; }
+}
+
+/* Pressed: a fill for rows and menu items, a dim for tabs and the page names. */
+.ssc-menu__item, .ssc-menu__summary, .ssc-tab, .ssc-subnav__item, .ssc-widenav__item {
+    transition: background-color var(--ssc-motion-press) ease-out, opacity var(--ssc-motion-press) ease-out;
+}
+.ssc-menu__item:active { background: var(--ssc-fill-1); }
+.ssc-tab:active, .ssc-subnav__item:active, .ssc-widenav__item:active, .ssc-menu__summary:active { opacity: 0.6; }
+
+/* On its side, a phone's tab bar puts icon and label on one line, as iOS does. */
+@media (orientation: landscape) and (max-height: 480px) {
+    .ssc-tab, .ssc-tab:hover { flex-direction: row; gap: var(--ssc-space-2); }
 }

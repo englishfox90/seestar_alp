@@ -80,7 +80,7 @@ def test_spacing_comes_from_tokens():
     pattern = re.compile(r"(?<![-\w])(padding|margin|gap|column-gap|row-gap)(-[a-z]+)?\s*:\s*([^;]+);")
     for sheet in _stylesheets():
         for match in pattern.finditer(_strip_comments(sheet.read_text())):
-            for part in re.sub(r"(var|calc|env)\([^;]*\)", "", match.group(3)).split():
+            for part in re.sub(r"(var|calc|env|max|min)\([^;]*\)", "", match.group(3)).split():
                 assert part in ("0", "auto"), f"{sheet.name}: {match.group(0)}"
 
 

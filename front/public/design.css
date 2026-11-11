@@ -889,3 +889,33 @@ code {
         gap: 4px;
     }
 }
+
+/* Touch screens keep no hover: a tapped button returns to its own colours. */
+@media (hover: none) {
+    .btn:hover {
+        color: var(--bs-btn-color);
+        background-color: var(--bs-btn-bg);
+        border-color: var(--bs-btn-border-color);
+    }
+    .navbar .nav-link:not(.active):hover { background-color: transparent; }
+    .dropdown-item:hover { background-color: transparent; color: var(--bs-dropdown-link-color); }
+}
+
+/* Red changes instantly, Bootstrap's own controls included. */
+[data-theme="red"] .btn,
+[data-theme="red"] .form-check-input,
+[data-theme="red"] .form-range,
+[data-theme="red"] .form-control,
+[data-theme="red"] .form-select,
+[data-theme="red"] .nav-link { transition: none; }
+
+/* The same phone rules as the shell's base.css: no tap flash, controls act on one tap and
+   a long press doesn't select their labels. */
+html { -webkit-tap-highlight-color: transparent; }
+button, .btn, [role="button"], summary, label, .nav-link, .dropdown-item {
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+.btn:active { transform: scale(var(--ssc-press-scale, 0.98)); }

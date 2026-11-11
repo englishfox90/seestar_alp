@@ -3,6 +3,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
+    {% include 'ssc/app_meta.html' %}
     <title>{% block title %}{% endblock %} - SSC</title>
     <script src="{{ root_path }}/public/ssc/theme.js"></script>
     {#    <link href="/public/xterm.css" rel="stylesheet">#}
@@ -111,7 +113,6 @@
             box-shadow: var(--ui-shadow);
             backdrop-filter: blur(12px);
             padding: clamp(1rem, 1.5vw, 1.6rem);
-            animation: content-fade 180ms ease-out;
         }
 
         .page-hero {
@@ -152,12 +153,8 @@
             background: color-mix(in srgb, var(--ui-surface-glass) 90%, #060e1d);
             padding: 1rem;
             margin-bottom: 1rem;
-            animation: content-fade 180ms ease-out;
         }
 
-        .panel-card:nth-of-type(2) { animation-delay: 30ms; }
-        .panel-card:nth-of-type(3) { animation-delay: 60ms; }
-        .panel-card:nth-of-type(4) { animation-delay: 90ms; }
 
         /* Prevent perceived "flashing" on periodically polled HTMX regions */
         .no-htmx-fx .panel-card,
@@ -298,7 +295,6 @@
         .navbar .nav-link {
             border-radius: 999px;
             padding: 0.4rem 0.72rem;
-            transition: background-color 120ms ease, color 120ms ease;
         }
 
         .navbar .nav-link:hover,
@@ -720,7 +716,6 @@
             border-radius: 0.75rem;
             background: linear-gradient(90deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.06));
             background-size: 220% 100%;
-            animation: skeleton-shift 1.15s linear infinite;
             z-index: 2;
             pointer-events: none;
         }
@@ -729,15 +724,7 @@
             cursor: progress;
         }
 
-        .htmx-swapping {
-            opacity: 0.65;
-            transition: opacity 140ms ease;
-        }
-
-        .no-htmx-fx.htmx-swapping {
-            opacity: 1;
-            transition: none;
-        }
+        /* Polled values are read, not watched: they change in place without a dim. */
 
         /* Keep Bootstrap modals above sticky nav/quickbar/custom layers. */
         .modal {
@@ -860,25 +847,7 @@
             color: var(--ui-link);
         }
 
-        @keyframes content-fade {
-            from {
-                opacity: 0;
-                transform: translateY(6px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
 
-        @keyframes skeleton-shift {
-            from {
-                background-position: 100% 0;
-            }
-            to {
-                background-position: -100% 0;
-            }
-        }
 
         {% if webui_font_family %}
         body {

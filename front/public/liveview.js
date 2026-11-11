@@ -70,6 +70,8 @@ class LiveViewJoystick {
       position: {left: '50%', top: '50%'},
       mode: 'static',
       dynamicPage: true,
+      // Red changes instantly, so the stick doesn't fade out on release there.
+      fadeTime: document.documentElement.dataset.theme === 'red' ? 0 : 250,
     }
     this.joystick = nipplejs.create(options);
     this.rootPath = rootPath;

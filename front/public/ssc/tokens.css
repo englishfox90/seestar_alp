@@ -151,7 +151,12 @@
 
     --ssc-motion-press: 100ms;
     --ssc-motion-sheet: 240ms;
+    --ssc-motion-sheet-out: 180ms;
+    --ssc-motion-fade: 160ms;
     --ssc-motion-image: 600ms;
+    /* Pressed: scale reads on black where a fade of a dark tint does not. */
+    --ssc-press-scale: 0.98;
+    --ssc-ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 @media (min-width: 768px) {
@@ -174,16 +179,36 @@
 [data-theme="red"] {
     --ssc-motion-press: 0ms;
     --ssc-motion-sheet: 100ms;
+    --ssc-motion-sheet-out: 0ms;
+    --ssc-motion-fade: 0ms;
     --ssc-motion-image: 0ms;
     --ssc-text-body: 1rem;
     --ssc-text-footnote: 0.9375rem;
     --ssc-text-caption: 0.8125rem;
 }
 
+/* Reduced motion keeps short fades and drops movement. Red alone is instant. */
 @media (prefers-reduced-motion: reduce) {
     :root {
         --ssc-motion-press: 0ms;
         --ssc-motion-sheet: 100ms;
+        --ssc-motion-sheet-out: 100ms;
         --ssc-motion-image: 0ms;
+        --ssc-press-scale: 1;
+    }
+}
+
+/* Translucency off when asked for. Red is already opaque. */
+@media (prefers-reduced-transparency: reduce) {
+    :root, [data-theme] {
+        --ssc-bar: var(--ssc-raised);
+        --ssc-bar-filter: none;
+    }
+}
+
+/* A phone on its side, or Duo closed and turned: the bars give back height. */
+@media (orientation: landscape) and (max-height: 480px) {
+    :root {
+        --ssc-tabbar-height: 36px;
     }
 }

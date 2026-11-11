@@ -28,9 +28,9 @@
     font-size: var(--ssc-text-body);
     font-weight: var(--ssc-weight-strong);
     cursor: pointer;
-    transition: opacity var(--ssc-motion-press) ease-out;
+    transition: transform var(--ssc-motion-press) ease-out, opacity var(--ssc-motion-press) ease-out;
 }
-.ssc-button:active { opacity: 0.7; }
+.ssc-button:active { transform: scale(var(--ssc-press-scale)); opacity: 0.85; }
 .ssc-button:disabled { cursor: default; opacity: 0.6; }
 .ssc-button[data-kind="primary"] { background: var(--ssc-primary-bg); color: var(--ssc-primary-fg); }
 .ssc-button[data-kind="secondary"] { background: var(--ssc-fill-1); color: var(--ssc-text-1); }
@@ -279,8 +279,42 @@ li:last-child > .ssc-menu__item { border-bottom: 0; }
     background: var(--ssc-raised);
     color: var(--ssc-text-1);
 }
-.ssc-sheet::backdrop { background: var(--ssc-scrim); }
-.ssc-sheet[open] { animation: ssc-sheet-in var(--ssc-motion-sheet) ease-out; }
+/* In and out along the same path, out a little faster. Closing by code animates too: the
+   browser keeps the dialog shown until its exit transition ends. */
+.ssc-sheet {
+    overscroll-behavior: contain;
+    transform: translateY(var(--ssc-space-6));
+    opacity: 0;
+    transition:
+        transform var(--ssc-motion-sheet-out) var(--ssc-ease-sheet),
+        opacity var(--ssc-motion-sheet-out) ease-out,
+        overlay var(--ssc-motion-sheet-out) allow-discrete,
+        display var(--ssc-motion-sheet-out) allow-discrete;
+}
+.ssc-sheet[open] {
+    transform: none;
+    opacity: 1;
+    transition-duration: var(--ssc-motion-sheet);
+}
+@starting-style {
+    .ssc-sheet[open] { transform: translateY(var(--ssc-space-6)); opacity: 0; }
+}
+.ssc-sheet::backdrop {
+    background: var(--ssc-scrim);
+    opacity: 0;
+    transition:
+        opacity var(--ssc-motion-sheet-out) ease-out,
+        overlay var(--ssc-motion-sheet-out) allow-discrete,
+        display var(--ssc-motion-sheet-out) allow-discrete;
+}
+.ssc-sheet[open]::backdrop { opacity: 1; transition-duration: var(--ssc-motion-sheet); }
+@starting-style {
+    .ssc-sheet[open]::backdrop { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .ssc-sheet, .ssc-sheet[open] { transform: none; }
+    @starting-style { .ssc-sheet[open] { transform: none; } }
+}
 .ssc-sheet__body {
     display: flex;
     flex-direction: column;
@@ -293,10 +327,6 @@ li:last-child > .ssc-menu__item { border-bottom: 0; }
     font-weight: var(--ssc-weight-strong);
 }
 .ssc-sheet__error { color: var(--ssc-red); font-weight: var(--ssc-weight-strong); }
-@keyframes ssc-sheet-in {
-    from { transform: translateY(var(--ssc-space-6)); opacity: 0; }
-    to { transform: none; opacity: 1; }
-}
 @media (min-width: 768px) {
     .ssc-sheet {
         inset: 0;
@@ -304,5 +334,15 @@ li:last-child > .ssc-menu__item { border-bottom: 0; }
         height: fit-content;
         margin: auto;
         border-radius: var(--ssc-radius-sheet);
+        /* Centred, so it grows from the centre rather than rising. */
+        transform: scale(0.97);
+    }
+    .ssc-sheet[open] { transform: none; }
+    @starting-style {
+        .ssc-sheet[open] { transform: scale(0.97); }
     }
 }
+
+/* Pressed states for everything else people tap. Fills, which read on black. */
+.ssc-band:active, .t-swap:active { transform: scale(var(--ssc-press-scale)); }
+.ssc-band, .t-swap { transition: transform var(--ssc-motion-press) ease-out; }

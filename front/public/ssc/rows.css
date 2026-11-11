@@ -36,7 +36,10 @@
 }
 .ssc-row:last-child { border-bottom: 0; }
 .ssc-row__label { min-width: 0; overflow-wrap: anywhere; }
+/* The label wraps; the value keeps its line. */
 .ssc-row__value {
+    flex: none;
+    max-width: 50%;
     color: var(--ssc-text-2);
     font-variant-numeric: tabular-nums;
     text-align: right;

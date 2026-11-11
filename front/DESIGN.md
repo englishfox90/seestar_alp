@@ -58,6 +58,8 @@ The design language and framework for the whole web UI. The owner approved this 
 
 ## Decision log
 
+- **2026-11-10:** Touch and feel, from a review against Emil Kowalski's skills (apple-design and others): no tap flash, visible pressed states, sheets that leave the way they came, state changes that fade, and no motion on polled data or legacy page loads. Reduced motion now keeps short fades; Red stays instant. Kept over the skills: glass only on navigation, the hairline under the top bar, the 600ms image fade, and no hold-to-confirm.
+- **2026-11-10:** iPhone Duo (Safari 27.1): side safe areas everywhere, and a short-landscape layout (closed and turned, about 594 by 368) where the tab bar slims and the image gets the height. Fold and posture APIs wait until they leave feature flags. The app has its own icon (a framing ring) and a manifest, so it installs to the Home Screen as SSC.
 - **2026-11-06:** Tonight shows the Starfront Clear Sky chart, the building's roof state and scheduled hours, and any facility announcements. These are read from public feeds for a person to read, and nothing decides on them. Satellite, radar and cameras stay as links, because they are heavy or rarely needed.
 - **2026-11-06:** The page-level "Updated" time only shows when stale, at all widths. Earned uses hours like Goal. Each Stop names what it stops. Live asks in its own dialog so Red holds.
 - **2026-11-06:** Every System sub-page moves to the shell, overturning "Leave" for Support, Platform and System, because the owner saw them as dated next to Settings. Event status becomes one set of rows on every page, including those still on `base.html`, which load `ssc/rows.css` for them.
@@ -346,6 +348,19 @@ Use `ease-out`. No loops, including `dash-pulse`, which `AGENTS.md`'s rule on un
 - No firmware terms in Tonight (never "cancel", "ContinuousExposure").
 - Rename "Armed" to "Automation on". "Stop + Park" becomes "Stop & park". "Target list" becomes "Targets". "Schedule Page" becomes "Sequences".
 - Button labels name the action and object.
+
+### 8a. Feel: standing rules
+
+- Every tappable shows a pressed state within 100ms of pointer-down, and it reads on true black: scale or a fill, not a fade alone.
+- Controls set `touch-action: manipulation` and `user-select: none`, and the tap highlight is off app-wide. Text people may copy stays selectable.
+- What enters with motion leaves along the same path, a little faster. A dialog closed by code still animates out.
+- Gestures track 1:1 while the finger is down and hand their release velocity to the settle. Boundaries rubber-band rather than stop.
+- Polled regions animate only when their state changes, never on every poll, and never with anything that holds input for long.
+- Hover styles live only inside `@media (hover: hover)`, legacy pages included.
+- Third-party widgets (Aladin, nipplejs, Bootstrap) are configured down to what the page needs and styled from tokens before they ship.
+- A tall touch surface on a scrolling page needs an explicit way to scroll past it.
+- Reduced motion keeps opacity fades of 100 to 160ms and drops movement. Red alone is instant.
+- Layout respects every safe-area inset, left and right included, and is checked in short landscape.
 
 ### 9. Technical framework
 
