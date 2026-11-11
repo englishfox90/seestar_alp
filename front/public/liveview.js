@@ -66,7 +66,8 @@ class LiveViewJoystick {
   constructor(rootPath, elementId) {
     const options = {
       zone: document.getElementById(elementId),
-      color: 'red',
+      // The accent, which is red in Red anyway.
+      color: getComputedStyle(document.documentElement).getPropertyValue('--ssc-accent').trim() || 'red',
       position: {left: '50%', top: '50%'},
       mode: 'static',
       dynamicPage: true,

@@ -357,7 +357,8 @@
     const wanted = Math.max(10, (middle.furthest + 5) * 2 * (rect.width / Math.max(rect.height, 1)));
     aladin.gotoRaDec(middle.ra, middle.dec);
     // Past about a hemisphere the usual projection can't show the whole view.
-    aladin.setProjection(wanted > 150 ? "MOL" : "SIN");
+    // A tall phone view runs out of room sooner, so it switches earlier.
+    aladin.setProjection(wanted > (rect.height >= rect.width * 0.95 ? 120 : 150) ? "MOL" : "SIN");
     aladin.setFoV(Math.min(wanted, 360));
     if (skyObjects) skyObjects.changed();
   }
@@ -509,6 +510,31 @@
     };
   }
 
+  // On a touch screen the sky would catch every swipe meant for the page. Until it's
+  // tapped, a clear layer lets the page scroll past; "Done" puts it back.
+  function lockOnTouch() {
+    if (!window.matchMedia("(pointer: coarse)").matches) return;
+    const shield = document.createElement("button");
+    shield.type = "button";
+    shield.className = "plan-sky__shield";
+    shield.textContent = "Tap to move the sky";
+    const done = document.createElement("button");
+    done.type = "button";
+    done.className = "ssc-button plan-sky__done";
+    done.dataset.kind = "secondary";
+    done.textContent = "Done";
+    done.hidden = true;
+    shield.addEventListener("click", function () {
+      shield.hidden = true;
+      done.hidden = false;
+    });
+    done.addEventListener("click", function () {
+      shield.hidden = false;
+      done.hidden = true;
+    });
+    view.append(shield, done);
+  }
+
   function start() {
     aladin = window.A.aladin("#target-sky-view", {
       survey: window.ALADIN_SURVEY,
@@ -516,7 +542,21 @@
       target: "0 0",
       showGotoControl: false,
       showReticle: true,
+      // Aladin's own controls are bright and say nothing this page doesn't: the sky is
+      // moved by hand, and the page has its own choice of target.
+      showProjectionControl: false,
+      showFullscreenControl: false,
+      showLayersControl: false,
+      showZoomControl: false,
+      showSettingsControl: false,
+      showShareControl: false,
+      showCooGridControl: false,
+      showFrame: false,
+      showCooLocation: false,
+      showStatusBar: false,
+      showFov: false,
     });
+    lockOnTouch();
     shareViewEvents();
     setUpReach();
     frames = window.A.graphicOverlay({ color: colors().other, lineWidth: 1 });
@@ -582,6 +622,7 @@
   showControls();
   window.aladinReady.then(start).catch(function (e) {
     setStatus("The sky view could not load.");
+    view.hidden = true;
     console.log(e);
   });
 })();

@@ -224,3 +224,24 @@
 @media (orientation: landscape) and (max-height: 480px) {
     .ssc-tab, .ssc-tab:hover { flex-direction: row; gap: var(--ssc-space-2); }
 }
+
+/* The scope menu grows from its corner, quickly. Red sets the time to nothing. */
+.ssc-menu[open] > .ssc-menu__panel {
+    transform-origin: top left;
+    transition: transform var(--ssc-motion-menu) cubic-bezier(0.23, 1, 0.32, 1), opacity var(--ssc-motion-menu) ease-out;
+}
+@starting-style {
+    .ssc-menu[open] > .ssc-menu__panel { transform: scale(0.97); opacity: 0; }
+}
+
+/* A page list wider than the screen fades at the edge it continues past, and snaps. */
+.ssc-subnav__inner {
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: var(--ssc-gutter);
+}
+.ssc-subnav__item { scroll-snap-align: start; }
+.ssc-subnav__inner[data-more="right"] { mask-image: linear-gradient(to right, var(--ssc-image-backing) calc(100% - var(--ssc-space-6)), transparent); }
+.ssc-subnav__inner[data-more="left"] { mask-image: linear-gradient(to left, var(--ssc-image-backing) calc(100% - var(--ssc-space-6)), transparent); }
+.ssc-subnav__inner[data-more="both"] {
+    mask-image: linear-gradient(to right, transparent, var(--ssc-image-backing) var(--ssc-space-6), var(--ssc-image-backing) calc(100% - var(--ssc-space-6)), transparent);
+}

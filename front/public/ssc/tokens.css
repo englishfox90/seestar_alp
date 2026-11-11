@@ -153,6 +153,8 @@
     --ssc-motion-sheet: 240ms;
     --ssc-motion-sheet-out: 180ms;
     --ssc-motion-fade: 160ms;
+    --ssc-motion-expand: 200ms;
+    --ssc-motion-menu: 150ms;
     --ssc-motion-image: 600ms;
     /* Pressed: scale reads on black where a fade of a dark tint does not. */
     --ssc-press-scale: 0.98;
@@ -181,6 +183,8 @@
     --ssc-motion-sheet: 100ms;
     --ssc-motion-sheet-out: 0ms;
     --ssc-motion-fade: 0ms;
+    --ssc-motion-expand: 0ms;
+    --ssc-motion-menu: 0ms;
     --ssc-motion-image: 0ms;
     --ssc-text-body: 1rem;
     --ssc-text-footnote: 0.9375rem;
@@ -193,6 +197,8 @@
         --ssc-motion-press: 0ms;
         --ssc-motion-sheet: 100ms;
         --ssc-motion-sheet-out: 100ms;
+        --ssc-motion-expand: 0ms;
+        --ssc-motion-menu: 100ms;
         --ssc-motion-image: 0ms;
         --ssc-press-scale: 1;
     }

@@ -105,6 +105,7 @@
 {# A native dialog. It sits outside polled regions, so a poll can't close it. #}
 {% macro sheet(id, title) -%}
 <dialog class="ssc-sheet" id="{{ id }}" aria-labelledby="{{ id }}-title">
+  <div class="ssc-sheet__grab" aria-hidden="true"></div>
   <div class="ssc-sheet__body">
     <h2 class="ssc-sheet__title" id="{{ id }}-title">{{ title|e }}</h2>
     {{ caller() }}

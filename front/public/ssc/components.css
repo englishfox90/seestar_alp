@@ -346,3 +346,42 @@ li:last-child > .ssc-menu__item { border-bottom: 0; }
 /* Pressed states for everything else people tap. Fills, which read on black. */
 .ssc-band:active, .t-swap:active { transform: scale(var(--ssc-press-scale)); }
 .ssc-band, .t-swap { transition: transform var(--ssc-motion-press) ease-out; }
+
+/* Rows that open (a target on Plan, Details on Tonight) grow to their height rather than
+   snapping. Browsers without ::details-content stay instant. Not the scope menu, whose
+   panel floats. */
+.plan-target, .t-details { interpolate-size: allow-keywords; }
+.plan-target::details-content, .t-details::details-content {
+    block-size: 0;
+    overflow: clip;
+    opacity: 0;
+    transition:
+        block-size var(--ssc-motion-expand) cubic-bezier(0.23, 1, 0.32, 1),
+        opacity var(--ssc-motion-expand) ease-out,
+        content-visibility var(--ssc-motion-expand) allow-discrete;
+}
+.plan-target[open]::details-content, .t-details[open]::details-content { block-size: auto; opacity: 1; }
+
+/* Numbers too long for their column wrap rather than run into the next. */
+.ssc-metric__value { overflow-wrap: anywhere; }
+
+/* Drag handle on phone sheets: pull it (or the title) down to close, as on iOS. Only these
+   take the drag, so a long sheet still scrolls. */
+.ssc-sheet__grab { display: none; }
+@media (max-width: 767.98px) {
+    .ssc-sheet__grab {
+        display: flex;
+        justify-content: center;
+        padding: var(--ssc-space-3) 0 0;
+        touch-action: none;
+    }
+    .ssc-sheet__grab::before {
+        content: "";
+        width: var(--ssc-space-7);
+        height: var(--ssc-space-2);
+        border-radius: var(--ssc-radius-round);
+        background: var(--ssc-fill-2);
+    }
+    .ssc-sheet__title { touch-action: none; }
+    .ssc-sheet__body { padding-top: var(--ssc-space-4); }
+}

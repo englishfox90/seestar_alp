@@ -119,16 +119,31 @@ body.live-rotation-flat .live-main img#liveViewImg {
     font-size: var(--ssc-text-body);
 }
 
-@media (max-width: 768px) {
-    .live-quickbar {
+/* Phones: the two things you need mid-session, docked above the tab bar like a toolbar,
+   never floating over the picture. Focus and zoom stay in the panel below. */
+@media (max-width: 767.98px) {
+    body.live-has-quickbar .live-quickbar {
+        left: 0;
+        right: 0;
+        bottom: calc(var(--ssc-tabbar-height) + env(safe-area-inset-bottom));
         gap: var(--ssc-space-3);
-        padding: var(--ssc-space-3);
+        padding: var(--ssc-space-3) max(var(--ssc-gutter), env(safe-area-inset-right)) var(--ssc-space-3) max(var(--ssc-gutter), env(safe-area-inset-left));
+        border: 0;
+        border-top: 1px solid var(--ssc-separator);
+        border-radius: var(--ssc-radius-image);
+        background: var(--ssc-bar);
+        box-shadow: none;
+    }
+
+    body.live-has-quickbar {
+        padding-bottom: calc(var(--ssc-tabbar-height) + env(safe-area-inset-bottom) + var(--ssc-touch) + var(--ssc-space-6) + var(--ssc-space-5));
     }
 
     .live-quickbar .btn {
         flex: 1 1 0;
         min-width: 0;
         padding: 0 var(--ssc-space-2);
+        white-space: nowrap;
     }
 }
 
@@ -447,10 +462,11 @@ body.live-rotation-flat .live-main img#liveViewImg {
         position: static;
     }
 
-    /* Leave room for the quick bar so it never sits over the picture. */
+    /* Leave room for the docked quick bar and the tab bar under it, so neither sits over
+       the picture. */
     .live-main img#liveViewImg,
     body.live-rotation-flat .live-main img#liveViewImg {
-        max-height: calc(var(--live-portrait-size, 80vh) - var(--ssc-stop-height) - var(--ssc-gap));
+        max-height: calc(var(--live-portrait-size, 80vh) - var(--ssc-tabbar-height) - env(safe-area-inset-bottom) - var(--ssc-touch) - var(--ssc-space-6) - var(--ssc-space-3));
     }
 
     .live-sidebar > :last-child {
@@ -458,14 +474,3 @@ body.live-rotation-flat .live-main img#liveViewImg {
     }
 }
 
-.live-confirm {
-    max-width: 480px;
-    padding: var(--ssc-inset);
-    border: 0;
-    border-radius: var(--ssc-radius-sheet);
-    background: var(--ssc-raised);
-    color: var(--ssc-text-1);
-}
-
-.live-confirm::backdrop { background: var(--ssc-canvas); opacity: 0.6; }
-.live-confirm__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--ssc-space-3); }

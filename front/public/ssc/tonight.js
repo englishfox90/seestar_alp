@@ -248,16 +248,123 @@
     return Math.min(high, Math.max(low, value));
   }
 
-  // Keeps the image over the stage: it can't be dragged out of sight.
-  function applyView() {
-    if (!shown) return;
+  // Motion is off in Red and under reduced motion: the image still follows the finger,
+  // but nothing coasts, overshoots or tweens.
+  function moves() {
+    return document.documentElement.dataset.theme !== "red" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  // How far the image may move each way before an edge comes into the stage.
+  function room() {
     const box = stage.getBoundingClientRect();
     const fit = shown.naturalWidth ? Math.min(box.width / shown.naturalWidth, box.height / shown.naturalHeight) : 1;
-    const roomX = Math.max(0, ((shown.naturalWidth || box.width) * fit * view.scale - box.width) / 2);
-    const roomY = Math.max(0, ((shown.naturalHeight || box.height) * fit * view.scale - box.height) / 2);
-    view.x = clamp(view.x, -roomX, roomX);
-    view.y = clamp(view.y, -roomY, roomY);
-    shown.style.transform = "translate(" + view.x + "px, " + view.y + "px) scale(" + view.scale + ")";
+    return {
+      x: Math.max(0, ((shown.naturalWidth || box.width) * fit * view.scale - box.width) / 2),
+      y: Math.max(0, ((shown.naturalHeight || box.height) * fit * view.scale - box.height) / 2),
+      w: box.width,
+      h: box.height,
+    };
+  }
+
+  // Past an edge the image resists more the further it goes, as iOS does.
+  function rubber(value, limit, size) {
+    if (Math.abs(value) <= limit) return value;
+    const over = Math.abs(value) - limit;
+    return Math.sign(value) * (limit + (1 - 1 / ((over * 0.55) / size + 1)) * size);
+  }
+
+  // Draws the view. While a finger is down the image may pull past an edge (elastic);
+  // otherwise it's kept over the stage, so it can't be dragged out of sight.
+  function applyView(elastic) {
+    if (!shown) return;
+    const r = room();
+    let x;
+    let y;
+    if (elastic && moves()) {
+      x = rubber(view.x, r.x, r.w);
+      y = rubber(view.y, r.y, r.h);
+    } else {
+      view.x = clamp(view.x, -r.x, r.x);
+      view.y = clamp(view.y, -r.y, r.y);
+      x = view.x;
+      y = view.y;
+    }
+    shown.style.transform = "translate(" + x + "px, " + y + "px) scale(" + view.scale + ")";
+  }
+
+  // After the finger lifts: coast on the release velocity, then ease back inside the edges.
+  let settling = 0;
+  let tweening = false;
+  const velocity = { x: 0, y: 0 };
+  const samples = [];
+  function stopSettling() {
+    if (settling) cancelAnimationFrame(settling);
+    settling = 0;
+    tweening = false;
+  }
+  function settle() {
+    // A double tap's zoom is still easing in; the lift that ended the tap leaves it alone.
+    if (tweening) return;
+    stopSettling();
+    if (!shown) return;
+    if (!moves()) {
+      applyView(false);
+      return;
+    }
+    let last = performance.now();
+    // Where the edges would let it rest, given where it's heading.
+    function step(now) {
+      const dt = Math.min(48, now - last);
+      last = now;
+      const r = room();
+      view.x += velocity.x * dt;
+      view.y += velocity.y * dt;
+      const decay = Math.pow(0.95, dt / 16);
+      velocity.x *= decay;
+      velocity.y *= decay;
+      // Outside an edge, the velocity dies quickly and a spring pulls it back.
+      const pull = 1 - Math.pow(0.8, dt / 16);
+      if (Math.abs(view.x) > r.x) {
+        velocity.x *= 0.5;
+        view.x += (Math.sign(view.x) * r.x - view.x) * pull;
+      }
+      if (Math.abs(view.y) > r.y) {
+        velocity.y *= 0.5;
+        view.y += (Math.sign(view.y) * r.y - view.y) * pull;
+      }
+      const resting =
+        Math.hypot(velocity.x, velocity.y) < 0.02 &&
+        Math.abs(view.x) <= r.x + 0.5 &&
+        Math.abs(view.y) <= r.y + 0.5;
+      applyView(!resting);
+      settling = resting ? 0 : requestAnimationFrame(step);
+    }
+    settling = requestAnimationFrame(step);
+  }
+
+  // A double tap eases between fitted and zoomed, about a quarter second, ending gently.
+  function tweenZoom(scale, clientX, clientY) {
+    stopSettling();
+    if (!moves()) {
+      zoomAt(scale, clientX, clientY);
+      return;
+    }
+    const from = { scale: view.scale, x: view.x, y: view.y };
+    zoomAt(scale, clientX, clientY);
+    const to = { scale: view.scale, x: view.x, y: view.y };
+    const started = performance.now();
+    tweening = true;
+    function step(now) {
+      const t = Math.min(1, (now - started) / 250);
+      const k = 1 - Math.pow(1 - t, 4);
+      view.scale = from.scale + (to.scale - from.scale) * k;
+      view.x = from.x + (to.x - from.x) * k;
+      view.y = from.y + (to.y - from.y) * k;
+      applyView(false);
+      settling = t < 1 ? requestAnimationFrame(step) : 0;
+      if (t >= 1) tweening = false;
+    }
+    settling = requestAnimationFrame(step);
   }
 
   // Zoom keeping one point of the stage still, given as client coordinates.
@@ -289,12 +396,15 @@
 
   stage.addEventListener("pointerdown", function (event) {
     stage.setPointerCapture(event.pointerId);
+    // A finger catches the image mid-coast, where it is.
+    stopSettling();
+    samples.length = 0;
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     startGesture();
     if (pointers.size === 1) {
       const now = event.timeStamp;
       if (now - lastTap < DOUBLE_TAP_MS) {
-        zoomAt(view.scale > 1 ? 1 : DOUBLE_TAP_ZOOM, event.clientX, event.clientY);
+        tweenZoom(view.scale > 1 ? 1 : DOUBLE_TAP_ZOOM, event.clientX, event.clientY);
         lastTap = 0;
       } else {
         lastTap = now;
@@ -318,18 +428,36 @@
       view.x += points[0].x - gesture.midX;
       view.y += points[0].y - gesture.midY;
       gesture = { midX: points[0].x, midY: points[0].y };
-      applyView();
+      samples.push({ x: view.x, y: view.y, t: event.timeStamp });
+      if (samples.length > 4) samples.shift();
+      applyView(true);
     }
   });
 
   function endPointer(event) {
     pointers.delete(event.pointerId);
     startGesture();
+    if (pointers.size) return;
+    // The release velocity, from the last few moves, in px per ms.
+    velocity.x = 0;
+    velocity.y = 0;
+    if (samples.length > 1) {
+      const first = samples[0];
+      const last = samples[samples.length - 1];
+      const dt = last.t - first.t;
+      if (dt > 0 && event.timeStamp - last.t < 80) {
+        velocity.x = (last.x - first.x) / dt;
+        velocity.y = (last.y - first.y) / dt;
+      }
+    }
+    samples.length = 0;
+    settle();
   }
   stage.addEventListener("pointerup", endPointer);
   stage.addEventListener("pointercancel", endPointer);
   stage.addEventListener("wheel", function (event) {
     event.preventDefault();
+    stopSettling();
     zoomAt(view.scale * Math.exp(-event.deltaY * 0.002), event.clientX, event.clientY);
   }, { passive: false });
 
@@ -379,12 +507,16 @@
   viewer.addEventListener("close", function () {
     // The event comes a moment after the dialog closes, so it may already be open again.
     if (viewer.open) return;
-    // A full frame is large. Let it go.
-    loading = null;
-    shown = null;
+    stopSettling();
     pointers.clear();
     gesture = null;
-    stage.replaceChildren();
+    loading = null;
+    // A full frame is large. Let it go, once the viewer has faded out.
+    setTimeout(function () {
+      if (viewer.open) return;
+      shown = null;
+      stage.replaceChildren();
+    }, 300);
   });
 
   // Pressing Stop twice repeats the whole park sequence, so the button is disabled at

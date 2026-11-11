@@ -41,7 +41,7 @@
           <span class="plan-target__bar">{{ ui.bar(row.percent) }}</span>
           <span class="plan-target__have">{{ row.have }} of {{ "%g"|format(t.goal_hours) }} h</span>
           <span class="plan-target__priority">{{ t.priority|capitalize|e }}</span>
-          <span class="plan-target__forecast"><span class="plan-target__forecast-word">Done </span>{{ (row.finish or "Beyond 2 weeks")|e }}</span>
+          <span class="plan-target__forecast">{% if row.finish %}<span class="plan-target__forecast-word">Done </span>{{ row.finish|e }}{% else %}Not within 2 weeks{% endif %}</span>
           <span class="plan-target__chevron">{{ ui.icon("down", 16) }}</span>
         </summary>
         <form id="target-{{ t.id }}" class="plan-target__detail" method="post" action="{{ root_path }}{{ page_root }}/update">

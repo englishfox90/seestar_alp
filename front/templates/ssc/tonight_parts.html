@@ -60,7 +60,7 @@
           {{ item.name|e }}{% if item.progress == "now" %} <span class="ssc-row__tag">Now</span>{% elif item.progress == "done" %} <span class="ssc-row__tag">Passed</span>{% endif %}
           {% if item.when %}<span class="ssc-row__sub">{{ item.when|e }}{% if item.goal %}. {{ item.goal|e }}{% endif %}</span>{% endif %}
         </span>
-        <span class="ssc-row__value">{% if item.altitude is none %}Alt unknown{% else %}{{ "%.0f"|format(item.altitude) }}&deg;{% endif %}{% if not item.ok %} too low{% endif %}</span>
+        <span class="ssc-row__value">{% if item.altitude is none %}Altitude unknown{% else %}{{ "%.0f"|format(item.altitude) }}&deg;{% endif %}{% if not item.ok %} too low{% endif %}</span>
       </div>
       {% endfor %}
     </div>

@@ -71,7 +71,7 @@
                 {% if row.when %}<div class="small text-body-secondary fw-normal">{{ row.when|e }}{% if row.goal %}. {{ row.goal|e }}{% endif %}</div>{% endif %}
               </div>
               <div class="dash-plan-meta">
-                {% if row.altitude is none %}Alt unknown{% else %}{{ "%.0f"|format(row.altitude) }}&deg;{% endif %}
+                {% if row.altitude is none %}Altitude unknown{% else %}{{ "%.0f"|format(row.altitude) }}&deg;{% endif %}
                 {% if not row.ok %}<span class="badge text-bg-secondary">Too low</span>{% endif %}
               </div>
             </div>

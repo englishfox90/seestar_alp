@@ -221,3 +221,40 @@
     height: 100%;
     pointer-events: none;
 }
+
+/* The lock that lets a phone scroll past the sky. Clear, with one quiet label at the foot. */
+.plan-sky__view { position: relative; }
+.plan-sky__view[hidden] { display: none; }
+.plan-sky__shield {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0 0 var(--ssc-space-5);
+    border: 0;
+    background: none;
+    color: var(--ssc-text-2);
+    font: inherit;
+    font-size: var(--ssc-text-footnote);
+    touch-action: pan-y;
+    cursor: pointer;
+}
+.plan-sky__shield[hidden], .plan-sky__done[hidden] { display: none; }
+.plan-sky__done {
+    position: absolute;
+    right: var(--ssc-space-4);
+    bottom: var(--ssc-space-4);
+    z-index: 40;
+}
+
+/* Aladin's mark stays, as its licence asks, but quiet after dark. */
+[data-theme="night"] .plan-sky__view [class*="aladin-logo"],
+[data-theme="red"] .plan-sky__view [class*="aladin-logo"] { opacity: 0.4; }
+
+/* Phones: about square, so the sky fills it and a scroll passes it in one swipe. */
+@media (max-width: 767.98px) {
+    .plan-sky__view { height: auto; aspect-ratio: 1; max-height: 60svh; }
+}
+

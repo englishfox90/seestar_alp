@@ -11,6 +11,10 @@
     dialog.showModal();
   });
   document.getElementById("live-confirm-no").addEventListener("click", () => dialog.close());
+  // A tap on the scrim targets the dialog itself.
+  dialog.addEventListener("click", function (event) {
+    if (event.target === dialog) dialog.close();
+  });
   document.getElementById("live-confirm-yes").addEventListener("click", function () {
     dialog.close();
     if (pending) pending.issueRequest(true);

@@ -278,6 +278,7 @@
     list-style: none;
 }
 .t-details__summary::-webkit-details-marker { display: none; }
+.t-details__summary .ssc-icon { transition: transform var(--ssc-motion-press) ease-out; }
 .t-details[open] .t-details__summary .ssc-icon { transform: rotate(180deg); }
 
 /* Autofocus curve: SVG on the canvas, so its text follows the theme. */
@@ -328,6 +329,23 @@
     grid-template-rows: auto minmax(0, 1fr) auto;
 }
 .t-viewer::backdrop { background: var(--ssc-image-backing); }
+/* It grows from just smaller and fades, and leaves the same way, a little faster. */
+.t-viewer {
+    opacity: 0;
+    transform: scale(0.97);
+    transition:
+        opacity var(--ssc-motion-sheet-out) ease-out,
+        transform var(--ssc-motion-sheet-out) ease-out,
+        overlay var(--ssc-motion-sheet-out) allow-discrete,
+        display var(--ssc-motion-sheet-out) allow-discrete;
+}
+.t-viewer[open] { opacity: 1; transform: none; transition-duration: var(--ssc-motion-fade); }
+@starting-style {
+    .t-viewer[open] { opacity: 0; transform: scale(0.97); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .t-viewer, .t-viewer[open] { transform: none; }
+}
 .t-viewer__bar { display: flex; justify-content: flex-end; }
 .t-viewer__close {
     display: flex;
