@@ -4750,3 +4750,78 @@ def test_wide_stack_events_do_not_overwrite_the_telescope_count(seestar):
     seestar.imaging_camera = "wide"
     seestar._store_event_state("Stack", events[3])
     assert seestar.event_state["Stack"]["stacked_frame"] == 1
+
+
+def _run_startup_recording(monkeypatch, seestar, reply_for=None):
+    """Run start_up_thread_fn (no AF/3PPA/darks); return every request sent."""
+    import datetime as _dt
+
+    monkeypatch.setattr("device.seestar_device.time.sleep", lambda _s: None)
+    monkeypatch.setattr(
+        "device.seestar_device.tzlocal.get_localzone_name", lambda: "UTC"
+    )
+    monkeypatch.setattr(
+        "device.seestar_device.tzlocal.get_localzone", lambda: _dt.timezone.utc
+    )
+    monkeypatch.setattr("device.seestar_device.EarthLocation", lambda **_k: object())
+    monkeypatch.setattr(seestar, "set_setting", lambda *a, **k: {"ok": True})
+    monkeypatch.setattr(seestar, "play_sound", lambda _sid: None)
+    monkeypatch.setattr(Config, "init_save_good_frames", True)
+    monkeypatch.setattr(Config, "init_save_all_frames", False)
+
+    sent = []
+
+    def fake_sync(payload):
+        sent.append(payload)
+        if payload["method"] == "get_device_state":
+            return {"result": {"device": {"firmware_ver_int": 2975}}}
+        if reply_for:
+            reply = reply_for(payload)
+            if reply is not None:
+                return reply
+        return {"result": 0, "code": 0}
+
+    monkeypatch.setattr(seestar, "send_message_param_sync", fake_sync)
+    seestar.start_up_thread_fn(
+        {
+            "lat": 1.1,
+            "lon": 2.2,
+            "auto_focus": False,
+            "3ppa": False,
+            "dark_frames": False,
+        }
+    )
+    return sent
+
+
+def test_startup_saves_frame_options_through_set_setting_stack(monkeypatch, seestar):
+    # set_stack_setting is in no analyzed firmware table (103 on 9.x); the
+    # documented path is set_setting {"stack": {...}} (seestar-spec, READ).
+    sent = _run_startup_recording(monkeypatch, seestar)
+
+    stack_sets = [
+        r["params"]["stack"]
+        for r in sent
+        if r["method"] == "set_setting" and "stack" in r.get("params", {})
+    ]
+    assert {"save_discrete_ok_frame": True, "save_discrete_frame": False} in stack_sets
+    assert "set_stack_setting" not in [r["method"] for r in sent]
+
+
+def test_startup_falls_back_to_set_stack_setting_when_stack_is_rejected(
+    monkeypatch, seestar
+):
+    def reject_stack(payload):
+        if payload["method"] == "set_setting" and "stack" in payload["params"]:
+            return {"error": "unexpected param", "code": 109}
+        return None
+
+    sent = _run_startup_recording(monkeypatch, seestar, reject_stack)
+
+    legacy = [r for r in sent if r["method"] == "set_stack_setting"]
+    assert legacy == [
+        {
+            "method": "set_stack_setting",
+            "params": {"save_discrete_ok_frame": True, "save_discrete_frame": False},
+        }
+    ]
