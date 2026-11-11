@@ -3854,3 +3854,40 @@ def test_device_state_helpers_request_only_needed_sections(monkeypatch):
         ("get_device_state", {"keys": ["device"]}),
         ("get_device_state", {"keys": ["device", "setting", "client"]}),
     ]
+
+
+def _sent_stack_dither(calls):
+    for action, params in calls:
+        if params.get("method") == "set_setting":
+            dither = (params.get("params") or {}).get("stack_dither")
+            if dither is not None:
+                return dither
+    return None
+
+
+@pytest.mark.parametrize(
+    "pix, interval, expected",
+    [
+        ("5", "3", {"pix": 5, "interval": 3}),
+        # Blank or out-of-range values are left out: the firmware ignores a
+        # missing member but answers 204 to an out-of-range one, which also
+        # stops the rest of that set_setting (seestar-spec, READ).
+        ("NaN", "", {}),
+        ("201", "0", {}),
+        ("-1", "101", {}),
+    ],
+)
+def test_settings_post_sends_only_valid_dither_values(
+    monkeypatch, pix, interval, expected
+):
+    _output, calls = _run_settings_post(
+        monkeypatch,
+        model="Seestar S50",
+        form_extra={
+            "stack_dither_pix": pix,
+            "stack_dither_interval": interval,
+            "stack_dither_enable": "true",
+        },
+    )
+
+    assert _sent_stack_dither(calls) == {"enable": True, **expected}
