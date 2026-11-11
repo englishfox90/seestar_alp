@@ -1080,6 +1080,7 @@ def test_headline_says_what_it_is_doing(rig):
     rig.tick(121)
     assert rig.auto.status()["headline"] == "Waiting: not dark"
     rig.sun = -40.0
+    rig.now += 3600  # long enough that the restart can't carry the roof's safe time
     rig.auto = rig.build()
     rig.settle_and_start()
     # Item 1 of the schedule is a setting, so item 2 of 3 is target 1 of 2.
@@ -1406,3 +1407,41 @@ def test_real_scope_passes_the_guard_outcome_and_dry_run_drops_it():
     real = RealScope(lambda: Dev())
     assert real.read().framing == outcome
     assert DryRunScope(real).read().framing is None
+
+
+def test_a_restart_with_the_roof_open_starts_without_waiting_out_the_settle_again(tmp_path):
+    rig = Rig(tmp_path)
+    rig.tick()
+    rig.tick(121)
+    assert rig.auto.phase == OPENING
+    # Restarted from parked, a few seconds later, with the roof still open.
+    rig.scope.state = replace(rig.scope.state, parked=True, sched_state="stopped")
+    rig.tick(5)
+    rig.auto = rig.build()
+    rig.tick(30)
+    assert rig.auto.phase == OPENING
+    assert any("safe before the restart" in line for line in rig.auto.status()["log"])
+
+
+def test_a_long_outage_still_waits_out_the_settle(tmp_path):
+    from roof.automation import SAFE_CARRY_S
+
+    rig = Rig(tmp_path)
+    rig.tick()
+    rig.tick(60)
+    rig.auto = rig.build()
+    rig.tick(SAFE_CARRY_S + 120)
+    assert rig.auto.phase != OPENING
+    assert "must read safe" in rig.auto.status()["note"]
+
+
+def test_a_roof_that_closed_before_the_restart_waits_out_the_settle(tmp_path):
+    rig = Rig(tmp_path)
+    rig.tick()
+    rig.tick(60)
+    rig.safety = UNSAFE
+    rig.tick(10)
+    rig.safety = SAFE
+    rig.auto = rig.build()
+    rig.tick(10)
+    assert rig.auto.phase != OPENING

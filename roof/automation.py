@@ -49,6 +49,10 @@ MAX_START_FAILURES = 3
 # replanning would pick the same ones. This also caps open/park cycles a night.
 EARLY_END_FRACTION = 0.5
 MAX_LIST_RUNS = 8
+# A restart keeps the roof's safe-since time if it read safe this recently before going
+# down, so a restart doesn't make an open roof wait out the settle time again.
+SAFE_CARRY_S = 300
+SAFE_NOTE_S = 60
 # A target the scope couldn't find gets one more try this long after, as the sky turns
 # (something in the way, say). After a second failure it waits for the next night.
 FAILED_RETRY_S = 45 * 60
@@ -154,6 +158,9 @@ class RoofAutomation:
         self._run_items = {}
         # Targets that failed: name -> {"night", "at", "count", "why"}.
         self._failed_targets = {}
+        # The roof's safe-since time from before a restart, and when it was last seen safe.
+        self._saved_safe_since = None
+        self._safe_seen_at = 0.0
         self._list_runs_night = ""
         self._launched_at = 0.0
         self._last_connected_at = None  # only ever reported
@@ -267,12 +274,19 @@ class RoofAutomation:
         if safety.safe:
             self._unsafe_since = None
             if self._safe_since is None:
-                self._safe_since = now
+                self._safe_since = self._carried_safe_since(now) or now
+            if now - self._safe_seen_at >= SAFE_NOTE_S:
+                self._safe_seen_at = now
+                self._save_state()
             if self._override_roof:
                 self._override_roof = False
                 self._log("roof reads safe; manual roof override ended")
         else:
-            self._safe_since = None
+            if self._safe_since is not None or self._safe_seen_at:
+                self._safe_seen_at = 0.0
+                self._safe_since = None
+                self._save_state()
+            self._saved_safe_since = None
             if self._unsafe_since is None:
                 self._unsafe_since = now
         if safety.safe != self._was_safe:
@@ -283,6 +297,15 @@ class RoofAutomation:
             sun_text = "unknown" if sun is None else f"{sun:.1f} deg"
             self._log(f"{'dark' if dark else 'not dark'} (sun {sun_text}, limit {s.sun_max_deg})")
             self._was_dark = dark
+
+    def _carried_safe_since(self, now):
+        """The safe-since time from before a restart, if the roof was safe just before it."""
+        saved, self._saved_safe_since = self._saved_safe_since, None
+        if saved and saved.get("since") and now - saved.get("seen", 0) <= SAFE_CARRY_S:
+            since = float(saved["since"])
+            self._log(f"roof was safe before the restart; counting from {datetime.fromtimestamp(since):%H:%M:%S}")
+            return since
+        return None
 
     def _next_commands(self, scope, s, state, safety, dark, night, now) -> bool:
         """Run queued button presses. True when one took this tick's action."""
@@ -998,6 +1021,8 @@ class RoofAutomation:
                 doc = json.load(f)
             self._hold_night = str(doc.get("hold_night", ""))
             self._completed_night = str(doc.get("completed_night", ""))
+            roof = doc.get("roof_safe")
+            self._saved_safe_since = roof if isinstance(roof, dict) else None
             failed = doc.get("failed_targets")
             self._failed_targets = failed if isinstance(failed, dict) else {}
             resume = doc.get("resume")
@@ -1017,6 +1042,11 @@ class RoofAutomation:
                         "completed_night": self._completed_night,
                         "resume": self._resume,
                         "failed_targets": self._failed_targets,
+                        "roof_safe": (
+                            {"since": self._safe_since, "seen": self._safe_seen_at}
+                            if self._safe_since and self._safe_seen_at
+                            else None
+                        ),
                     },
                     f,
                 )
