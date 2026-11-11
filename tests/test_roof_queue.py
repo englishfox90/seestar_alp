@@ -43,8 +43,9 @@ def remaining(*targets):
     return {t.id: t.goal_hours for t in targets}
 
 
-def stacking(target="NGC 6960", stacked=100, lapse=3600.0, exposure=20.0, dropped=0):
+def stacking(target="NGC 6960", stacked=100, lapse=3600.0, exposure=20.0, dropped=0, scale=None):
     return ScopeState(
+        mosaic_scale=scale,
         view_state="working",
         view_stage="Stack",
         view_target=target,
@@ -353,16 +354,77 @@ def test_progress_saved_within_a_minute_and_when_stacking_ends(tmp_path):
     assert json.loads(path.read_text())[0]["stacked"] == 3
 
 
-def test_short_framed_run_is_shown_but_not_counted(tmp_path):
+def test_unjudged_framed_run_counts_once_it_ran_an_hour(tmp_path):
     log = SessionLog(str(tmp_path / "s.json"))
     target = framed()
-    log.observe(stacking(stacked=180, lapse=3600, exposure=20), "n", 10000)
+    log.observe(stacking(stacked=90, lapse=1800, exposure=20, scale=1.7), "n", 10000)
     short = log.progress(target)
-    assert short.counted_hours == 0 and short.partial_hours == pytest.approx(1.0)
-    log.observe(stacking(stacked=720, lapse=4 * 3600, exposure=20), "n", 90000)
+    assert short.counted_hours == 0 and short.partial_hours == pytest.approx(0.5)
+    log.observe(stacking(stacked=720, lapse=4 * 3600, exposure=20, scale=1.7), "n", 90000)
     full = log.progress(target)
     assert full.counted_hours == pytest.approx(4.0)
     assert full.sessions == 2
+
+
+def _ended_run(log, lapse, stacked=74, exposure=30.0, at=10000):
+    log.observe(stacking(stacked=stacked, lapse=lapse, exposure=exposure, scale=2.3), "n", at)
+    log.observe(ScopeState(), "n", at + 10)
+
+
+def test_a_covered_framing_counts_however_short(tmp_path):
+    log = SessionLog(str(tmp_path / "s.json"))
+    _ended_run(log, lapse=1200)
+    judged = log.review("share", 10000 + 600, find=lambda d, n, e: "/x/Stacked_74.jpg", measure=lambda p: 0.07)
+    assert judged == 1
+    progress = log.progress(framed())
+    assert progress.counted_hours == pytest.approx(74 * 30 / 3600) and progress.partial_hours == 0
+    assert log.rows()[0]["stack"] == "Stacked_74.jpg"
+
+
+def test_a_framing_with_holes_does_not_count_however_long(tmp_path):
+    log = SessionLog(str(tmp_path / "s.json"))
+    _ended_run(log, lapse=5 * 3600)
+    log.review("share", 10000 + 600, find=lambda d, n, e: "/x/s.jpg", measure=lambda p: 0.83)
+    progress = log.progress(framed())
+    assert progress.counted_hours == 0 and progress.partial_hours > 0
+
+
+def test_review_waits_for_the_file_then_falls_back_to_length(tmp_path):
+    from roof.sessions import COVERAGE_GIVE_UP_S, COVERAGE_WAIT_S
+
+    log = SessionLog(str(tmp_path / "s.json"))
+    _ended_run(log, lapse=2 * 3600)
+    ended = log.rows()[0]["last_seen"]
+    none = lambda d, n, e: None  # noqa: E731
+    assert log.review("share", ended + COVERAGE_WAIT_S - 1, find=none) == 0  # too soon
+    assert log.review("share", ended + COVERAGE_WAIT_S, find=none) == 0  # not saved yet
+    assert "covered" not in log.rows()[0]
+    assert log.review("share", ended + COVERAGE_GIVE_UP_S, find=none) == 1
+    assert log.rows()[0]["covered"] is None
+    assert log.progress(framed()).counted_hours > 0  # two hours, so its length counts
+
+
+def test_review_leaves_single_frames_and_judged_runs_alone(tmp_path):
+    log = SessionLog(str(tmp_path / "s.json"))
+    log.observe(stacking("M 42", stacked=60, lapse=600, exposure=10), "n", 1000)
+    log.observe(ScopeState(), "n", 1010)
+    _ended_run(log, lapse=1200, at=20000)
+    seen = []
+    log.review("share", 30000, find=lambda d, n, e: seen.append(n) or "/x/s.jpg", measure=lambda p: 0.1)
+    log.review("share", 40000, find=lambda d, n, e: seen.append(n) or "/x/s.jpg", measure=lambda p: 0.1)
+    assert len(seen) == 1
+
+
+def test_black_share_reads_a_real_jpeg(tmp_path):
+    from PIL import Image
+
+    from roof.coverage import black_share
+
+    image = Image.new("RGB", (400, 200), (40, 30, 30))
+    image.paste((0, 0, 0), (0, 0, 100, 200))  # a quarter with no data
+    path = tmp_path / "Stacked_1.jpg"
+    image.save(path)
+    assert black_share(str(path)) == pytest.approx(0.25, abs=0.02)
 
 
 def test_short_single_frame_run_still_counts(tmp_path):
@@ -992,11 +1054,13 @@ def test_parked_plan_explains_targets_left_out(tmp_path, plain_config, monkeypat
     assert "12 h framed run" in details["skipped"][0]["why"]
 
 
-def test_goal_text_counts_only_full_framed_runs(tmp_path):
+def test_goal_text_leaves_out_framed_runs_with_holes(tmp_path):
     dash = _dash()
     log = SessionLog(str(tmp_path / "s.json"))
-    log.observe(stacking(stacked=180, lapse=3600, exposure=20), "n", 10000)
-    assert dash.goal_text(framed(goal_hours=15.0), log) == "0.0 of 15 h, plus 1.0 h not counted yet"
+    log.observe(stacking(stacked=180, lapse=3600, exposure=20, scale=1.7), "n", 10000)
+    log.observe(ScopeState(), "n", 10010)
+    log.review("share", 11000, find=lambda d, n, e: "/x/s.jpg", measure=lambda p: 0.8)
+    assert dash.goal_text(framed(goal_hours=15.0), log) == "0.0 of 15 h, plus 1.0 h not counted, framing not covered"
     assert dash.goal_text(framed(goal_hours=15.0, prior_hours=2.0), log).startswith("2.0 of 15 h")
 
 
@@ -1022,3 +1086,19 @@ def test_a_target_list_problem_never_breaks_the_dashboard(monkeypatch):
     monkeypatch.setattr(dash, "target_queue", broken)
     details = dash.list_details({"uses_target_list": True}, {})
     assert "unreadable" in details["error"] and "rows" not in details
+
+
+def test_a_run_is_matched_to_its_own_stack_not_a_later_one(tmp_path):
+    import os
+
+    from roof.coverage import run_stack
+
+    folder = tmp_path / "Ngc 7000_mosaic"
+    folder.mkdir()
+    for name, when in (("Stacked_1_a.jpg", 1000), ("Stacked_1_a_thn.jpg", 1000), ("Stacked_74_b.jpg", 5000)):
+        (folder / name).write_bytes(b"x")
+        os.utime(folder / name, (when, when))
+    assert run_stack(str(tmp_path), "Ngc 7000", 990).endswith("Stacked_1_a.jpg")
+    assert run_stack(str(tmp_path), "Ngc 7000", 4990).endswith("Stacked_74_b.jpg")
+    assert run_stack(str(tmp_path), "Ngc 7000", 9000) is None
+

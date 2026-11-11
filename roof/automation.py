@@ -59,6 +59,7 @@ FAILED_RETRY_S = 45 * 60
 FAILED_TRIES = 2
 NEVER_STACKED = "the scope never started stacking it, so it probably could not find it (a failed plate solve, say)"
 HEARTBEAT_S = 1800
+COVERAGE_REVIEW_S = 300
 LOOP_STALE_S = 90
 IDLE_VIEW_STAGES = {"", "None", "ContinuousExposure"}
 
@@ -154,6 +155,7 @@ class RoofAutomation:
         self._list_note = ""
         self._alarm_after_park = ""
         self._list_runs = 0
+        self._coverage_at = 0.0
         # This run's imaging items: item number -> what happened to it.
         self._run_items = {}
         # Targets that failed: name -> {"night", "at", "count", "why"}.
@@ -233,6 +235,7 @@ class RoofAutomation:
             state = self._step(scope, s, state, safety, dark, night, now)
         self._manage_dew(scope, s, state)
         self._record_stack(state, night, now)
+        self._review_coverage(s, now)
         self._alert(
             "observe",
             state,
@@ -969,6 +972,18 @@ class RoofAutomation:
             self._learn_framing_estimate(state)
         except Exception as e:
             self._logger.warning("could not record the stack: %s", e)
+
+    def _review_coverage(self, s, now):
+        """Judge finished framed runs by their saved image. Bookkeeping, never fatal."""
+        if self._session_log is None or now - self._coverage_at < COVERAGE_REVIEW_S:
+            return
+        self._coverage_at = now
+        try:
+            judged = self._session_log.review(s.discord_image_dir, now)
+            if judged:
+                self._log(f"judged {judged} framed run(s) by their saved image")
+        except Exception as e:
+            self._logger.warning("could not check a stack's coverage: %s", e)
 
     def _learn_framing_estimate(self, state):
         # Only while stacking, when the firmware's setting is this target's framing.

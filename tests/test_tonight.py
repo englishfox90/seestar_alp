@@ -747,7 +747,7 @@ def test_finished_shows_each_target_and_leaves_the_total_to_the_sentence():
     card = result["morning"]
     assert card["total"] is None
     assert [r["hours"] for r in card["rows"]] == ["2.7 h", "3 h"]
-    assert card["rows"][0]["line"] == "Kept 92%. 3.4 of 10 h toward goal. 0.4 h of this not counted yet"
+    assert card["rows"][0]["line"] == "Kept 92%. 3.4 of 10 h toward goal. 0.4 h of this not counted, framing not covered"
     assert card["rows"][1]["line"] == "Kept 95%"
     assert result["last_image"] is True
 

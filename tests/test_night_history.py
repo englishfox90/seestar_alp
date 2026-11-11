@@ -448,16 +448,16 @@ def test_summary_totals_targets_and_has_no_goal_for_one_off_the_list(tmp_path):
     assert summary["kept_percent"] == 100
 
 
-def test_summary_marks_a_short_framed_run_as_not_counted_toward_the_goal(tmp_path):
+def test_summary_marks_a_framed_run_with_holes_as_not_counted_toward_the_goal(tmp_path):
     framed = Target(
         id="a", name="IC 1805", ra=1, dec=2, goal_hours=8, mosaic_scale=1.7, min_session_hours=4
     )
-    log = _log(tmp_path, [_row("IC 1805", 120, wall=3600.0)])
+    log = _log(tmp_path, [{**_row("IC 1805", 120, wall=3600.0), "covered": False}])
     entry = night_web.night_summary(NIGHT, log, [framed])["targets"][0]
     assert entry["hours"] == 1.0
     assert entry["hours_not_counted"] == 1.0
     assert entry["goal"]["have_hours"] == 0.0
-    assert entry["goal"]["text"] == "0.0 of 8 h, plus 1.0 h not counted yet"
+    assert entry["goal"]["text"] == "0.0 of 8 h, plus 1.0 h not counted, framing not covered"
 
 
 def test_summary_invents_no_hours_for_a_run_with_no_exposure_known(tmp_path):

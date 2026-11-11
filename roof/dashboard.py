@@ -144,7 +144,7 @@ def goal_text(target, log) -> str:
     have = target.prior_hours + progress.counted_hours
     text = f"{have:.1f} of {target.goal_hours:g} h"
     if progress.partial_hours >= 0.05:
-        text += f", plus {progress.partial_hours:.1f} h not counted yet"
+        text += f", plus {progress.partial_hours:.1f} h not counted, framing not covered"
     return text
 
 

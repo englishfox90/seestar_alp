@@ -12,7 +12,7 @@ import falcon
 from roof import config as roof_config
 from roof import dashboard, site_status
 from roof.automation import get_automation, night_history, session_log, target_queue
-from roof.sessions import _PANEL_SUFFIX, FULL_SESSION_FRACTION, base_name
+from roof.sessions import _PANEL_SUFFIX, base_name, counts
 from roof.sun import night_key
 
 
@@ -33,11 +33,8 @@ def _goal(target, log) -> dict | None:
 
 
 def _not_counted(target, row) -> bool:
-    """A framed run short of its minimum, which SessionLog.progress leaves out."""
-    if target is None or not target.framed:
-        return False
-    minimum_s = target.min_session_hours * 3600 * FULL_SESSION_FRACTION
-    return row.get("wall_s", 0) < minimum_s
+    """A framed run that SessionLog.progress leaves out."""
+    return target is not None and not counts(target, row)
 
 
 def night_summary(night: str, log, targets) -> dict:

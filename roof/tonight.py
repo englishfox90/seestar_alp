@@ -270,7 +270,7 @@ def _metrics(key, stack) -> list:
                 "label": "Goal",
                 "value": f"{goal['have']:.1f}",
                 "unit": f"of {goal['goal']:g} h",
-                "hint": f"plus {goal['partial']:.1f} h not counted yet" if goal["partial"] >= 0.05 else "",
+                "hint": f"plus {goal['partial']:.1f} h not counted, framing not covered" if goal["partial"] >= 0.05 else "",
             }
         )
     return metrics
@@ -374,7 +374,7 @@ def _summary_line(entry) -> str:
     if goal:
         parts.append(f"{goal['have_hours']:.1f} of {goal['goal_hours']:g} h toward goal")
     if entry.get("hours_not_counted", 0) >= 0.05:
-        parts.append(f"{entry['hours_not_counted']:.1f} h of this not counted yet")
+        parts.append(f"{entry['hours_not_counted']:.1f} h of this not counted, framing not covered")
     return ". ".join(parts)
 
 
