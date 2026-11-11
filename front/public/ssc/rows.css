@@ -46,12 +46,21 @@
     color: var(--ssc-text-2);
     font-size: var(--ssc-text-footnote);
 }
+/* A small capsule after the name, like a status label in a list. */
 .ssc-row__tag {
+    display: inline-block;
+    margin-left: var(--ssc-space-2);
+    padding: 0 var(--ssc-space-3);
+    border-radius: var(--ssc-radius-round);
+    background: var(--ssc-fill-1);
     color: var(--ssc-text-2);
-    font-size: var(--ssc-text-footnote);
+    font-size: var(--ssc-text-caption);
+    font-weight: var(--ssc-weight-strong);
+    line-height: 1.6;
+    vertical-align: 0.1em;
 }
 .ssc-row[data-progress="now"] .ssc-row__label { font-weight: var(--ssc-weight-strong); }
-.ssc-row[data-progress="now"] .ssc-row__tag { color: var(--ssc-accent); }
+.ssc-row[data-progress="now"] .ssc-row__tag { background: var(--ssc-accent-tint); color: var(--ssc-accent); }
 .ssc-row[data-progress="done"] .ssc-row__label { color: var(--ssc-text-2); }
 .ssc-row[data-tone="attention"] .ssc-row__value { color: var(--ssc-orange); }
 .ssc-row[data-tone="danger"] .ssc-row__value { color: var(--ssc-red); }

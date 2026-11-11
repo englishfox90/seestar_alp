@@ -245,7 +245,21 @@
     color: var(--ssc-text-2);
 }
 .t-step { display: inline-flex; align-items: center; gap: var(--ssc-space-1); }
-.t-step[data-state="active"] { color: var(--ssc-text-1); font-weight: var(--ssc-weight-strong); }
+.t-step[data-state="active"] { color: var(--ssc-accent); font-weight: var(--ssc-weight-strong); }
+/* Every step has a mark the width of the check, so the labels line up: a dim dot to
+   come, the accent dot for the step under way. */
+.t-step__dot { display: inline-grid; place-items: center; width: var(--ssc-space-5); height: var(--ssc-space-5); }
+.t-step__dot::before {
+    content: "";
+    width: var(--ssc-space-3);
+    height: var(--ssc-space-3);
+    border-radius: var(--ssc-radius-full);
+    background: var(--ssc-fill-2);
+}
+.t-step[data-state="active"] .t-step__dot::before {
+    background: var(--ssc-accent);
+    box-shadow: 0 0 0 var(--ssc-space-1) var(--ssc-accent-tint);
+}
 .t-step[data-state="failed"],
 .t-step[data-state="blocked"] { color: var(--ssc-red); font-weight: var(--ssc-weight-strong); }
 

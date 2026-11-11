@@ -27,7 +27,7 @@
   {% if steps %}
   <ol class="t-steps">
     {% for step in steps %}
-    <li class="t-step" data-state="{{ step.state }}"{% if step.state == "active" %} aria-current="step"{% endif %}>{% if step.state in ("done", "warn") %}{{ ui.icon("check", 16) }}{% elif step.state in ("failed", "blocked") %}{{ ui.icon("warning", 16) }}{% endif %}{{ step.label|e }}</li>
+    <li class="t-step" data-state="{{ step.state }}"{% if step.state == "active" %} aria-current="step"{% endif %}>{% if step.state in ("done", "warn") %}{{ ui.icon("check", 16) }}{% elif step.state in ("failed", "blocked") %}{{ ui.icon("warning", 16) }}{% else %}<span class="t-step__dot" aria-hidden="true"></span>{% endif %}{{ step.label|e }}</li>
     {% endfor %}
   </ol>
   {% endif %}
