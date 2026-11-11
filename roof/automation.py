@@ -44,10 +44,16 @@ PARK_ATTEMPTS = 3
 STOP_RETRY_S = 60
 START_RETRY_S = 120
 MAX_START_FAILURES = 3
-# A plan from the target list that ends well before its time means targets failed,
-# and replanning would pick the same ones. This also caps open/park cycles a night.
+# A plan from the target list that ends well before its time means targets failed.
+# Those it can name are left out and the night is planned again; with none to name,
+# replanning would pick the same ones. This also caps open/park cycles a night.
 EARLY_END_FRACTION = 0.5
 MAX_LIST_RUNS = 8
+# A target the scope couldn't find gets one more try this long after, as the sky turns
+# (something in the way, say). After a second failure it waits for the next night.
+FAILED_RETRY_S = 45 * 60
+FAILED_TRIES = 2
+NEVER_STACKED = "the scope never started stacking it, so it probably could not find it (a failed plate solve, say)"
 HEARTBEAT_S = 1800
 LOOP_STALE_S = 90
 IDLE_VIEW_STAGES = {"", "None", "ContinuousExposure"}
@@ -139,11 +145,15 @@ class RoofAutomation:
         self._session_log = session_log
         self._night_history = night_history
         self._alerts = alerts
-        self._plan_targets = plan_targets or (lambda s, now: (False, "no target list"))
+        self._plan_targets = plan_targets or (lambda s, now, exclude=(): (False, "no target list"))
         self._framing_estimates = framing_estimates
         self._list_note = ""
         self._alarm_after_park = ""
         self._list_runs = 0
+        # This run's imaging items: item number -> what happened to it.
+        self._run_items = {}
+        # Targets that failed: name -> {"night", "at", "count", "why"}.
+        self._failed_targets = {}
         self._list_runs_night = ""
         self._launched_at = 0.0
         self._last_connected_at = None  # only ever reported
@@ -564,7 +574,7 @@ class RoofAutomation:
     def _refresh_list_plan(self, s, now) -> bool:
         """Write tonight's plan from the target list. True if a target is ready now."""
         try:
-            ready, self._list_note = self._plan_targets(s, now)
+            ready, self._list_note = self._plan_targets(s, now, self._left_out(s, now))
         except Exception as e:
             self._logger.warning("could not plan from the target list: %s", e)
             self._list_note = f"cannot plan from the target list: {e}"
@@ -637,6 +647,7 @@ class RoofAutomation:
         self._alarm_after_park = ""
         self._skip_asked = 0
         self._framing_checked = 0
+        self._run_items = {}
         self._last_item = start_item
         self._deadline = now + START_GRACE_S
         self._arm_deadline = now + ARM_OPEN_ALARM_S
@@ -691,6 +702,7 @@ class RoofAutomation:
                 self._raise_alarm(f"arm still closed {ARM_OPEN_ALARM_S}s after the schedule started")
             elif state.parked is False:
                 self._arm_deadline = 0.0
+            self._note_item(state)
             self._skip_if_too_low(scope, s, state, now)
             self._check_framing(state)
             return
@@ -704,7 +716,9 @@ class RoofAutomation:
             if adopted:
                 self._alert("session_ended", "schedule finished")
                 return
-            if not self._list_run_may_replan(night, now):
+            self._note_item(state)
+            failed = self._record_failures(night, now)
+            if not self._list_run_may_replan(night, now, failed):
                 self._completed_night = night
             self._report_framing_guard(state)
             self._resume = {}
@@ -722,7 +736,7 @@ class RoofAutomation:
         self._alert("session_ended", "stopped elsewhere")
         self._raise_alarm("scheduler stopped outside automation; holding until Start or the next night")
 
-    def _list_run_may_replan(self, night, now) -> bool:
+    def _list_run_may_replan(self, night, now, failed=()) -> bool:
         """After a plan from the target list ends, may the night carry on?"""
         if self._active_schedule != schedule_tools.TARGET_LIST:
             return False
@@ -731,7 +745,7 @@ class RoofAutomation:
             for item in self._active_items
             if item.get("action") in schedule_tools.IMAGING_ACTIONS
         )
-        if now - self._launched_at < planned * EARLY_END_FRACTION:
+        if now - self._launched_at < planned * EARLY_END_FRACTION and not failed:
             self._alarm_after_park = (
                 "the target list's plan ended well before its time, so a target probably "
                 "failed; done for tonight. Press Start to try again"
@@ -745,6 +759,58 @@ class RoofAutomation:
             self._log(f"stopping for tonight after {MAX_LIST_RUNS} runs from the target list")
             return False
         return True
+
+    def _note_item(self, state):
+        """Remember, for this run, which targets stacked and which the guard gave up on."""
+        number = state.item_number
+        if 1 <= number <= len(self._active_items):
+            item = self._active_items[number - 1]
+            if item.get("action") in schedule_tools.IMAGING_ACTIONS:
+                seen = self._run_items.setdefault(number, {})
+                if state.view_stage == "Stack":
+                    seen["stacked"] = True
+        guard = state.framing or {}
+        number = guard.get("item_number") or 0
+        if guard.get("state") == "skipped" and 1 <= number <= len(self._active_items):
+            self._run_items.setdefault(number, {})["why"] = "its framing would not hold"
+
+    def _record_failures(self, night, now) -> list:
+        """Targets this run reached but never stacked. Not those skipped for altitude."""
+        if self._adopted or self._active_schedule != schedule_tools.TARGET_LIST:
+            return []
+        failed = []
+        for number, seen in sorted(self._run_items.items()):
+            if seen.get("stacked") or seen.get("low"):
+                continue
+            name = self._active_items[number - 1].get("params", {}).get("target_name", "?")
+            why = seen.get("why") or NEVER_STACKED
+            record = self._failed_targets.get(name)
+            if not record or record.get("night") != night:
+                record = {"night": night, "count": 0}
+            record.update(at=now, why=why, count=record["count"] + 1)
+            self._failed_targets[name] = record
+            failed.append(name)
+            if record["count"] >= FAILED_TRIES:
+                later = "leaving it out for the rest of tonight"
+            else:
+                retry = datetime.fromtimestamp(now + FAILED_RETRY_S).strftime("%H:%M")
+                later = f"leaving it out until {retry}, then one more try"
+            self._log(f"{name} failed: {why}; {later}")
+            self._alert("target_skipped", name, f"{why[0].upper()}{why[1:]}. {later.capitalize()}.")
+        self._run_items = {}
+        if failed:
+            self._save_state()
+        return failed
+
+    def _left_out(self, s, now) -> set:
+        """Targets the next plan should leave out, after failing tonight."""
+        night = night_key(now, s.lon)
+        return {
+            name
+            for name, record in self._failed_targets.items()
+            if record.get("night") == night
+            and (record.get("count", 0) >= FAILED_TRIES or now - record.get("at", 0) < FAILED_RETRY_S)
+        }
 
     def _skip_if_too_low(self, scope, s, state, now):
         number = state.item_number
@@ -763,6 +829,7 @@ class RoofAutomation:
         name = item.get("params", {}).get("target_name", "?")
         self._log(f"skipping item {number} ({name}): below {s.min_target_alt_deg:g} deg")
         self._skip_asked = number
+        self._run_items.setdefault(number, {})["low"] = True
         self._alert("target_skipped", name, f"below {s.min_target_alt_deg:g} deg")
         failure = self._guard(scope.skip_item)
         if failure:
@@ -931,6 +998,8 @@ class RoofAutomation:
                 doc = json.load(f)
             self._hold_night = str(doc.get("hold_night", ""))
             self._completed_night = str(doc.get("completed_night", ""))
+            failed = doc.get("failed_targets")
+            self._failed_targets = failed if isinstance(failed, dict) else {}
             resume = doc.get("resume")
             self._resume = resume if isinstance(resume, dict) else {}
         except (OSError, ValueError):
@@ -947,6 +1016,7 @@ class RoofAutomation:
                         "hold_night": self._hold_night,
                         "completed_night": self._completed_night,
                         "resume": self._resume,
+                        "failed_targets": self._failed_targets,
                     },
                     f,
                 )
@@ -1128,8 +1198,12 @@ def get_automation() -> RoofAutomation:
             night_history=NightHistory(os.path.join(base, "roof_night_history.json")),
             alerts=alerts,
             framing_estimates=FramingEstimates(os.path.join(base, "roof_framing.json")),
-            plan_targets=lambda s, now: planner.write_night_plan(
-                s, targets.all(), log, now, schedule_tools.schedule_dir()
+            plan_targets=lambda s, now, exclude=(): planner.write_night_plan(
+                s,
+                [t for t in targets.all() if t.name not in exclude],
+                log,
+                now,
+                schedule_tools.schedule_dir(),
             ),
         )
     return _instance

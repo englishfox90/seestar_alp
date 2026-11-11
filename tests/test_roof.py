@@ -1339,7 +1339,7 @@ def test_guard_skip_on_the_last_item_stays_on_tonight_after_the_park(rig):
     assert sum(note in line for line in rig.auto.status()["log"]) == 1
 
 
-def test_guard_skip_keeps_the_plan_ended_early_message(rig):
+def test_guard_skip_leaves_the_target_out_and_replans(rig):
     rig.settings = replace(rig.settings, schedule=schedule_tools.TARGET_LIST)
     rig.auto._active_schedule = schedule_tools.TARGET_LIST
     rig.auto._active_items = [_framed("A")]
@@ -1347,8 +1347,10 @@ def test_guard_skip_keeps_the_plan_ended_early_message(rig):
     rig.auto.phase = IMAGING
     rig.set_scope(connected=True, parked=False, sched_state="complete", framing=_guard(1, "skipped", "A skipped."))
     rig.tick(1)
-    alarm = rig.auto.status()["alarm"]
-    assert alarm.startswith("A skipped.") and "ended well before its time" in alarm
+    status = rig.auto.status()
+    assert status["alarm"].startswith("A skipped.") and "ended well before" not in status["alarm"]
+    assert status["completed"] is False
+    assert rig.auto._failed_targets["A"]["why"] == "its framing would not hold"
 
 
 def test_guard_skip_on_an_item_is_not_overwritten_by_the_backstop(rig):

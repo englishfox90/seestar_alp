@@ -19,7 +19,7 @@ from roof.queue import (
     targets_from_schedule,
 )
 from roof.scope import RealScope, ScopeState
-from roof.automation import IDLE
+from roof.automation import IDLE, IMAGING
 from roof.sentinel import SafetyReading
 from roof.sessions import SessionLog
 from roof.sun import night_key
@@ -606,8 +606,9 @@ class _ListRig:
         self.panel_time = 3600
         self.rig.auto._plan_targets = self._plan
 
-    def _plan(self, s, now):
+    def _plan(self, s, now, exclude=()):
         self.plans += 1
+        self.excluded = set(exclude)
         if self.answer[0]:
             self.rig.write(
                 schedule_tools.PLAN_FILE,
@@ -645,7 +646,7 @@ def test_waits_with_the_arm_closed_until_a_target_is_due(list_rig):
 def test_a_failing_planner_only_delays_the_start(list_rig):
     rig = list_rig.rig
 
-    def broken(s, now):
+    def broken(s, now, exclude=()):
         raise RuntimeError("target list unreadable")
 
     rig.auto._plan_targets = broken
@@ -690,9 +691,83 @@ def test_a_finished_plan_parks_then_plans_again(list_rig):
     assert "rest of this night" in rig.auto.status()["note"]
 
 
+def _failed_name(rig):
+    (name,) = rig.auto._failed_targets
+    return name
+
+
+def _fail_target(list_rig, after=60):
+    """The scope reaches the plan's target, never stacks it, and the schedule ends."""
+    rig = list_rig.rig
+    rig.set_scope(sched_state="working", item_number=1, view_stage="AutoGoto")
+    rig.tick(10)
+    list_rig.finish_schedule(after=after)
+
+
+def test_a_target_that_never_stacks_is_left_out_and_the_night_replanned(list_rig):
+    rig = list_rig.rig
+    rig.settle_and_start()
+    _fail_target(list_rig)
+    status = rig.auto.status()
+    assert status["completed"] is False
+    assert "ended well before" not in status["alarm"]
+    assert "park" in rig.scope.calls
+    name = _failed_name(rig)
+    assert any(f"{name} failed" in line and "one more try" in line for line in status["log"])
+    rig.tick(10)
+    assert list_rig.excluded == {name}
+
+
+def test_a_failed_target_gets_one_more_try_later_then_waits_for_tomorrow(list_rig):
+    from roof.automation import FAILED_RETRY_S
+
+    rig = list_rig.rig
+    rig.settle_and_start()
+    _fail_target(list_rig)
+    rig.tick(FAILED_RETRY_S)
+    assert list_rig.excluded == set()  # its second chance
+    auto = rig.auto
+    name = _failed_name(rig)
+    # It fails again on that second run.
+    auto._active_items = [{"action": "start_mosaic", "params": {"target_name": name, "panel_time_sec": 3600}}]
+    auto._launched_at = rig.now
+    auto.phase = IMAGING
+    rig.set_scope(parked=False)
+    _fail_target(list_rig)
+    assert auto._failed_targets[name]["count"] == 2
+    rig.tick(FAILED_RETRY_S * 3)
+    assert list_rig.excluded == {name}
+
+
+def test_a_target_skipped_for_altitude_is_not_a_failure(list_rig):
+    rig = list_rig.rig
+    rig.settle_and_start()
+    rig.settings = replace(rig.settings, min_target_alt_deg=20.0)
+    rig.alts.update({f"run {n}": 5.0 for n in range(1, 5)})
+    rig.set_scope(sched_state="working", item_number=1, view_stage="AutoGoto")
+    rig.tick(10)
+    list_rig.finish_schedule(after=60)
+    status = rig.auto.status()
+    assert status["completed"] is True and "ended well before" in status["alarm"]
+
+
+def test_failures_survive_a_restart(list_rig):
+    rig = list_rig.rig
+    rig.settle_and_start()
+    _fail_target(list_rig)
+    rig.auto = rig.build()
+    rig.auto._plan_targets = list_rig._plan
+    rig.tick()
+    rig.tick(121)
+    assert list_rig.excluded == {_failed_name(rig)}
+
+
 def test_a_plan_ending_early_stops_for_the_night_with_an_alarm(list_rig):
     rig = list_rig.rig
     rig.settle_and_start()
+    # It stacked, so there's no failed target to leave out and replanning would repeat it.
+    rig.set_scope(sched_state="working", item_number=1, view_stage="Stack")
+    rig.tick(10)
     list_rig.finish_schedule(after=60)
     status = rig.auto.status()
     assert status["completed"] is True
