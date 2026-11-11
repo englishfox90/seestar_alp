@@ -6,7 +6,7 @@
     --t-stack-ratio: 0.5625;
     --t-pier-ratio: 1;
     /* Compact: the image across the whole width, kept whole above the Now panel. */
-    --t-slot: calc(100svh - var(--ssc-bar-height) - var(--ssc-tabbar-height) - var(--t-now-reserve));
+    --t-slot: calc(100svh - var(--ssc-bar-height) - var(--ssc-tabbar-room) - var(--t-now-reserve));
     display: flex;
     flex-direction: column;
     gap: var(--ssc-gap);

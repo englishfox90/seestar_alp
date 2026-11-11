@@ -2,7 +2,6 @@
   "name": "SSC",
   "short_name": "SSC",
   "description": "Seestar controller and roof automation",
-  "start_url": "../../../",
   "scope": "../../../",
   "display": "standalone",
   "background_color": "#000000",

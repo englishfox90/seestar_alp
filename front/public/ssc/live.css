@@ -125,9 +125,9 @@ body.live-rotation-flat .live-main img#liveViewImg {
     body.live-has-quickbar .live-quickbar {
         left: 0;
         right: 0;
-        bottom: calc(var(--ssc-tabbar-height) + env(safe-area-inset-bottom));
+        bottom: calc(var(--ssc-tabbar-room) + env(safe-area-inset-bottom));
         gap: var(--ssc-space-3);
-        padding: var(--ssc-space-3) max(var(--ssc-gutter), env(safe-area-inset-right)) var(--ssc-space-3) max(var(--ssc-gutter), env(safe-area-inset-left));
+        padding: var(--ssc-space-3) max(var(--ssc-gutter), var(--ssc-safe-right)) var(--ssc-space-3) max(var(--ssc-gutter), var(--ssc-safe-left));
         border: 0;
         border-top: 1px solid var(--ssc-separator);
         border-radius: var(--ssc-radius-image);
@@ -136,7 +136,7 @@ body.live-rotation-flat .live-main img#liveViewImg {
     }
 
     body.live-has-quickbar {
-        padding-bottom: calc(var(--ssc-tabbar-height) + env(safe-area-inset-bottom) + var(--ssc-touch) + var(--ssc-space-6) + var(--ssc-space-5));
+        padding-bottom: calc(var(--ssc-tabbar-room) + env(safe-area-inset-bottom) + var(--ssc-touch) + var(--ssc-space-6) + var(--ssc-space-5));
     }
 
     .live-quickbar .btn {
@@ -466,7 +466,7 @@ body.live-rotation-flat .live-main img#liveViewImg {
        the picture. */
     .live-main img#liveViewImg,
     body.live-rotation-flat .live-main img#liveViewImg {
-        max-height: calc(var(--live-portrait-size, 80vh) - var(--ssc-tabbar-height) - env(safe-area-inset-bottom) - var(--ssc-touch) - var(--ssc-space-6) - var(--ssc-space-3));
+        max-height: calc(var(--live-portrait-size, 80vh) - var(--ssc-tabbar-room) - env(safe-area-inset-bottom) - var(--ssc-touch) - var(--ssc-space-6) - var(--ssc-space-3));
     }
 
     .live-sidebar > :last-child {
@@ -474,3 +474,7 @@ body.live-rotation-flat .live-main img#liveViewImg {
     }
 }
 
+
+/* iPhone Duo: the quick bar stops at the tab rail. */
+:root[data-rail="right"] body.live-has-quickbar .live-quickbar { right: var(--ssc-rail); }
+:root[data-rail="left"] body.live-has-quickbar .live-quickbar { left: var(--ssc-rail); }

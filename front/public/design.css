@@ -149,8 +149,9 @@ body {
 
 main.container {
     max-width: var(--ssc-max-width);
-    padding-left: var(--ssc-gutter);
-    padding-right: var(--ssc-gutter);
+    /* Clear of a notch or the Duo's camera column, as the shell's page is. */
+    padding-left: max(var(--ssc-gutter), var(--ssc-safe-left));
+    padding-right: max(var(--ssc-gutter), var(--ssc-safe-right));
 }
 
 main.container {
@@ -347,15 +348,15 @@ main.container .row > [class*="col"] > .panel-card:only-child {
    destinations stay reachable there too. */
 @media (max-width: 767.98px) {
     body {
-        padding-bottom: calc(var(--ssc-tabbar-height) + env(safe-area-inset-bottom) + var(--ssc-space-5));
+        padding-bottom: calc(var(--ssc-tabbar-room) + env(safe-area-inset-bottom) + var(--ssc-space-5));
     }
 
     body.live-has-quickbar {
-        padding-bottom: calc(var(--ssc-tabbar-height) + env(safe-area-inset-bottom) + var(--ssc-space-8) + var(--ssc-space-7));
+        padding-bottom: calc(var(--ssc-tabbar-room) + env(safe-area-inset-bottom) + var(--ssc-space-8) + var(--ssc-space-7));
     }
 
     body.live-has-quickbar .live-quickbar {
-        bottom: calc(var(--ssc-tabbar-height) + env(safe-area-inset-bottom) + var(--ssc-space-3));
+        bottom: calc(var(--ssc-tabbar-room) + env(safe-area-inset-bottom) + var(--ssc-space-3));
     }
 }
 

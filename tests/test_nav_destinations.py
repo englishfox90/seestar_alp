@@ -262,3 +262,59 @@ def test_appearance_offers_four_modes_and_leaves_forms_and_the_server_alone():
     assert "name=" not in html and "toggleuitheme" not in html
     shell = (PUBLIC / "ssc" / "shell.js").read_text()
     assert "sscTheme.set(" in shell and "sscTheme.mode()" in shell and "toggleuitheme" not in shell
+
+
+def test_duo_rail_is_detected_before_paint_on_every_page():
+    """iPhone Duo: rail.js loads in <head> beside theme.js, and nav.css has a rail for each side."""
+    for template in ("ssc/shell.html", "base.html"):
+        head = (TEMPLATES / template).read_text().split("</head>")[0]
+        assert "/public/ssc/theme.js" in head and "/public/ssc/rail.js" in head, template
+    rail = (PUBLIC / "ssc" / "rail.js").read_text()
+    nav = (PUBLIC / "ssc" / "nav.css").read_text()
+    assert "safe-area-inset-left" in rail and "safe-area-inset-right" in rail
+    assert '"data-rail"' in rail and "max-width: 767.98px" in rail
+    # Only the Home Screen app: in the Safari browser the column is Safari's own buttons.
+    assert "display-mode: standalone" in rail and "navigator.standalone" in rail
+    # Duo opened: the installed app on a wide touch screen gets the rail instead of the top bar nav.
+    assert "(min-width: 768px) and (pointer: coarse)" in rail
+    assert ":root[data-rail] .ssc-widenav { display: none; }" in nav
+    for side in ("right", "left"):
+        assert f':root[data-rail="{side}"] body' in nav
+    assert ":root[data-rail] .ssc-tabbar" in nav
+
+
+def test_duo_rail_takes_the_side_inset_and_the_bottom_room():
+    """With a rail, nothing reserves tab bar room at the bottom or pads twice beside the camera."""
+    tokens = (PUBLIC / "ssc" / "tokens.css").read_text()
+    assert "--ssc-tabbar-room: 0px;" in tokens
+    assert '--ssc-safe-right: 0px;' in tokens and '--ssc-safe-left: 0px;' in tokens
+    sheets = [p for p in (PUBLIC / "ssc").glob("*.css") if p.name not in ("tokens.css", "nav.css")]
+    sheets.append(PUBLIC / "design.css")
+    for sheet in sheets:
+        css = sheet.read_text()
+        # Room under the page comes from --ssc-tabbar-room, never the bar's own height.
+        assert not re.search(r"var\(--ssc-tabbar-height\)\s*[+-]", css), sheet.name
+        assert not re.search(r"[+-]\s*var\(--ssc-tabbar-height\)", css), sheet.name
+    for name in ("layout.css", "nav.css", "live.css"):
+        css = (PUBLIC / "ssc" / name).read_text()
+        assert "env(safe-area-inset-right)" not in css.split("iPhone Duo")[0], name
+
+
+def test_home_screen_app_opens_on_the_page_it_was_added_from():
+    """No start_url: the browser uses the page you install from. Scope stays the whole app."""
+    import json
+
+    manifest = json.loads((PUBLIC / "ssc" / "app" / "manifest.json").read_text())
+    assert "start_url" not in manifest
+    assert manifest["scope"] == "../../../" and manifest["display"] == "standalone"
+
+
+def test_every_page_with_the_nav_draws_under_the_safe_areas():
+    """Both page shells use viewport-fit=cover, so the rail and bars sit in the same place on every
+    page. Every page with the nav extends one of these two; a new shell must opt in too."""
+    heads = [p for p in TEMPLATES.rglob("*.html") if "<head>" in p.read_text(encoding="utf-8")]
+    assert sorted(p.relative_to(TEMPLATES).as_posix() for p in heads) == [
+        "base.html", "no_telescopes.html", "ssc/shell.html",
+    ]
+    for template in ("base.html", "ssc/shell.html"):
+        assert "viewport-fit=cover" in (TEMPLATES / template).read_text(), template

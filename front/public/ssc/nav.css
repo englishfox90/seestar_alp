@@ -19,7 +19,7 @@
     min-height: var(--ssc-bar-height);
     max-width: var(--ssc-max-width);
     margin: 0 auto;
-    padding: 0 max(var(--ssc-gutter), env(safe-area-inset-right)) 0 max(var(--ssc-gutter), env(safe-area-inset-left));
+    padding: var(--ssc-space-2) max(var(--ssc-gutter), var(--ssc-safe-right)) var(--ssc-space-2) max(var(--ssc-gutter), var(--ssc-safe-left));
 }
 
 /* Roof status. Tonight renders ui.status lines here, and other pages poll /roof/badge. */
@@ -122,7 +122,13 @@
     backdrop-filter: var(--ssc-bar-filter);
     -webkit-backdrop-filter: var(--ssc-bar-filter);
     border-top: 1px solid var(--ssc-separator);
-    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    padding: 0 var(--ssc-safe-right) env(safe-area-inset-bottom) var(--ssc-safe-left);
+}
+/* In a browser the address bar floats below the page with the page showing round it, so the bar
+   takes the page's own colour and its hairline: it reads as the foot of the page, not a strip
+   hovering over a gap. The Home Screen app keeps the bar fill. */
+@media (display-mode: browser) {
+    .ssc-tabbar { background: var(--ssc-canvas); }
 }
 .ssc-tab,
 .ssc-tab:hover {
@@ -244,4 +250,40 @@
 .ssc-subnav__inner[data-more="left"] { mask-image: linear-gradient(to left, var(--ssc-image-backing) calc(100% - var(--ssc-space-6)), transparent); }
 .ssc-subnav__inner[data-more="both"] {
     mask-image: linear-gradient(to right, transparent, var(--ssc-image-backing) var(--ssc-space-6), var(--ssc-image-backing) calc(100% - var(--ssc-space-6)), transparent);
+}
+
+/* iPhone Duo: the camera and status bar take a column down one side (rail.js marks which), and
+   the tab bar moves into it, as Apple's Duo guidance has bars do. The page steps in by the rail
+   so nothing sits beside the camera, and the tabs sit at the foot of the column, clear of the
+   clock and in reach of a thumb. */
+:root[data-rail="right"] body { padding-right: var(--ssc-rail); }
+:root[data-rail="left"] body { padding-left: var(--ssc-rail); }
+:root[data-rail] .ssc-tabbar {
+    inset: 0 0 0 auto;
+    width: var(--ssc-rail);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: var(--ssc-space-2);
+    padding: var(--ssc-space-4) 0 calc(env(safe-area-inset-bottom) + var(--ssc-space-4));
+    border-top: 0;
+    border-left: 1px solid var(--ssc-separator);
+}
+:root[data-rail="left"] .ssc-tabbar {
+    inset: 0 auto 0 0;
+    border-left: 0;
+    border-right: 1px solid var(--ssc-separator);
+}
+:root[data-rail] .ssc-tab,
+:root[data-rail] .ssc-tab:hover {
+    flex-direction: column;
+    gap: var(--ssc-space-1);
+    min-height: var(--ssc-rail-tab-height);
+    padding: 0 var(--ssc-space-1);
+    text-align: center;
+}
+/* On Duo opened the rail replaces the sections in the top bar. */
+:root[data-rail] .ssc-widenav { display: none; }
+@media (min-width: 768px) {
+    :root[data-rail] .ssc-tabbar { display: flex; }
 }

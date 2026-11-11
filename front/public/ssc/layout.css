@@ -2,7 +2,7 @@
 .ssc-page {
     max-width: var(--ssc-max-width);
     margin: 0 auto;
-    padding: 0 max(var(--ssc-gutter), env(safe-area-inset-right)) calc(var(--ssc-tabbar-height) + env(safe-area-inset-bottom) + var(--ssc-space-6)) max(var(--ssc-gutter), env(safe-area-inset-left));
+    padding: 0 max(var(--ssc-gutter), var(--ssc-safe-right)) calc(var(--ssc-tabbar-room) + env(safe-area-inset-bottom) + var(--ssc-space-6)) max(var(--ssc-gutter), var(--ssc-safe-left));
 }
 
 @media (min-width: 768px) {

@@ -2,11 +2,12 @@
 <html lang="en" data-bs-theme="{{ webui_theme }}"{% if root_path %} data-root-path="{{ root_path }}"{% endif %}>
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
     {% include 'ssc/app_meta.html' %}
     <title>{% block title %}{% endblock %} - SSC</title>
     <script src="{{ root_path }}/public/ssc/theme.js"></script>
+    <script src="{{ root_path }}/public/ssc/rail.js"></script>
     {#    <link href="/public/xterm.css" rel="stylesheet">#}
     <script src="{{ root_path }}/public/htmx.min.js"></script>
     <script src="{{ root_path }}/public/sse.js"></script>

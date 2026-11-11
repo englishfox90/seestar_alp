@@ -137,6 +137,14 @@
     --ssc-control-height: 44px;
     --ssc-bar-height: 44px;
     --ssc-tabbar-height: 50px;
+    /* What the page leaves under itself for the tab bar: none when the bar is a side rail. */
+    --ssc-tabbar-room: var(--ssc-tabbar-height);
+    /* The side rail on iPhone Duo, at least this wide and as wide as the camera column. */
+    --ssc-rail-width: 72px;
+    --ssc-rail-tab-height: 56px;
+    /* Side safe areas. A rail takes over its side's, so the page stops adding it there. */
+    --ssc-safe-left: env(safe-area-inset-left);
+    --ssc-safe-right: env(safe-area-inset-right);
     --ssc-touch: 44px;
     --ssc-stop-height: 48px;
     --ssc-sheet-button: 50px;
@@ -217,4 +225,18 @@
     :root {
         --ssc-tabbar-height: 36px;
     }
+}
+
+/* iPhone Duo: the camera and status bar run down one side, and rail.js marks which. The tab bar
+   becomes a rail in that column, so nothing leaves room for it at the bottom. */
+:root[data-rail] {
+    --ssc-tabbar-room: 0px;
+}
+:root[data-rail="right"] {
+    --ssc-safe-right: 0px;
+    --ssc-rail: max(var(--ssc-rail-width), env(safe-area-inset-right));
+}
+:root[data-rail="left"] {
+    --ssc-safe-left: 0px;
+    --ssc-rail: max(var(--ssc-rail-width), env(safe-area-inset-left));
 }
