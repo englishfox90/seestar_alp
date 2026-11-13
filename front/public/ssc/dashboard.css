@@ -289,8 +289,9 @@
     .sd-columns:not([data-single]) { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
 }
 
-/* Room for the six rows before the first fill, so the services below don't jump. */
-.sd-events > .ssc-group { min-height: calc(6 * (var(--ssc-touch) + var(--ssc-space-1))); }
+/* Room for the six rows before the first fill, so the services below don't jump. Only while
+   empty: once the scope answers, the box fits what it says, even "No results available." */
+.sd-events > .ssc-group:empty { min-height: calc(6 * (var(--ssc-touch) + var(--ssc-space-1))); }
 .sd-events > summary { margin-bottom: var(--ssc-space-2); }
 
 .sd-services__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--ssc-space-2) var(--ssc-space-4); }
