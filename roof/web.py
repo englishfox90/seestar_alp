@@ -278,7 +278,7 @@ class AlertsEvents(_Action):
 
 
 class DefaultDeviceMiddleware:
-    """Send page URLs with no device number to the configured scope.
+    """Send page URLs with no device number to the configured scope, and / to Tonight.
 
     Upstream pages default to device 0, the Federation, when the URL has no
     number. Federation is still there, explicitly, at /0/.
@@ -291,7 +291,8 @@ class DefaultDeviceMiddleware:
         if req.method != "GET" or req.path.split("/")[1].isdigit():
             return
         device = roof_config.load().device_num
-        target = f"/{device}{req.path}"
+        # The bare address opens on Tonight. The Device page stays at /<n>/.
+        target = f"/{device}/dashboard" if req.path == "/" else f"/{device}{req.path}"
         if self._router.find(target) is None:
             return
         query = f"?{req.query_string}" if req.query_string else ""

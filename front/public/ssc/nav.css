@@ -22,6 +22,37 @@
     padding: var(--ssc-space-2) max(var(--ssc-gutter), var(--ssc-safe-right)) var(--ssc-space-2) max(var(--ssc-gutter), var(--ssc-safe-left));
 }
 
+/* The app's name and mark, so every page says what it is. A hairline sets it apart from the
+   scope menu. The tagline shows from 768px, where there is room. */
+.ssc-brand,
+.ssc-brand:hover {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: var(--ssc-space-3);
+    min-height: var(--ssc-touch);
+    padding-right: var(--ssc-space-4);
+    border-right: 1px solid var(--ssc-separator);
+    color: var(--ssc-text-1);
+    text-decoration: none;
+}
+.ssc-brand__mark { flex: none; color: var(--ssc-accent); }
+.ssc-brand__text { display: flex; flex-direction: column; line-height: 1.15; }
+.ssc-brand__name {
+    font-size: var(--ssc-text-section);
+    font-weight: var(--ssc-weight-strong);
+    letter-spacing: 0.04em;
+}
+.ssc-brand__tagline {
+    display: none;
+    color: var(--ssc-text-2);
+    font-size: var(--ssc-text-caption);
+}
+.ssc-brand:active { opacity: 0.6; }
+@media (min-width: 768px) {
+    .ssc-brand__tagline { display: block; }
+}
+
 /* Roof status. Tonight renders ui.status lines here, and other pages poll /roof/badge. */
 .ssc-topbar__status,
 .ssc-topbar__status:hover {

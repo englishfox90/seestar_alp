@@ -204,6 +204,18 @@ def test_with_roof_automation_short_urls_go_through_the_configured_device(monkey
     assert client.simulate_get("/1/system").status_code == 200
 
 
+def test_the_bare_address_opens_on_tonight(monkeypatch):
+    monkeypatch.setattr(roof_config, "load", lambda: SimpleNamespace(device_num=1))
+    client = falcon.testing.TestClient(_app_with_every_route(monkeypatch))
+    assert client.simulate_get("/").headers["location"] == "/1/dashboard"
+
+
+def test_every_page_names_the_app_and_links_home_to_tonight():
+    html = _render("ssc/nav.html", "settings")
+    brand = html[html.index('class="ssc-brand"'):html.index("</a>", html.index('class="ssc-brand"'))]
+    assert 'href="/1/dashboard"' in brand and "SSC" in brand
+
+
 def test_scope_switching_keeps_the_page_and_sub_path():
     html = _render("ssc/nav.html", "schedule/image")
     menu = html[html.index('class="ssc-menu ssc-scope"'):html.index("</details>")]
