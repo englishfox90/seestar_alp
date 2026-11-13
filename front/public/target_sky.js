@@ -18,6 +18,8 @@
   const model = window.SEESTAR_MODELS[card.dataset.model] || window.SEESTAR_MODELS[MODELS_FALLBACK];
   const fovW = model.fov_x / 60.0;
   const fovH = model.fov_y / 60.0;
+  // The wide angle camera's field, when it has been measured for this model.
+  const wide = model.wide_fov_x ? { w: model.wide_fov_x / 60.0, h: model.wide_fov_y / 60.0 } : null;
   const field = (id) => document.getElementById(id);
   const view = field("target-sky-view");
 
@@ -27,7 +29,21 @@
   let skyObjects = null;
   let press = null;
   // The frame being adjusted. target is null while it's a new one from a search.
-  const current = { target: null, ra: null, dec: null };
+  const current = { target: null, ra: null, dec: null, camera: "main" };
+
+  // A camera this view can draw. Without a measured wide field, everything is the telescope.
+  function knownCamera(camera) {
+    return wide && (camera === "wide" || camera === "both") ? camera : "main";
+  }
+
+  // The frames a camera choice images, largest first so the fit covers it.
+  function fields(camera) {
+    const telescope = { w: fovW, h: fovH };
+    camera = knownCamera(camera);
+    if (camera === "wide") return [wide];
+    if (camera === "both") return [wide, telescope];
+    return [telescope];
+  }
 
   // Designation and common name, in the characters a target name may use.
   function catalogName(entry) {
@@ -235,10 +251,14 @@
     return document.documentElement.dataset.theme === "red" ? COLORS.red : COLORS.night;
   }
 
-  function polygon(ra, dec, frameScale, frameAngle, color, lineWidth) {
-    const corners = window.FrameGeometry.corners(ra, dec, fovW, fovH, frameScale, frameAngle);
+  function polygon(ra, dec, size, frameScale, frameAngle, color, lineWidth) {
+    const corners = window.FrameGeometry.corners(ra, dec, size.w, size.h, frameScale, frameAngle);
     // Aladin's default selection is green, which Red turns black.
     return window.A.polygon(corners, { color: color, lineWidth: lineWidth, selectionColor: color, hoverColor: color });
+  }
+
+  function addFrames(ra, dec, camera, frameScale, frameAngle, color, lineWidth) {
+    fields(camera).forEach((size) => frames.add(polygon(ra, dec, size, frameScale, frameAngle, color, lineWidth)));
   }
 
   function draw() {
@@ -248,10 +268,10 @@
     const palette = colors();
     targets.forEach(function (t) {
       if (current.target && t.id === current.target.id) return;
-      frames.add(polygon(t.ra, t.dec, t.scale, t.angle, palette.other, 1));
+      addFrames(t.ra, t.dec, t.camera, t.scale, t.angle, palette.other, 1);
     });
     if (current.ra !== null) {
-      frames.add(polygon(current.ra, current.dec, scale(), angle(), palette.selected, 3));
+      addFrames(current.ra, current.dec, current.camera, scale(), angle(), palette.selected, 3);
     }
   }
 
@@ -261,6 +281,12 @@
     field("target-sky-scale-value").textContent = `${scale().toFixed(1)}x`;
     field("target-sky-angle-value").textContent = `${angle()}°`;
     field("target-sky-frame-controls").hidden = !hasFrame;
+    field("target-sky-camera").hidden = !wide;
+    const single = current.camera !== "main";
+    field("target-sky-scale").disabled = single;
+    document.querySelectorAll('input[name="target-sky-camera"]').forEach(function (radio) {
+      radio.checked = radio.value === current.camera;
+    });
     field("target-sky-add").hidden = editing || !hasFrame;
     field("target-sky-save").hidden = !editing;
     field("target-sky-heading").textContent = editing
@@ -274,6 +300,7 @@
         field(`${prefix}-dec`).value = current.dec.toFixed(4);
         field(`${prefix}-scale`).value = scale().toFixed(1);
         field(`${prefix}-angle`).value = angle();
+        field(`${prefix}-camera`).value = current.camera;
       }
     }
     if (editing) field("target-sky-save-id").value = current.target.id;
@@ -282,8 +309,9 @@
   function fit() {
     const rect = view.getBoundingClientRect();
     aladin.setProjection("SIN");
+    const size = fields(current.camera)[0];
     aladin.setFoV(
-      window.FrameGeometry.fitFov(fovW, fovH, scale(), angle(), rect.width, rect.height)
+      window.FrameGeometry.fitFov(size.w, size.h, scale(), angle(), rect.width, rect.height)
     );
   }
 
@@ -302,6 +330,7 @@
   function select(target) {
     current.target = target;
     if (skyObjects) skyObjects.clear();
+    current.camera = target.scale > 1 ? "main" : knownCamera(target.camera);
     field("target-sky-scale").value = target.scale;
     field("target-sky-angle").value = target.angle;
     setStatus("");
@@ -341,6 +370,7 @@
     current.target = null;
     current.ra = null;
     current.dec = null;
+    current.camera = "main";
     if (skyObjects) skyObjects.clear();
     field("target-sky-scale").value = 1;
     field("target-sky-angle").value = 0;
@@ -381,6 +411,8 @@
 
   function startNew(ra, dec, name) {
     current.target = null;
+    current.camera = "main";
+    field("target-sky-scale").value = 1;
     if (skyObjects) skyObjects.clear();
     field("target-sky-add-name").value = name;
     setStatus("");
@@ -608,6 +640,14 @@
     showControls();
   });
   field("target-sky-scale").addEventListener("input", refit);
+  document.querySelectorAll('input[name="target-sky-camera"]').forEach(function (radio) {
+    radio.addEventListener("change", function () {
+      current.camera = knownCamera(radio.value);
+      // The wide angle camera images a single frame.
+      if (current.camera !== "main") field("target-sky-scale").value = 1;
+      refit();
+    });
+  });
   field("target-sky-angle").addEventListener("input", refit);
   document.querySelectorAll("[data-sky-show]").forEach(function (button) {
     button.addEventListener("click", function () {

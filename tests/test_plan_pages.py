@@ -1,5 +1,6 @@
 """Targets and Automation on the shell: every control keeps its route and fields."""
 
+import json
 import re
 from dataclasses import replace
 from html.parser import HTMLParser
@@ -302,14 +303,15 @@ def test_targets_keeps_every_form(rig):
     assert update["action"] == "/1/targets/update" and update["method"] == "post"
     assert set(update["fields"]) == {
         "id", "enabled", "goal_hours", "min_session_hours", "prior_hours", "priority", "exposure_s", "lp_filter",
+        "camera",  # single frames only; a framed target has no camera choice
     }
     assert _form(html, "/1/targets/remove")["fields"]["id"]["value"] == target.id
     assert set(_form(html, "/1/targets/import")["fields"]) == {"source", "goal_hours"}
     added = [f for f in _parse(html).forms if f["action"] == "/1/targets/add"]
     assert [set(f["fields"]) for f in added if f["id"] is None] == [{"name", "ra", "dec", "goal_hours", "lp_filter"}]
     sky = next(f for f in added if f["id"] == "target-sky-add")
-    assert set(sky["fields"]) == {"ra", "dec", "mosaic_scale", "mosaic_angle", "name", "goal_hours", "lp_filter"}
-    assert set(_form(html, "/1/targets/framing")["fields"]) == {"id", "ra", "dec", "mosaic_scale", "mosaic_angle"}
+    assert set(sky["fields"]) == {"ra", "dec", "mosaic_scale", "mosaic_angle", "camera", "name", "goal_hours", "lp_filter"}
+    assert set(_form(html, "/1/targets/framing")["fields"]) == {"id", "ra", "dec", "mosaic_scale", "mosaic_angle", "camera"}
 
 
 def test_saving_a_row_untouched_changes_nothing(rig):
@@ -587,3 +589,27 @@ def test_markers_and_shading_both_hear_the_view_move():
     share = script.index("shareViewEvents();")
     assert share < script.index("setUpReach();", share)
     assert share < script.index("window.SkyObjects.start(aladin", share)
+
+
+def test_the_sky_view_frames_each_targets_camera(rig):
+    wide = _add(rig, name="Cygnus", camera="wide")
+    plain = _add(rig, name="M 31")
+    framed = _add(rig, name="Veil", camera="both", mosaic_scale="1.7")
+    assert (wide.camera, plain.camera, framed.camera) == ("wide", "main", "main")
+    html = _get(rig, "/1/targets")
+    data = json.loads(re.search(r'id="target-sky-data">(.*?)</script>', html, re.S).group(1))
+    assert {t["name"]: t["camera"] for t in data} == {"Cygnus": "wide", "M 31": "main", "Veil": "main"}
+    assert 'id="target-sky-camera"' in html
+
+
+def test_saving_framing_keeps_wide_targets_single_frames(rig):
+    target = _add(rig, name="Cygnus", camera="wide")
+    body = {"id": target.id, "ra": "20.5", "dec": "40", "mosaic_scale": "1", "mosaic_angle": "0", "camera": "both"}
+    rig.client.simulate_post("/1/targets/framing", headers=FORM, body=urlencode(body))
+    assert next(t for t in queue_web._queue().all() if t.id == target.id).camera == "both"
+    body.update(mosaic_scale="2.0")
+    rig.client.simulate_post("/1/targets/framing", headers=FORM, body=urlencode(body))
+    saved = next(t for t in queue_web._queue().all() if t.id == target.id)
+    assert saved.framed and saved.camera == "main"
+    bad = {**body, "mosaic_scale": "1", "camera": "infrared"}
+    assert rig.client.simulate_post("/1/targets/framing", headers=FORM, body=urlencode(bad)).status_code == 400

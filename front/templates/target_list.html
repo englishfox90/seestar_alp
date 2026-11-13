@@ -14,6 +14,7 @@
 {% set priority_options = [] %}
 {% for p in priorities %}{% set _ = priority_options.append({"value": p, "label": p|capitalize}) %}{% endfor %}
 {% set filter_options = [{"value": "on", "label": "LP"}, {"value": "off", "label": "None"}] %}
+{% set camera_options = [{"value": "main", "label": "Telescope"}, {"value": "wide", "label": "Wide"}, {"value": "both", "label": "Both"}] %}
 <main class="ssc-page plan-page" id="targets">
   <h1 class="ssc-title">Targets</h1>
 
@@ -61,6 +62,7 @@
             </div>
             {{ form.field("Exposure (s)", "target-exposure-" ~ t.id, "exposure_s", value=t.exposure_s, type="number", attrs='min="1" max="90" step="any" required') }}
             {{ form.segmented("Filter", "lp_filter", filter_options, selected="on" if t.lp_filter else "off") }}
+            {% if not t.framed %}{{ form.segmented("Camera", "camera", camera_options, selected=t.camera) }}{% endif %}
             {{ form.segmented("Priority", "priority", priority_options, selected=t.priority) }}
           </div>
           <div class="plan-actions plan-actions--row">

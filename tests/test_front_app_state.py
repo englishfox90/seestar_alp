@@ -3301,3 +3301,22 @@ def test_bubble_level_sits_outside_the_polled_stats_region():
         online=True, stats={"Balance Sensor (angle)": 1.5}
     )
     assert 'id="bubbleLevelSheet"' not in fragment
+
+
+@pytest.mark.parametrize(
+    "camera_input,expected",
+    [(None, None), ("main", None), ("wide", "wide"), ("both", "both"), ("bogus", None)],
+)
+def test_do_create_image_passes_the_camera(monkeypatch, camera_input, expected):
+    captured = {}
+
+    def fake_do_action_device(action, dev_num, params, is_schedule=False):
+        captured["params"] = params
+        return {"ErrorNumber": 0, "Value": {}}
+
+    monkeypatch.setattr(front_app, "do_action_device", fake_do_action_device)
+    form = _make_image_form({"camera": camera_input} if camera_input else {})
+    values, errors = front_app.do_create_image(_FormReq(form), DummyResp(), False, 1)
+
+    assert not errors
+    assert captured["params"].get("camera") == expected

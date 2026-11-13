@@ -37,12 +37,18 @@
         </div>
         <button id="target-sky-center" class="ssc-button" data-kind="secondary" type="button">Move frame to view center</button>
       </div>
+      {# Shown by target_sky.js when the model's wide angle field is known. #}
+      <div id="target-sky-camera" hidden>
+        {{ form.segmented("Camera", "target-sky-camera", [{"value": "main", "label": "Telescope"}, {"value": "wide", "label": "Wide"}, {"value": "both", "label": "Both"}], selected="main") }}
+        <p class="ssc-footnote">Wide and Both image a single frame, so the scale stays at 1x.</p>
+      </div>
 
       <form id="target-sky-add" class="plan-stack" method="post" action="{{ root_path }}{{ page_root }}/add" hidden>
         <input type="hidden" id="target-sky-add-ra" name="ra">
         <input type="hidden" id="target-sky-add-dec" name="dec">
         <input type="hidden" id="target-sky-add-scale" name="mosaic_scale">
         <input type="hidden" id="target-sky-add-angle" name="mosaic_angle">
+        <input type="hidden" id="target-sky-add-camera" name="camera" value="main">
         <div class="plan-fields">
           {{ form.field("Name", "target-sky-add-name", "name", attrs="required") }}
           {{ form.field("Hours wanted", "target-sky-add-goal", "goal_hours", value="10", attrs='inputmode="decimal"') }}
@@ -57,6 +63,7 @@
         <input type="hidden" id="target-sky-save-dec" name="dec">
         <input type="hidden" id="target-sky-save-scale" name="mosaic_scale">
         <input type="hidden" id="target-sky-save-angle" name="mosaic_angle">
+        <input type="hidden" id="target-sky-save-camera" name="camera" value="main">
         <div class="plan-actions">{{ ui.button("Save framing", "primary", "submit") }}</div>
       </form>
     </div>

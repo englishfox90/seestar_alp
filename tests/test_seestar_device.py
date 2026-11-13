@@ -4286,3 +4286,123 @@ def test_start_mosaic_item_keeps_the_target_when_the_check_fails(
     monkeypatch.setattr("device.seestar_device.horizon.visibility", broken)
     seestar.start_mosaic_item(_mosaic_item_params())
     assert received.get("stack_type") == "DeepSky"
+
+
+# ---- wide angle camera ---------------------------------------------------------
+
+
+def _run_single_frame(monkeypatch, seestar, camera, nRA=1, nDec=1, autofocus=True):
+    """Run mosaic_thread_fn with the scope mocked; return the calls in order."""
+    calls = []
+    monkeypatch.setattr("device.seestar_device.time.sleep", lambda _s: None)
+    monkeypatch.setattr("device.seestar_device.sleep", lambda _s: None)
+    monkeypatch.setattr(
+        "device.seestar_device.Util.mosaic_next_center_spacing", lambda *_a: [0.1, 0.2]
+    )
+
+    def goto(_ra, _dec, _name, use_af, _lp, *a, **k):
+        calls.append(("goto", use_af))
+        return True
+
+    monkeypatch.setattr(seestar, "mosaic_goto_inner_worker", goto)
+    monkeypatch.setattr(seestar, "set_target_name", lambda n: calls.append(("name", n)))
+    monkeypatch.setattr(
+        seestar, "start_stack", lambda p: calls.append(("start_stack", p)) or True
+    )
+    monkeypatch.setattr(seestar, "stop_stack", lambda: calls.append(("stop_stack",)))
+    monkeypatch.setattr(
+        seestar, "try_auto_focus", lambda _n: calls.append(("autofocus",)) or True
+    )
+
+    def send(msg):
+        calls.append((msg["method"], msg.get("params")))
+        return {"result": 0}
+
+    monkeypatch.setattr(seestar, "send_message_param_sync", send)
+    seestar.schedule["state"] = "working"
+    seestar.schedule["is_skip_requested"] = False
+    seestar.schedule["current_item_id"] = "w1"
+    seestar.event_state["scheduler"] = {"cur_scheduler_item": {}}
+    seestar.mosaic_thread_fn(
+        "SH2-171", 0.1, 67.3, False, 5, nRA, nDec, 10, 200, autofocus, "", 1, 5,
+        camera=camera,
+    )
+    return [c for c in calls if c[0] != "set_setting" or "stack_lenhance" not in c[1]]
+
+
+WIDE_VIEW = ("iscope_start_view", {"mode": "star", "selected_cam": "SecondView"})
+STOP_WIDE = [
+    ("set_setting", {"selected_cam": "View"}),
+    ("stop_stack",),
+    ("iscope_stop_view", None),
+]
+
+
+def test_both_cameras_follow_the_seestar_app_sequence(monkeypatch, seestar):
+    calls = _run_single_frame(monkeypatch, seestar, "both")
+    assert calls[0] == ("goto", True)  # the telescope focuses as usual
+    i = calls.index(("set_setting", {"stack": {"capt_type": "cont_capt"}}))
+    main_stack = calls.index(next(c for c in calls if c[0] == "start_stack"))
+    assert i < main_stack
+    wide = calls.index(WIDE_VIEW)
+    assert main_stack < wide
+    assert calls[wide + 1 : wide + 4] == [
+        ("autofocus",),
+        ("name", "SH2-171"),
+        ("start_stack", {"restart": True}),
+    ]
+    assert calls[-3:] == STOP_WIDE
+    assert seestar.imaging_camera == "main"
+
+
+def test_wide_camera_alone_skips_the_telescope_stack(monkeypatch, seestar):
+    calls = _run_single_frame(monkeypatch, seestar, "wide")
+    assert calls[0] == ("goto", False)  # no telescope autofocus
+    assert [c for c in calls if c[0] == "start_stack"] == [
+        ("start_stack", {"restart": True})
+    ]
+    assert WIDE_VIEW in calls
+    assert ("set_setting", {"stack": {"capt_type": "cont_capt"}}) not in calls
+    assert calls[-3:] == STOP_WIDE
+
+
+@pytest.mark.parametrize("camera", ["wide", "both"])
+def test_a_mosaic_always_uses_the_telescope(monkeypatch, seestar, camera):
+    calls = _run_single_frame(monkeypatch, seestar, camera, nRA=2, nDec=1)
+    assert WIDE_VIEW not in calls
+    assert ("iscope_stop_view", None) not in calls
+    assert calls.count(("stop_stack",)) == 2
+
+
+def test_telescope_only_is_unchanged(monkeypatch, seestar):
+    calls = _run_single_frame(monkeypatch, seestar, "main")
+    assert WIDE_VIEW not in calls and ("iscope_stop_view", None) not in calls
+    assert calls[-1] == ("stop_stack",)
+
+
+def test_skip_still_stops_the_wide_camera(monkeypatch, seestar):
+    monkeypatch.setattr(
+        seestar,
+        "start_wide_stack",
+        lambda *_a: seestar.schedule.update(is_skip_requested=True) or True,
+    )
+    calls = _run_single_frame(monkeypatch, seestar, "both")
+    assert calls[-3:] == STOP_WIDE
+
+
+def test_wide_stack_events_do_not_overwrite_the_telescope_count(seestar):
+    seestar.imaging_camera = "both"
+    events = [
+        {"Event": "Stack", "state": "working", "cont_capt_frame": 3, "route": ["View"]},
+        {"Event": "Stack", "state": "frame_complete", "stacked_frame": 3},
+        {"Event": "Stack", "state": "working", "stacked_frame": 1, "route": ["SecondView"]},
+        {"Event": "Stack", "state": "frame_complete", "stacked_frame": 1},
+    ]
+    for e in events:
+        seestar._store_event_state("Stack", e)
+    assert seestar.event_state["Stack"]["stacked_frame"] == 3
+    assert seestar.event_state["WideStack"]["stacked_frame"] == 1
+
+    seestar.imaging_camera = "wide"
+    seestar._store_event_state("Stack", events[3])
+    assert seestar.event_state["Stack"]["stacked_frame"] == 1

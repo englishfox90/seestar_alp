@@ -1785,6 +1785,10 @@ def do_create_image(req, resp, schedule, telescope_id):
         "retry_wait_s": int(retry_wait_s) if retry_wait_s else 300,
         "stack_type": stack_type,
     }
+    # An image is a single frame, so any of the cameras can take it.
+    camera = form.get("camera", "main")
+    if camera in ("wide", "both"):
+        values["camera"] = camera
 
     if telescope_id == 0:
         fedMode = form.get("federation_mode")
@@ -2361,6 +2365,7 @@ def import_csv_schedule(input, telescope_id):
                     "num_tries",
                     "retry_wait_s",
                     "array_mode",
+                    "camera",
                 ]
                 if "session_time_sec" in params:
                     session_time_sec = params.pop("session_time_sec")

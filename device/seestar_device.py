@@ -246,6 +246,9 @@ class Seestar:
         self.event_state_lock = threading.Lock()
 
         self.event_state: dict[str, Any] = {}
+        # Camera(s) the running imaging item uses; see _store_event_state.
+        self.imaging_camera = "main"
+        self._last_stack_wide = False
         self.update_scheduler_state_obj({}, result=0)
 
         self.cur_pa_error_x: float = None
@@ -958,7 +961,7 @@ class Seestar:
                             self.logger.debug(f"received : {parsed_data}")
                         event_name = parsed_data["Event"]
                         with self.event_state_lock:
-                            self.event_state[event_name] = parsed_data
+                            self._store_event_state(event_name, parsed_data)
 
                         # {'Event': 'EqModePA', 'Timestamp': '740.411562378', 'state': 'working', 'lapse_ms': 0, 'route': []}
                         # {'Event': 'EqModePA', 'Timestamp': '6359.231750447', 'state': 'fail', 'error': 'fail to operate', 'code': 207, 'lapse_ms': 80471, 'route': []}
@@ -1723,6 +1726,87 @@ class Seestar:
         self.schedule["is_stacking"] = False
         return self.send_message_param_sync(data)
 
+    def _is_wide_stack_event(self, parsed_data) -> bool:
+        """Whether a Stack event came from the wide angle camera.
+
+        The firmware tags a stack's "working" events with route SecondView;
+        the "frame_complete" event that follows carries no route, so it
+        belongs to the camera of the event before it.
+        """
+        route = parsed_data.get("route")
+        if route is not None:
+            self._last_stack_wide = "SecondView" in route
+        return self._last_stack_wide
+
+    def _store_event_state(self, event_name, parsed_data):
+        """Keep the latest event of each kind; caller holds event_state_lock.
+
+        With both cameras stacking, wide angle Stack events go to WideStack
+        so Stack keeps counting the telescope's frames. When only the wide
+        camera is imaging, its events are the Stack.
+        """
+        if event_name == "Stack" and self._is_wide_stack_event(parsed_data):
+            self.event_state["WideStack"] = parsed_data
+            if self.imaging_camera != "wide":
+                return
+        self.event_state[event_name] = parsed_data
+
+    # Which camera(s) a single-frame target images with. "both" runs the
+    # wide angle camera alongside the telescope, the way the Seestar app does.
+    CAMERAS = ("main", "wide", "both")
+
+    @staticmethod
+    def normalize_camera(camera, single_frame: bool = True) -> str:
+        camera = str(camera or "main").lower()
+        if camera not in Seestar.CAMERAS:
+            camera = "main"
+        # The wide camera covers a whole mosaic in one frame, so a mosaic
+        # always uses the telescope.
+        return camera if single_frame else "main"
+
+    def start_wide_stack(self, target_name: str, is_use_autofocus: bool) -> bool:
+        """Switch to the wide angle camera, focus it, and start it stacking.
+
+        Mirrors the Seestar app (firmware with a SecondView camera):
+        ``iscope_start_view`` with ``selected_cam: SecondView``, then
+        ``start_auto_focuse`` (runs on the wide focuser), then
+        ``iscope_start_stack``. A telescope stack already running keeps going.
+        """
+        self.logger.info("%s: starting the wide angle camera", self.device_name)
+        result = self.send_message_param_sync(
+            {
+                "method": "iscope_start_view",
+                "params": {"mode": "star", "selected_cam": "SecondView"},
+            }
+        )
+        if "error" in result:
+            self.logger.warning("Could not select the wide angle camera: %s", result)
+            return False
+        time.sleep(3)
+        if is_use_autofocus:
+            self.event_state["scheduler"]["cur_scheduler_item"]["action"] = (
+                "auto focusing the wide angle camera"
+            )
+            if not self.try_auto_focus(2):
+                self.logger.info(
+                    "Wide angle autofocus failed, but will stack with it anyway."
+                )
+        self.set_target_name(target_name)
+        return self.start_stack({"restart": True})
+
+    def stop_wide_camera(self):
+        """Stop a session that used the wide angle camera, as the app does.
+
+        Select the telescope again, stop stacking (one stop ends both
+        cameras' stacks), then leave the wide view.
+        """
+        self.logger.info("%s: stopping the wide angle camera", self.device_name)
+        self.send_message_param_sync(
+            {"method": "set_setting", "params": {"selected_cam": "View"}}
+        )
+        self.stop_stack()
+        return self.send_message_param_sync({"method": "iscope_stop_view"})
+
     def play_sound(self, in_sound_id: int):
         self.logger.info("%s: playing sound...", self.device_name)
         req: MessageParams = {"method": "play_sound", "params": {"num": in_sound_id}}
@@ -2448,7 +2532,13 @@ class Seestar:
         retry_wait_s,
         stack_type="DeepSky",
         check_horizon=False,
+        camera="main",
     ):
+        camera = self.normalize_camera(camera, single_frame=nRA == 1 and nDec == 1)
+        self.imaging_camera = camera
+        # Set while the wide angle camera is stacking, so every way out of
+        # this function also stops it.
+        wide_active = False
         try:
             spacing_result = Util.mosaic_next_center_spacing(
                 center_RA, center_Dec, overlap_percent
@@ -2562,7 +2652,8 @@ class Seestar:
                             cur_ra,
                             cur_dec,
                             save_target_name,
-                            is_use_autofocus,
+                            # wide only: the wide camera focuses itself below
+                            is_use_autofocus and camera != "wide",
                             is_use_LP_filter,
                         )
                         if result:
@@ -2609,9 +2700,38 @@ class Seestar:
                     # be sure we are using the right target name before we stack
                     self.set_target_name(save_target_name)
 
-                    if not self.start_stack(
-                        {"gain": gain, "restart": True, "stack_type": stack_type}
-                    ):
+                    if camera == "both":
+                        # The app puts the telescope in continuous capture
+                        # before adding the wide camera; the firmware sets
+                        # it back to "stack" when the session stops.
+                        self.send_message_param_sync(
+                            {
+                                "method": "set_setting",
+                                "params": {"stack": {"capt_type": "cont_capt"}},
+                            }
+                        )
+
+                    if camera == "wide":
+                        started = self.start_wide_stack(
+                            save_target_name, is_use_autofocus
+                        )
+                        wide_active = True
+                    else:
+                        started = self.start_stack(
+                            {"gain": gain, "restart": True, "stack_type": stack_type}
+                        )
+                        if started and camera == "both":
+                            wide_active = True
+                            if not self.start_wide_stack(
+                                save_target_name, is_use_autofocus
+                            ):
+                                self.logger.warning(
+                                    "Wide angle camera did not start; continuing with the telescope only."
+                                )
+                    if not started:
+                        if wide_active:
+                            self.stop_wide_camera()
+                            wide_active = False
                         msg = "Failed to start stacking."
                         self.logger.warning(msg)
                         self.event_state["scheduler"]["cur_scheduler_item"][
@@ -2638,7 +2758,11 @@ class Seestar:
                             self.event_state["scheduler"]["cur_scheduler_item"][
                                 "action"
                             ] = "Scheduler was requested to stop. Stopping at current mosaic."
-                            self.stop_stack()
+                            if wide_active:
+                                self.stop_wide_camera()
+                                wide_active = False
+                            else:
+                                self.stop_stack()
                             self.schedule["state"] = "stopped"
                             self.event_state["scheduler"]["cur_scheduler_item"][
                                 "panel_remaining_time_s"
@@ -2659,7 +2783,11 @@ class Seestar:
                     self.event_state["scheduler"]["cur_scheduler_item"][
                         "panel_remaining_time_s"
                     ] = 0
-                    self.stop_stack()
+                    if wide_active:
+                        self.stop_wide_camera()
+                        wide_active = False
+                    else:
+                        self.stop_stack()
                     msg = "Stacking operation finished " + save_target_name
                     self.logger.info(msg)
                     self.event_state["scheduler"]["cur_scheduler_item"]["action"] = msg
@@ -2671,6 +2799,14 @@ class Seestar:
             ] = 0
             self.event_state["scheduler"]["cur_scheduler_item"]["action"] = "complete"
         finally:
+            # A skip or an error can leave the wide camera selected, and the
+            # next goto would then only start a wide preview.
+            if wide_active:
+                try:
+                    self.stop_wide_camera()
+                except Exception as exc:
+                    self.logger.warning("Could not stop the wide angle camera: %s", exc)
+            self.imaging_camera = "main"
             self.is_cur_scheduler_item_working = False
 
     def start_mosaic_item(self, params: dict[str, Any]) -> None:
@@ -2702,6 +2838,9 @@ class Seestar:
         num_tries = params.get("num_tries", 1)
         retry_wait_s = params.get("retry_wait_s", 300)
         stack_type = params.get("stack_type", "DeepSky")
+        camera = self.normalize_camera(
+            params.get("camera"), single_frame=nRA == 1 and nDec == 1
+        )
 
         # verify mosaic pattern
         if nRA < 1 or nDec < 0:
@@ -2757,6 +2896,7 @@ class Seestar:
         self.logger.info("  select panels : %s", selected_panels)
         self.logger.info("  # goto tries  : %s", num_tries)
         self.logger.info("  retry wait sec: %s", retry_wait_s)
+        self.logger.info("  camera        : %s", camera)
 
         self.is_cur_scheduler_item_working = True
         self.mosaic_thread = threading.Thread(
@@ -2776,6 +2916,7 @@ class Seestar:
                 retry_wait_s,
                 stack_type,
                 check_horizon=not self._at_current_position(params),
+                camera=camera,
             )
         )
         self.mosaic_thread.name = f"MosaicThread:{self.device_name}"

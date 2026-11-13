@@ -1102,3 +1102,51 @@ def test_a_run_is_matched_to_its_own_stack_not_a_later_one(tmp_path):
     assert run_stack(str(tmp_path), "Ngc 7000", 4990).endswith("Stacked_74_b.jpg")
     assert run_stack(str(tmp_path), "Ngc 7000", 9000) is None
 
+
+
+# ---- camera choice -----------------------------------------------------------
+
+
+def test_plan_carries_the_camera_for_single_frames_only():
+    wide, both = single(name="Wide one", camera="wide"), single(name="Both one", ra=5.0, camera="both")
+    big = framed(camera="both")  # a framed target always uses the telescope
+    plan = plan_night([wide, both, big], remaining(wide, both, big), NIGHT, CFG)
+    doc = to_schedule(plan)
+    errors, _ = schedule_tools.validate_items(doc["list"])
+    assert not errors
+    by_name = {i["params"]["target_name"]: i for i in doc["list"] if "target_name" in i.get("params", {})}
+    planned = {b.target.name for b in plan.blocks}
+    if "Wide one" in planned:
+        assert by_name["Wide one"]["params"]["camera"] == "wide"
+    if "Both one" in planned:
+        assert by_name["Both one"]["params"]["camera"] == "both"
+    if big.name in planned:
+        assert "camera" not in by_name[big.name]["params"]
+    assert planned & {"Wide one", "Both one"}
+
+
+def test_target_item_leaves_telescope_only_items_unchanged():
+    item = schedule_tools.target_item({"target_name": "M 31", "target_ra_dec": [0.7, 41.3], "camera": "main"})
+    assert item["action"] == "start_mosaic" and "camera" not in item["params"]
+    item = schedule_tools.target_item({"target_name": "M 31", "target_ra_dec": [0.7, 41.3], "camera": "both"})
+    assert item["params"]["camera"] == "both"
+    assert schedule_tools.describe_target(item) == "Single frame, both cameras"
+
+
+def test_page_saves_a_targets_camera(page, monkeypatch):
+    client, queue_web, _ = page
+    import roof.web
+
+    monkeypatch.setattr(roof.web, "_front", lambda: _NoPage())
+    body = "name=M+42&ra=5h35m17s&dec=-5d23m&goal_hours=6&lp_filter=on"
+    client.simulate_post("/targets/add", headers=FORM, body=body)
+    target = queue_web._queue().all()[0]
+    assert target.camera == "main"
+
+    base = f"id={target.id}&goal_hours=6&min_session_hours=2&prior_hours=0&priority=normal&enabled=on"
+    client.simulate_post("/targets/update", headers=FORM, body=base + "&camera=both")
+    assert queue_web._queue().all()[0].camera == "both"
+
+    result = client.simulate_post("/targets/update", headers=FORM, body=base + "&camera=infrared")
+    assert result.status_code == 400
+    assert queue_web._queue().all()[0].camera == "both"

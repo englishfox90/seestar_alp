@@ -122,7 +122,9 @@ def describe_target(item: dict) -> str:
     if action == "start_mosaic":
         ra_num, dec_num = params.get("ra_num", 1), params.get("dec_num", 1)
         if ra_num == 1 and dec_num == 1:
-            return "Single frame"
+            return {"wide": "Single frame, wide angle", "both": "Single frame, both cameras"}.get(
+                params.get("camera"), "Single frame"
+            )
         return f"Mosaic {ra_num}x{dec_num} panels"
     if action == "start_spectra":
         return "Spectra"
@@ -159,6 +161,8 @@ def target_item(target: dict) -> dict:
             params["mosaic_star_map_angle"] = float(mosaic["star_map_angle"])
         return {"action": "start_framed_mosaic", "params": params}
     params.update(ra_num=1, dec_num=1, panel_overlap_percent=PANEL_OVERLAP)
+    if target.get("camera") in ("wide", "both"):
+        params["camera"] = target["camera"]
     return {"action": "start_mosaic", "params": params}
 
 

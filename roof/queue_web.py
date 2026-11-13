@@ -51,7 +51,9 @@ def _night_label(key: str) -> str:
 def _framing(target) -> str:
     if target.framed:
         return f"Framed {target.mosaic_scale:g}x at {target.mosaic_angle:g}°"
-    return "Single frame"
+    return {"wide": "Single frame, wide angle", "both": "Single frame, both cameras"}.get(
+        target.camera, "Single frame"
+    )
 
 
 def _plan_row(plan, names) -> dict:
@@ -134,6 +136,7 @@ def _sky_targets() -> list[dict]:
             "dec": t.dec,
             "scale": t.mosaic_scale,
             "angle": t.mosaic_angle,
+            "camera": "main" if t.framed else t.camera,
         }
         for t in _queue().all()
     ]
@@ -218,6 +221,10 @@ def _form_capture(form) -> dict:
         if form["lp_filter"] not in ("on", "off"):
             raise falcon.HTTPBadRequest(description="unknown filter")
         changes["lp_filter"] = form["lp_filter"] == "on"
+    if "camera" in form:
+        if form["camera"] not in target_queue.CAMERAS:
+            raise falcon.HTTPBadRequest(description="unknown camera")
+        changes["camera"] = form["camera"]
     return changes
 
 
@@ -234,6 +241,14 @@ def _coordinate(text, unit, low, high) -> float:
     if not low <= value <= high:
         raise falcon.HTTPBadRequest(description=f"coordinate {text!r} is out of range")
     return round(float(value), 4)
+
+
+def _form_camera(form, scale: float) -> str:
+    """The camera a form chose. A framed target is a mosaic, which only the telescope images."""
+    camera = form.get("camera", "main") or "main"
+    if camera not in target_queue.CAMERAS:
+        raise falcon.HTTPBadRequest(description="unknown camera")
+    return camera if scale <= 1.0 else "main"
 
 
 def _form_framing(form) -> tuple[float, float]:
@@ -262,6 +277,7 @@ class QueueAdd(_QueueAction):
                 "ra": _coordinate(form.get("ra"), "hour", 0.0, 24.0),
                 "dec": _coordinate(form.get("dec"), "deg", -90.0, 90.0),
                 "lp_filter": form.get("lp_filter") == "on",
+                "camera": _form_camera(form, scale),
                 "source": "added by hand",
             },
             {"scale": scale, "angle": angle},
@@ -356,6 +372,8 @@ class QueueFraming(_QueueAction):
             "mosaic_scale": scale,
             "mosaic_angle": angle,
         }
+        if "camera" in form or scale > 1.0:
+            changes["camera"] = _form_camera(form, scale)
         if target.mosaic_star_map_angle is not None:
             # The app's star map angle tracks the framing angle at a fixed offset.
             changes["mosaic_star_map_angle"] = target.mosaic_star_map_angle + angle - target.mosaic_angle

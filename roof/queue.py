@@ -13,6 +13,8 @@ from dataclasses import asdict, dataclass, fields
 from roof import schedule_tools
 
 PRIORITIES = ("low", "normal", "high")
+# main: the telescope; wide: the wide angle camera; both: the two at once.
+CAMERAS = ("main", "wide", "both")
 DEFAULT_GOAL_HOURS = 10.0
 DEFAULT_SINGLE_SESSION_HOURS = 1.0
 # A framed mosaic is one stack that the firmware spreads across its panels, so a
@@ -43,6 +45,7 @@ class Target:
     mosaic_scale: float = 1.0
     mosaic_angle: float = 0.0
     mosaic_star_map_angle: float | None = None
+    camera: str = "main"  # a framed target always uses the telescope
     moon_sep_deg: float | None = None  # None: the default for its filter
     moon_width_days: float | None = None
     source: str = ""

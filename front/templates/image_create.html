@@ -138,6 +138,16 @@
     <div class="card border-primary mb-3">
         <div class="card-body">
             <div class="mb-3">
+                <label for="camera" class="form-label">Camera</label>
+                <select class="form-select" id="camera" name="camera" aria-describedby="cameraHelp">
+                    <option value="main" {% if values.camera == "main" or not values.camera %}selected{% endif %}>Telescope</option>
+                    <option value="wide" {% if values.camera == "wide" %}selected{% endif %}>Wide angle</option>
+                    <option value="both" {% if values.camera == "both" %}selected{% endif %}>Both at once</option>
+                </select>
+                <div id="cameraHelp" class="form-text">Wide angle and Both need a Seestar with a wide angle camera (S30/S30P/S50P). With Both, the wide angle camera stacks alongside the telescope and focuses itself.</div>
+            </div>
+
+            <div class="mb-3">
                 <label for="panelTime" class="form-label">Panel acquisition time</label>
                 <input type="text" class="form-control" id="panelTime" name="panelTime"
                        aria-describedby="panelTimeHelp" value="{{ values.panel_time_sec }}" required>

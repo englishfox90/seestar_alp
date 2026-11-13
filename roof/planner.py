@@ -392,6 +392,7 @@ def to_schedule(plan: NightPlan) -> dict:
                 "target_ra_dec": [target.ra, target.dec],
                 "lp_filter": target.lp_filter,
                 "mosaic": mosaic,
+                "camera": target.camera,
             }
         )
         item["params"].update(panel_time_sec=block.stack_s, gain=target.gain)
