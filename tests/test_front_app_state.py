@@ -3937,3 +3937,30 @@ def test_build_workflow_bundles_alp_dat_into_data_dir():
     entries = re.findall(r'--add-data="data/alp\.dat([;:])([^"]*)"', workflow)
     assert len(entries) == 3, entries
     assert all(dest == "data" for _sep, dest in entries), entries
+
+
+
+
+@pytest.mark.parametrize(
+    "target, expected",
+    [
+        ("M31", "Andromeda Galaxy"),
+        ("M 31", "Andromeda Galaxy"),  # catalog stores identifiers without spaces
+        ("NGC 7000", "North America Nebula"),
+        ("Eagle Nebula", "Eagle Nebula,Star Queen"),  # common names keep spaces
+        ("Barnard's Merope", "Barnard's Merope Nebula"),
+    ],
+)
+def test_local_search_endpoint_matches_spaced_names(target, expected):
+    client = testing.TestClient(falcon.App())
+    client.app.add_route("/localsearch", front_app.GetLocalSearch())
+    r = client.simulate_get("/localsearch", params={"target": target})
+    assert r.status_code == 200, r.text
+    assert expected in [o["objectName"] for o in json.loads(r.text)]
+
+
+def test_local_search_endpoint_unknown_object_is_404():
+    client = testing.TestClient(falcon.App())
+    client.app.add_route("/localsearch", front_app.GetLocalSearch())
+    r = client.simulate_get("/localsearch", params={"target": "NoSuchThing12345"})
+    assert r.status_code == 404
