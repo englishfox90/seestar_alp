@@ -62,6 +62,54 @@
   // A control can arrive in a swapped fragment.
   document.addEventListener("htmx:afterSettle", syncThemeControls);
 
+  // Loading placeholders (ui.skeleton). A scope that is slow to answer says so, and a fetch
+  // that fails offers a retry, so a placeholder never just sits there.
+  function skeletonFor(target) {
+    if (!target) return null;
+    if (target.matches("[data-skeleton]")) return target;
+    return target.querySelector(":scope > [data-skeleton]");
+  }
+  function setSkeletonText(skeleton, text) {
+    const label = skeleton.querySelector("[data-skeleton-text]");
+    if (label) label.textContent = text;
+  }
+  function watchSkeletons(root) {
+    root.querySelectorAll("[data-skeleton]").forEach(function (skeleton) {
+      if (skeleton.dataset.watched) return;
+      skeleton.dataset.watched = "true";
+      setTimeout(function () {
+        if (skeleton.isConnected && !skeleton.dataset.failed) {
+          setSkeletonText(skeleton, "Still waiting for the scope…");
+        }
+      }, 6000);
+    });
+  }
+  watchSkeletons(document);
+  function onLoadFailed(event) {
+    const target = event.detail.target;
+    const skeleton = skeletonFor(target);
+    if (!skeleton || !event.detail.requestConfig) return;
+    const path = event.detail.requestConfig.path;
+    skeleton.dataset.failed = "true";
+    setSkeletonText(skeleton, "Couldn't load this from the scope.");
+    const label = skeleton.querySelector(".ssc-skeleton__label");
+    if (!label || label.querySelector("button")) return;
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "ssc-button";
+    retry.dataset.kind = "plain";
+    retry.textContent = "Retry";
+    retry.addEventListener("click", function () {
+      retry.remove();
+      delete skeleton.dataset.failed;
+      setSkeletonText(skeleton, "Loading from the scope…");
+      htmx.ajax("GET", path, { target: target, swap: "innerHTML" });
+    });
+    label.appendChild(retry);
+  }
+  document.addEventListener("htmx:responseError", onLoadFailed);
+  document.addEventListener("htmx:sendError", onLoadFailed);
+
   // A sub-navigation scrolled inside itself shows the current page without moving the window.
   document.querySelectorAll("[data-subnav]").forEach(function (strip) {
     const current = strip.querySelector('[aria-current="page"]');

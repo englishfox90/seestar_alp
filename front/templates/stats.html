@@ -1,4 +1,5 @@
 {% extends 'ssc/system_page.html' %}
+{% import 'ssc/ui.html' as ui %}
 
 {% block title %}Stats{% endblock %}
 
@@ -10,7 +11,7 @@
      hx-trigger="every 15s [!document.hidden]"
      hx-sync="this:drop"
      hx-swap="innerHTML">
-  {% include 'partials/stats_content.html' with context %}
+  {% if stats_lazy %}{{ ui.skeleton(10, src=root ~ "/stats-content?fresh=1", target="#stats-content") }}{% else %}{% include 'partials/stats_content.html' with context %}{% endif %}
 </div>
 {# Outside the polled region, so a refresh can't close it. #}
 {% include 'partials/bubble_level.html' with context %}

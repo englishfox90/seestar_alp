@@ -749,6 +749,7 @@ def test_send_message_param_sync_shutdown_and_wait_paths(monkeypatch, seestar):
 def test_send_message_param_sync_timeout(monkeypatch, seestar):
     monkeypatch.setattr(seestar, "send_message_param", lambda _d: 999)
     monkeypatch.setattr("device.seestar_device.time.sleep", lambda _s: None)
+    monkeypatch.setattr(seestar._response_cond, "wait", lambda timeout=None: False)
 
     times = iter([0.0, 2.1, 11.2])
     monkeypatch.setattr("device.seestar_device.time.time", lambda: next(times))
@@ -756,10 +757,28 @@ def test_send_message_param_sync_timeout(monkeypatch, seestar):
     assert "Error: Exceeded allotted wait time for result" in out["result"]
 
 
+def test_send_message_param_sync_wakes_when_reply_arrives(monkeypatch, seestar):
+    # A reply stored by the receive thread wakes the sync caller at once, rather
+    # than on the next polling tick (which made every sync command take >= 0.5s).
+    monkeypatch.setattr(seestar, "send_message_param", lambda _d: 321)
+
+    def deliver():
+        with seestar._response_cond:
+            seestar.response_dict[321] = {"id": 321, "result": "ok"}
+            seestar._response_cond.notify_all()
+
+    threading.Timer(0.05, deliver).start()
+    start = time.monotonic()
+    out = seestar.send_message_param_sync({"method": "get_view_state"})
+    assert out["result"] == "ok"
+    assert time.monotonic() - start < 0.3
+
+
 def _run_one_sync_timeout(monkeypatch, seestar, cmdid, method="get_device_state"):
     """Drive send_message_param_sync through exactly one 10s-timeout cycle."""
     monkeypatch.setattr(seestar, "send_message_param", lambda _d: cmdid)
     monkeypatch.setattr("device.seestar_device.time.sleep", lambda _s: None)
+    monkeypatch.setattr(seestar._response_cond, "wait", lambda timeout=None: False)
     times = iter([0.0, 2.1, 11.2])
     monkeypatch.setattr("device.seestar_device.time.time", lambda: next(times))
     return seestar.send_message_param_sync({"method": method})

@@ -1134,6 +1134,130 @@ def test_stats_content_endpoint_returns_non_empty_html(monkeypatch):
     assert "Wi-Fi Signal" in resp.text
 
 
+def _fail_if_called(name):
+    def _fail(*_a, **_k):
+        raise AssertionError(f"{name} must not run while the page itself loads")
+
+    return _fail
+
+
+def test_device_page_sends_a_placeholder_and_loads_stats_after(monkeypatch):
+    # The Device page used to wait on several scope round trips before sending anything.
+    monkeypatch.setattr(
+        front_app, "get_telescopes_state", _fail_if_called("get_telescopes_state")
+    )
+    monkeypatch.setattr(
+        front_app, "get_device_state", _fail_if_called("get_device_state")
+    )
+    monkeypatch.setattr(
+        front_app, "get_telescopes", lambda: [_minimal_context("")["telescope"]]
+    )
+    monkeypatch.setattr(
+        front_app, "get_context", lambda _tid, _req: _minimal_context("", online=True)
+    )
+    resp = DummyResp()
+
+    front_app.HomeTelescopeResource.on_get(DummyHTMXReq(relative_uri="/1/"), resp, 1)
+
+    assert 'hx-get="/1/home-content"' in resp.text
+    assert 'hx-trigger="load, every 15s"' in resp.text
+    assert "data-skeleton" in resp.text
+
+
+def test_stats_page_sends_a_placeholder_that_fetches_fresh_stats(monkeypatch):
+    monkeypatch.setattr(
+        front_app, "get_device_state", _fail_if_called("get_device_state")
+    )
+    monkeypatch.setattr(
+        front_app,
+        "get_context",
+        lambda _tid, _req: _minimal_context("stats", online=True),
+    )
+    resp = DummyResp()
+
+    front_app.StatsResource.on_get(DummyHTMXReq(relative_uri="/1/stats"), resp, 1)
+
+    assert "data-skeleton" in resp.text
+    assert 'hx-get="/1/stats-content?fresh=1"' in resp.text
+    assert 'hx-target="#stats-content"' in resp.text
+
+
+def test_fresh_stats_fetch_is_never_an_unchanged_204(monkeypatch):
+    # The unchanged cache is shared by every viewer; a placeholder given a 204 would stay up.
+    front_app.StatsContentResource._last_render_by_key.clear()
+    monkeypatch.setattr(
+        front_app, "get_device_state", lambda _tid: {"View State": "Idle"}
+    )
+    monkeypatch.setattr(
+        front_app,
+        "get_context",
+        lambda _tid, _req: _minimal_context("stats-content", online=True),
+    )
+    first = DummyResp()
+    front_app.StatsContentResource.on_get(
+        DummyHTMXReq(relative_uri="/1/stats-content"), first, 1
+    )
+    fresh = DummyResp()
+    front_app.StatsContentResource.on_get(
+        DummyHTMXReq(relative_uri="/1/stats-content", params={"fresh": "1"}), fresh, 1
+    )
+    poll = DummyResp()
+    front_app.StatsContentResource.on_get(
+        DummyHTMXReq(relative_uri="/1/stats-content"), poll, 1
+    )
+
+    assert fresh.status == front_app.falcon.HTTP_200 and "View State" in fresh.text
+    assert poll.status == front_app.falcon.HTTP_204
+
+
+def test_settings_page_sends_a_placeholder_and_the_form_follows(monkeypatch):
+    monkeypatch.setattr(
+        front_app, "get_device_settings", _fail_if_called("get_device_settings")
+    )
+    monkeypatch.setattr(
+        front_app, "get_firmware_ver_int", _fail_if_called("get_firmware_ver_int")
+    )
+    monkeypatch.setattr(
+        front_app,
+        "get_context",
+        lambda _tid, _req: _minimal_context("settings", online=True),
+    )
+    page = DummyResp()
+
+    front_app.SettingsResource().on_get(
+        DummyHTMXReq(relative_uri="/1/settings"), page, 1
+    )
+
+    assert 'hx-get="/1/settings-content"' in page.text
+    assert 'hx-target="#settingsContent"' in page.text
+    assert 'id="settingsForm"' not in page.text
+    assert "Appearance" in page.text
+
+
+def test_settings_content_returns_the_form_and_the_firmware_note(monkeypatch):
+    monkeypatch.setattr(
+        front_app, "get_device_settings", lambda _tid: {"heater_enable": False}
+    )
+    monkeypatch.setattr(front_app, "get_firmware_ver_int", lambda _tid: 3000)
+    monkeypatch.setattr(
+        front_app,
+        "get_context",
+        lambda _tid, _req: _minimal_context("settings-content", online=True),
+    )
+    resp = DummyResp()
+
+    front_app.SettingsContentResource.on_get(
+        DummyHTMXReq(relative_uri="/1/settings-content"), resp, 1
+    )
+
+    assert '<form id="settingsForm"' in resp.text
+    assert 'name="heater_enable"' in resp.text
+    # No action: the form posts to the page it sits in (/1/settings), not to this fragment.
+    assert 'action=""' in resp.text
+    assert 'id="settingsFirmware"' in resp.text and 'hx-swap-oob="true"' in resp.text
+    assert "<html" not in resp.text
+
+
 def test_guestmode_content_endpoint_handles_sparse_state(monkeypatch):
     front_app.GuestModeContentResource._last_render_by_key.clear()
     monkeypatch.setattr(
@@ -3320,3 +3444,28 @@ def test_do_create_image_passes_the_camera(monkeypatch, camera_input, expected):
 
     assert not errors
     assert captured["params"].get("camera") == expected
+
+
+def test_device_state_helpers_request_only_needed_sections(monkeypatch):
+    # A full get_device_state takes the scope ~1 s; the settings page calls
+    # these helpers three times, so they must ask for just their sections.
+    calls = []
+
+    def fake_method_sync(method, telescope_id=1, **kwargs):
+        calls.append((method, kwargs.get("params")))
+        return {
+            "device": {"firmware_ver_int": 2670, "product_model": "Seestar S50"},
+            "setting": {"guest_mode": False},
+        }
+
+    monkeypatch.setattr(front_app, "check_api_state", lambda _tid: True)
+    monkeypatch.setattr(front_app, "method_sync", fake_method_sync)
+
+    assert front_app.get_firmware_ver_int(1) == 2670
+    assert front_app.get_device_model(1) == "Seestar S50"
+    assert front_app.get_guestmode_state(1)["firmware_ver_int"] == 2670
+    assert calls == [
+        ("get_device_state", {"keys": ["device"]}),
+        ("get_device_state", {"keys": ["device"]}),
+        ("get_device_state", {"keys": ["device", "setting", "client"]}),
+    ]

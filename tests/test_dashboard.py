@@ -900,3 +900,43 @@ def test_image_times_come_from_the_observatory(client, monkeypatch):
     assert dashboard.site_clock(1793970840) == "22:14"
     image = {"frame": 1, "target": "x", "stacked": 1, "captured_at": 1793970840, "snr": None}
     assert dashboard._image_meta(image)["captured_clock"] == "22:14"
+
+
+def test_a_frame_on_its_way_is_flagged_for_a_quick_look(store):
+    # The page looks again within seconds while a frame it asked for is on its way.
+    images, _ = store
+    imager = FakeImager(_view(3))
+    images.latest(imager, fetch=True)
+    assert imager.requests == 1 and images.pending()
+    imager.receive()
+    images.latest(imager)
+    assert not images.pending()
+
+
+def test_an_unanswered_request_stops_the_quick_look(store):
+    images, clock = store
+    imager = FakeImager(_view(3))
+    images.latest(imager, fetch=True)
+    clock.now += dashboard.PENDING_QUICK_S + 1
+    assert not images.pending()
+
+
+def test_image_json_says_when_a_frame_is_pending(client, monkeypatch):
+    imager = FakeImager(_view(6))
+    monkeypatch.setattr(dashboard, "_imager", lambda telescope_id: imager)
+    meta = json.loads(client.simulate_get("/1/dashboard/image.json").text)
+    assert imager.requests == 1
+    assert meta == {"frame": None, "pending": True}
+
+
+def test_another_targets_image_is_held_back_while_stacking(client, monkeypatch):
+    from roof import tonight
+
+    old = {"frame": 7, "target": "M 31", "stacked": 90, "captured_at": 0, "captured_clock": "21:02", "snr": None}
+    monkeypatch.setattr(tonight, "_first_images", lambda telescope_id: {"stack": old, "pier": None})
+    monkeypatch.setattr(tonight, "stack_waiting", lambda state, stack: True)
+    html = _page(client, monkeypatch)
+    assert 'data-waiting="1"' in html
+    assert 'id="t-stack-placeholder"' in html
+    assert "image.jpg?v=7" not in html
+    assert 'id="t-stack" data-name="stack" data-role="front"' in html

@@ -8,6 +8,7 @@ the spec's sentence it says less: "Parking" appears only while the loop is parki
 last snapshot, ALP's cached events and files on this computer.
 """
 
+import re
 import threading
 import time
 from datetime import datetime, timedelta
@@ -444,7 +445,27 @@ def tonight_state(
         "last_image": key in DIMMED or key == "finished" or bool(morning),
         # The caption needn't repeat the sentence's target, if it's the image's too.
         "stack_target": (status.get("target") or status.get("view_target") or "") if key == "stacking" else "",
+        # The scope's own name for it, which is what a stack image is labelled with.
+        "image_target": (status.get("view_target") or status.get("target") or "") if key == "stacking" else "",
     }
+
+
+def _target_key(name) -> str:
+    return re.sub(r"[^a-z0-9]", "", (name or "").lower())
+
+
+def stack_waiting(state, stack) -> bool:
+    """While stacking, whether the held image is from somewhere else and must not be shown.
+
+    It is current only if it is labelled with this target, by either name. When the page
+    can't say what is being stacked, the image stands, so a placeholder can never stick.
+    """
+    if state.get("key") != "stacking":
+        return False
+    names = {_target_key(state.get("stack_target")), _target_key(state.get("image_target"))} - {""}
+    if not names:
+        return False
+    return not (stack and _target_key(stack.get("target")) in names)
 
 
 def roof_status(status) -> list:
@@ -884,7 +905,10 @@ class TonightPage:
         built = build(telescope_id)
         images = _first_images(telescope_id)
         focusing = _focus_chart(telescope_id)
-        layout = first_layout("focus" if focusing else built["state"]["hero"], images)
+        waiting = stack_waiting(built["state"], images["stack"])
+        # A placeholder holds the stack's place until this target's first image arrives.
+        shown = dict(images, stack=images["stack"] or waiting)
+        layout = first_layout("focus" if focusing else built["state"]["hero"], shown)
         front.render_template(
             req,
             resp,
@@ -897,6 +921,7 @@ class TonightPage:
             stop_url=f"/{telescope_id}/roof/stop",
             on_accent=_on_accent(context.get("webui_accent_color")),
             images=images,
+            stack_waiting=waiting,
             first_layout=layout,
             first_focus=focusing,
             **built,

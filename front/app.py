@@ -897,9 +897,14 @@ def get_client_master(telescope_id):
     return client_master
 
 
+# A full get_device_state takes the scope about a second (it reads every
+# sensor); asking for only the "device" section takes about 0.1 s.
+DEVICE_KEYS = {"keys": ["device"]}
+
+
 def get_firmware_ver_int(telescope_id):
     if check_api_state(telescope_id):
-        state = method_sync("get_device_state", telescope_id)
+        state = method_sync("get_device_state", telescope_id, params=DEVICE_KEYS)
         return pydash.get(state, "device.firmware_ver_int", 0)
     return 0
 
@@ -1021,7 +1026,7 @@ def planner_model_key(model):
 
 def get_device_model(telescope_id):
     if check_api_state(telescope_id):
-        state = method_sync("get_device_state", telescope_id)
+        state = method_sync("get_device_state", telescope_id, params=DEVICE_KEYS)
         return pydash.get(state, "device.product_model", 0)
     return 0
 
@@ -1035,7 +1040,11 @@ def get_guestmode_state(telescope_id):
         client_list = []
         fw = 0
 
-        result = method_sync("get_device_state", telescope_id)
+        result = method_sync(
+            "get_device_state",
+            telescope_id,
+            params={"keys": ["device", "setting", "client"]},
+        )
         if result is not None:
             device = result.get("device", {})
             fw = device.get("firmware_ver_int", 0)
@@ -2595,10 +2604,12 @@ class BaseResource:
 
 
 class HomeResource:
+    # The device stats take several round trips to each scope, so the page is sent with
+    # a placeholder and its own hx-trigger="load" fetches them from /home-content.
     @staticmethod
     def on_get(req, resp):
         now = datetime.now()
-        telescopes = get_telescopes_state()
+        telescopes = get_telescopes()
         telescope = telescopes[0]  # We just force it to first telescope
         context = get_context(telescope["device_num"], req)
         del context["telescopes"]
@@ -2606,7 +2617,13 @@ class HomeResource:
             redirect(f"/{telescope['device_num']}/")
         else:
             render_template(
-                req, resp, "index.html", now=now, telescopes=telescopes, **context
+                req,
+                resp,
+                "index.html",
+                now=now,
+                telescopes=telescopes,
+                home_lazy=True,
+                **context,
             )
 
 
@@ -2614,12 +2631,18 @@ class HomeTelescopeResource:
     @staticmethod
     def on_get(req, resp, telescope_id):
         now = datetime.now()
-        telescopes = get_telescopes_state()
+        telescopes = get_telescopes()
         context = get_context(telescope_id, req)
         if "telescopes" in context:
             del context["telescopes"]
         render_template(
-            req, resp, "index.html", now=now, telescopes=telescopes, **context
+            req,
+            resp,
+            "index.html",
+            now=now,
+            telescopes=telescopes,
+            home_lazy=True,
+            **context,
         )
 
 
@@ -4201,7 +4224,10 @@ class SearchObjectResource:
 
 class SettingsResource(BaseResource):
     def on_get(self, req, resp, telescope_id=0):
-        self.render_settings(req, resp, telescope_id, {})
+        # The form needs several round trips to the scope, so the page is sent at once
+        # with a placeholder and the form follows from /settings-content.
+        context = get_context(telescope_id, req)
+        render_template(req, resp, "settings.html", settings_lazy=True, **context)
 
     def on_post(self, req, resp, telescope_id=0):
         PostedSettings = req.media
@@ -4525,7 +4551,7 @@ class SettingsResource(BaseResource):
         self.render_settings(req, resp, telescope_id, output)
 
     @staticmethod
-    def render_settings(req, resp, telescope_id, output):
+    def render_settings(req, resp, telescope_id, output, fragment=False):
         settings = {}
         context = get_context(telescope_id, req)
         firmware_ver_int = 0
@@ -4671,17 +4697,27 @@ class SettingsResource(BaseResource):
             "auto_af": "Lets the scope re-run autofocus on its own during a session, e.g. when sensor temperature drifts.",
             "alpaca_enable": "Enables ZWO's built-in ASCOM Alpaca REST server on the device itself (port 32323, separate from seestar_alp's own Alpaca API). Warning: this server has no authentication by default -- any client on your local network can control the device once enabled.",
         }
-        render_template(
+        render = render_fragment if fragment else render_template
+        render(
             req,
             resp,
-            "settings.html",
+            "partials/settings_content.html" if fragment else "settings.html",
             settings=settings,
             settings_friendly_names=settings_friendly_names,
             settings_helper_text=settings_helper_text,
             output=output,
             firmware_ver_int=firmware_ver_int,
+            settings_fragment=fragment,
             **context,
         )
+
+
+class SettingsContentResource:
+    """The Settings form, fetched by the Settings page once it has loaded."""
+
+    @staticmethod
+    def on_get(req, resp, telescope_id=0):
+        SettingsResource.render_settings(req, resp, telescope_id, {}, fragment=True)
 
 
 class PlanningResource:
@@ -4743,16 +4779,13 @@ class PlanningResource:
 
 
 class StatsResource:
+    # Sent with a placeholder; the stats follow from /stats-content?fresh=1.
     @staticmethod
     def on_get(req, resp, telescope_id=1):
-        if telescope_id == 0:
-            stats = {}
-        else:
-            stats = get_device_state(telescope_id)
         now = datetime.now()
         context = get_context(telescope_id, req)
 
-        render_template(req, resp, "stats.html", stats=stats, now=now, **context)
+        render_template(req, resp, "stats.html", stats_lazy=True, now=now, **context)
 
 
 class StatsContentResource:
@@ -4769,6 +4802,10 @@ class StatsContentResource:
         render_fragment(
             req, resp, "partials/stats_content.html", stats=stats, **context
         )
+        # The first fetch fills the page's placeholder, so it must never be a 204: the
+        # unchanged cache is shared, and another viewer may already have seen this HTML.
+        if req.get_param("fresh"):
+            return
         respond_204_if_unchanged(
             resp,
             StatsContentResource._last_render_by_key,
@@ -5957,6 +5994,7 @@ class FrontMain:
         app.add_route("/stats", StatsResource())
         app.add_route("/home-content", HomeContentResource())
         app.add_route("/stats-content", StatsContentResource())
+        app.add_route("/settings-content", SettingsContentResource())
         app.add_route("/guestmode-content", GuestModeContentResource())
         app.add_route("/guestmode", GuestModeResource())
         app.add_route("/support", SupportResource())
@@ -6043,6 +6081,7 @@ class FrontMain:
         app.add_route("/{telescope_id:int}/stats", StatsResource())
         app.add_route("/{telescope_id:int}/home-content", HomeContentResource())
         app.add_route("/{telescope_id:int}/stats-content", StatsContentResource())
+        app.add_route("/{telescope_id:int}/settings-content", SettingsContentResource())
         app.add_route(
             "/{telescope_id:int}/guestmode-content", GuestModeContentResource()
         )

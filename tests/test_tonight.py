@@ -908,3 +908,28 @@ def test_site_json_reports_without_touching_the_scope(client, monkeypatch):
     )
     reply = client.simulate_get("/1/dashboard/site.json")
     assert reply.status_code == 200 and reply.json["safe_seen"] is True
+
+
+STACKING = {"key": "stacking", "stack_target": "Veil Nebula East", "image_target": "NGC 6992"}
+
+
+@pytest.mark.parametrize(
+    "state, stack, waiting",
+    [
+        (STACKING, {"target": "M 31"}, True),  # another target's last image
+        (STACKING, {"target": None}, True),  # unlabelled, so not known to be this one
+        (STACKING, None, True),  # nothing yet: the placeholder holds the place
+        (STACKING, {"target": "NGC 6992"}, False),  # the scope's name
+        (STACKING, {"target": "veil nebula east"}, False),  # the plan's name, any spelling
+        (STACKING, {"target": "NGC6992"}, False),
+        ({**STACKING, "key": "held"}, {"target": "M 31"}, False),  # a last image is fine
+        ({"key": "stacking", "stack_target": "", "image_target": ""}, {"target": "M 31"}, False),
+    ],
+)
+def test_stack_waiting_only_for_an_image_not_of_this_target(state, stack, waiting):
+    assert tonight.stack_waiting(state, stack) is waiting
+
+
+def test_image_target_is_the_scopes_name_while_stacking():
+    assert state({**IMAGING, "target": "Veil East", "view_target": "NGC 6992"})["image_target"] == "NGC 6992"
+    assert state({**PARKED, "held": True})["image_target"] == ""

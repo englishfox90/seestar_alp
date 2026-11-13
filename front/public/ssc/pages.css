@@ -91,6 +91,22 @@
     transition: opacity var(--ssc-motion-image) ease-out;
 }
 .t-frame img[data-entering] { opacity: 0; }
+/* Stands in for the stack while this target's first image is on its way. Static: no looping motion. */
+.t-placeholder {
+    display: none;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    padding: var(--ssc-space-4);
+    color: var(--ssc-text-2);
+    font-size: var(--ssc-text-footnote);
+    text-align: center;
+}
+#t-stack[data-waiting="1"] .t-placeholder { display: flex; }
+#t-stack[data-waiting="1"] .t-frame img { display: none; }
+#t-stack[data-waiting="1"] .t-frame { pointer-events: none; }
+#t-stack[data-waiting="1"] .t-save { display: none; }
 [data-theme="night"] .t-frame img { filter: brightness(0.85); }
 .t-page[data-dim="1"] #t-stack { --t-image-opacity: 0.55; }
 .t-image[data-stale="1"] { --t-image-opacity: 0.55; }

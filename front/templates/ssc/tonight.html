@@ -5,7 +5,7 @@
 {% block title %}Tonight{% endblock %}
 
 {% block content %}
-<main class="ssc-page t-page" id="tonight" data-state="{{ state.key }}" data-hero="{{ state.hero }}" data-dim="{{ "1" if state.dim else "0" }}" data-last="{{ "1" if state.last_image else "0" }}" data-target="{{ state.stack_target|e }}"
+<main class="ssc-page t-page" id="tonight" data-state="{{ state.key }}" data-hero="{{ state.hero }}" data-dim="{{ "1" if state.dim else "0" }}" data-last="{{ "1" if state.last_image else "0" }}" data-target="{{ state.stack_target|e }}" data-image-target="{{ state.image_target|e }}"
       data-root="{{ root_path }}{{ page_root }}">
   <header class="t-head">
     <h1 class="ssc-title">Tonight</h1>
@@ -18,9 +18,11 @@
 
   <div class="t-main">
     <section class="t-images" id="t-images" data-layout="{{ first_layout.layout }}" aria-label="Images">
-      <figure class="t-image" id="t-stack" data-name="stack" data-role="{{ "front" if first_layout.front == "stack" else "thumb" }}"{% if not images.stack %} hidden{% endif %}>
+      <figure class="t-image" id="t-stack" data-name="stack" data-role="{{ "front" if first_layout.front == "stack" else "thumb" }}"{% if not images.stack and not stack_waiting %} hidden{% endif %} data-waiting="{{ "1" if stack_waiting else "0" }}">
         <a class="t-frame" href="{{ root_path }}{{ page_root }}/image-view.jpg" target="_blank" rel="noopener" aria-label="Open the stack at full size">
-          {% if images.stack %}<img src="{{ root_path }}{{ page_root }}/image.jpg?v={{ images.stack.frame }}" alt="Latest stacked image">{% endif %}
+          {% if images.stack and not stack_waiting %}<img src="{{ root_path }}{{ page_root }}/image.jpg?v={{ images.stack.frame }}" alt="Latest stacked image">{% endif %}
+          {#- Until this target's first image arrives, rather than another target's last one. #}
+          <span class="t-placeholder" id="t-stack-placeholder" role="status">Waiting for the first image{% if state.stack_target %} of {{ state.stack_target|e }}{% endif %}…</span>
         </a>
         <figcaption class="t-caption">
           <span id="t-stack-caption" role="status"></span>

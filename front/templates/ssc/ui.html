@@ -57,6 +57,21 @@
 </div>
 {%- endmacro %}
 
+{# Placeholder rows for content still coming from the scope. Static on purpose: no looping
+   motion on loading content (front/DESIGN.md). With src, it fetches that content itself, once,
+   into target. shell.js turns it into a retry if the fetch fails. #}
+{% macro skeleton(rows=6, src=none, target=none, label="Loading from the scope…") -%}
+<div class="ssc-skeleton" data-skeleton role="status"
+  {%- if src %} hx-get="{{ src|e }}" hx-trigger="load" hx-target="{{ target|e }}" hx-swap="innerHTML"{% endif %}>
+  <p class="ssc-skeleton__label"><span data-skeleton-text>{{ label|e }}</span></p>
+  <div class="ssc-group" aria-hidden="true">
+    {%- for _ in range(rows) %}
+    <div class="ssc-row"><span class="ssc-skeleton__bar"></span><span class="ssc-skeleton__bar" data-part="value"></span></div>
+    {%- endfor %}
+  </div>
+</div>
+{%- endmacro %}
+
 {% macro notice(tone, text) -%}
 <p class="ssc-notice" data-tone="{{ tone }}">{{ icon("warning" if tone == "attention" else "info", 20) }}<span>{{ text|e }}</span></p>
 {%- endmacro %}

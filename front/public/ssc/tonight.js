@@ -95,9 +95,36 @@
   let stackMeta = null;
   let pierMeta = null;
 
+  // While stacking, an image from another target (or an unlabelled one) is not this target's,
+  // so a placeholder stands in until one is. Same rule as roof/tonight.py stack_waiting.
+  function targetKey(name) {
+    return (name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+  function stackWaiting(meta) {
+    if (page.dataset.state !== "stacking") return false;
+    const names = [page.dataset.target, page.dataset.imageTarget].map(targetKey).filter(Boolean);
+    if (!names.length) return false;
+    return !(meta && names.indexOf(targetKey(meta.target)) !== -1);
+  }
+  function showStackWaiting() {
+    const waiting = stackWaiting(stackMeta);
+    stack.dataset.waiting = waiting ? "1" : "0";
+    if (waiting) {
+      const target = page.dataset.target || page.dataset.imageTarget;
+      document.getElementById("t-stack-placeholder").textContent =
+        "Waiting for the first image" + (target ? " of " + target : "") + "…";
+      stackCaption.textContent = "";
+      stack.hidden = false;
+    } else {
+      if (stackMeta) stackCaption.textContent = stackText(stackMeta);
+      stack.hidden = !stack.querySelector(".t-frame img");
+    }
+    arrange();
+  }
+
   function applyStack(meta) {
     stackMeta = meta;
-    stackCaption.textContent = stackText(meta);
+    showStackWaiting();
   }
 
   function applyPier(meta) {
@@ -108,12 +135,23 @@
     else delete pier.dataset.stale;
   }
 
+  // A frame the server has just asked the scope for is looked for every few seconds,
+  // rather than on the next 15 s poll.
+  let quickPoll = null;
+  function pollSoon() {
+    if (quickPoll === null) quickPoll = setTimeout(function () {
+      quickPoll = null;
+      pollStack();
+    }, 3000);
+  }
+
   async function pollStack() {
     if (document.hidden) return;
     try {
       const reply = await fetch(root + "/image.json", { cache: "no-store" });
       if (!reply.ok) return;
       const meta = await reply.json();
+      if (meta.pending) pollSoon();
       if (meta.frame === null || meta.frame === undefined) return;
       if (meta.frame !== shownStack) {
         showImage(stack, root + "/image.jpg?v=" + encodeURIComponent(meta.frame), "Latest stacked image", "--t-stack-ratio", function () {
@@ -172,8 +210,8 @@
       lastHero = data.dataset.hero;
       chosen = null;
     }
-    if (stackMeta) applyStack(stackMeta);
-    arrange();
+    page.dataset.imageTarget = data.dataset.imageTarget || "";
+    showStackWaiting();
     // Stop can stop being possible while the sheet is open.
     if (stopSheet.open && !stopBusy && data.dataset.stop !== "1") stopSheet.close();
     lastGood = Date.now();
@@ -558,9 +596,12 @@
 
   const first = window.sscTonight || {};
   if (first.stack) {
-    shownStack = first.stack.frame;
-    applyStack(first.stack);
+    stackMeta = first.stack;
+    // Held back by the server as another target's: the first poll loads it out of sight,
+    // so it's still there to show as the last image if this target's never comes.
+    if (stack.querySelector(".t-frame img")) shownStack = first.stack.frame;
   }
+  showStackWaiting();
   if (first.pier) {
     shownPier = first.pier.frame;
     applyPier(first.pier);

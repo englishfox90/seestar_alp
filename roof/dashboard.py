@@ -33,6 +33,8 @@ MIN_FETCH_INTERVAL_S = 30
 # A request's label only describes a reply that comes back about then. Images can also
 # arrive without one, and go unseen until a browser polls hours later.
 PENDING_MAX_AGE_S = 2 * MIN_FETCH_INTERVAL_S
+# How long after asking the scope for a frame the page keeps looking for it every few seconds.
+PENDING_QUICK_S = 20
 PIER_PREVIEW_WIDTH = 1024
 PIER_FETCH_INTERVAL_S = 30
 PIER_TIMEOUT_S = 5
@@ -571,6 +573,11 @@ class ImageStore:
         self._rendered_frame = frame
         self._pending = None
 
+    def pending(self) -> bool:
+        """True just after a frame was asked for and before it has arrived."""
+        with self._lock:
+            return self._pending is not None and self._clock() - self._requested_at <= PENDING_QUICK_S
+
     def latest(self, imager, fetch=False, view=None):
         """Return the newest image; with fetch, also ask the scope for a newer one.
 
@@ -829,10 +836,14 @@ class DashboardImageMeta:
     @staticmethod
     def on_get(req, resp, telescope_id=1):
         view = cached_view(telescope_id, get_automation().status())
-        image = _store(telescope_id).latest(_imager(telescope_id), fetch=True, view=view)
+        store = _store(telescope_id)
+        image = store.latest(_imager(telescope_id), fetch=True, view=view)
+        meta = _image_meta(image)
+        if store.pending():
+            meta["pending"] = True
         resp.content_type = "application/json"
         resp.set_header("Cache-Control", "no-store")
-        resp.text = json.dumps(_image_meta(image))
+        resp.text = json.dumps(meta)
 
 
 class DashboardImage:

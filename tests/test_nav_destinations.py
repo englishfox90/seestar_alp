@@ -156,7 +156,7 @@ def test_no_page_route_loses_its_way_into_the_nav():
         "/toggleuitheme", "/toggleplanningcard", "/collapseplanningcard", "/updatetwilighttimes",
         "/getbalancesensor", "/gensupportbundle", "/getplanetcoordinates", "/getcometcoordinates",
         "/localsearch", "/getminorplanetcoordinates", "/getaavsocoordinates", "/home-content",
-        "/stats-content", "/guestmode-content", "/auth-status", "/plan", "/scope", "/api", "/imaging",
+        "/stats-content", "/settings-content", "/guestmode-content", "/auth-status", "/plan", "/scope", "/api", "/imaging",
     }
     for route in _registered_routes():
         path = route.replace("/{telescope_id:int}", "") or "/"

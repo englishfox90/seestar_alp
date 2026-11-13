@@ -68,6 +68,9 @@ def _build_front_test_app():
     app = falcon.App()
     app.add_route("/{telescope_id:int}/", front_app.HomeTelescopeResource())
     app.add_route("/{telescope_id:int}/settings", front_app.SettingsResource())
+    app.add_route(
+        "/{telescope_id:int}/settings-content", front_app.SettingsContentResource()
+    )
     app.add_route("/{telescope_id:int}/stats", front_app.StatsResource())
     app.add_route("/{telescope_id:int}/command", front_app.CommandResource())
     app.add_route("/{telescope_id:int}/guestmode", front_app.GuestModeResource())
@@ -455,7 +458,7 @@ def test_02_set_stack_settings_alias_compatibility(front_sim_bridge):
 
 
 def test_03_settings_http_round_trip(front_sim_bridge):
-    get_before = front_sim_bridge["client"].simulate_get("/1/settings")
+    get_before = front_sim_bridge["client"].simulate_get("/1/settings-content")
     assert get_before.status_code == 200
     assert "Save Sub Frames" in get_before.text
     assert "Save Failed Sub Frames" in get_before.text
@@ -671,7 +674,7 @@ def test_08_guestmode_get_and_post(front_sim_bridge):
 def test_09_wrapped_value_shape_compat(front_sim_bridge):
     front_sim_bridge["wrapped_method_sync"]["enabled"] = True
     client = front_sim_bridge["client"]
-    resp = client.simulate_get("/1/settings")
+    resp = client.simulate_get("/1/settings-content")
     assert resp.status_code == 200
     assert "Save Sub Frames" in resp.text
     front_sim_bridge["wrapped_method_sync"]["enabled"] = False
@@ -842,9 +845,12 @@ def test_21_html_contract_snapshot_smoke(front_sim_bridge):
     client = front_sim_bridge["client"]
     settings = client.simulate_get("/1/settings")
     assert settings.status_code == 200
-    assert "Save Sub Frames" in settings.text
-    assert "Save Failed Sub Frames" in settings.text
     assert "Seestar Federation" in settings.text
+    assert 'hx-get="/1/settings-content"' in settings.text
+    form = client.simulate_get("/1/settings-content")
+    assert form.status_code == 200
+    assert "Save Sub Frames" in form.text
+    assert "Save Failed Sub Frames" in form.text
 
     live = client.simulate_get("/1/live/star")
     assert live.status_code == 200
@@ -1322,7 +1328,7 @@ def test_32_wide_cam_settings_shown_for_s30_model(monkeypatch, front_sim_bridge)
     monkeypatch.setattr(front_app, "get_device_model", lambda _tid: "Seestar S30")
     # Config.experimental is already True from the bridge fixture
 
-    resp = front_sim_bridge["client"].simulate_get("/1/settings")
+    resp = front_sim_bridge["client"].simulate_get("/1/settings-content")
     assert resp.status_code == 200
     assert "Wide Angle Camera" in resp.text
     assert "Wide Camera 4K Mode" in resp.text
@@ -1334,7 +1340,7 @@ def test_33_wide_cam_settings_absent_for_s50_model(monkeypatch, front_sim_bridge
     """GET /settings for an S50 device must NOT include wide cam fields."""
     monkeypatch.setattr(front_app, "get_device_model", lambda _tid: "Seestar S50")
 
-    resp = front_sim_bridge["client"].simulate_get("/1/settings")
+    resp = front_sim_bridge["client"].simulate_get("/1/settings-content")
     assert resp.status_code == 200
     assert "Wide Angle Camera" not in resp.text
     assert "Wide Camera 4K Mode" not in resp.text
@@ -1347,7 +1353,7 @@ def test_34_wide_cam_settings_absent_when_experimental_off(
     monkeypatch.setattr(front_app, "get_device_model", lambda _tid: "Seestar S30")
     monkeypatch.setattr(Config, "experimental", False)
 
-    resp = front_sim_bridge["client"].simulate_get("/1/settings")
+    resp = front_sim_bridge["client"].simulate_get("/1/settings-content")
     assert resp.status_code == 200
     assert "Wide Angle Camera" not in resp.text
 
@@ -1433,7 +1439,7 @@ def test_41_auto_af_shown_in_settings(monkeypatch, front_sim_bridge):
         {"id": 3601, "method": "set_setting", "params": {"auto_af": True}},
     )
 
-    resp = front_sim_bridge["client"].simulate_get("/1/settings")
+    resp = front_sim_bridge["client"].simulate_get("/1/settings-content")
     assert resp.status_code == 200
     assert "Automatic Autofocus" in resp.text
 

@@ -160,6 +160,9 @@ class Seestar:
         self.heartbeat_msg_thread: Optional[threading.Thread] = None
         self.is_debug: bool = is_debug
         self.response_dict: OrderedDict[int, dict] = FixedSizeOrderedDict(max=100)
+        # Notified whenever the receive thread stores a reply, so a sync caller
+        # wakes as soon as its reply lands instead of on a fixed polling tick.
+        self._response_cond = threading.Condition()
         self.logger = logger
         self.is_connected: bool = False
         # PEM key bytes (lazy loaded)
@@ -947,7 +950,9 @@ class Seestar:
                         if parsed_data["method"] == "get_device_state":
                             self._update_eq_mode_from_device_state(parsed_data)
                         # keep a running queue of last 100 responses for sync call results
-                        self.response_dict[parsed_data["id"]] = parsed_data
+                        with self._response_cond:
+                            self.response_dict[parsed_data["id"]] = parsed_data
+                            self._response_cond.notify_all()
 
                     elif "Event" in parsed_data:
                         # add parsed_data
@@ -1141,7 +1146,11 @@ class Seestar:
                         f"SLOW message response.  {elapsed} seconds. {cur_cmdid=} {data=}"
                     )
                     # todo : dump out stats.  last run time on threads, connection status, etc.
-            time.sleep(0.5)
+            # Wake as soon as the receive thread stores a reply. The timeout keeps the
+            # slow-reply logging and the 10s limit above running when none arrives.
+            with self._response_cond:
+                if cur_cmdid not in self.response_dict:
+                    self._response_cond.wait(timeout=0.5)
         self.logger.debug(f"response is {self.response_dict[cur_cmdid]}")
         self._note_sync_reply()
         return self.response_dict[cur_cmdid]

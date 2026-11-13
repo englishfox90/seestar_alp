@@ -5,65 +5,10 @@
 {% block title %}Settings{% endblock %}
 
 {% block content %}
-{#- Same keys, names and values as before; only the markup around them changed. -#}
-{%- macro group_for_key(key) -%}
-    {%- set key_l = key|lower -%}
-    {%- if "gain" in key_l or "exp" in key_l or "stack" in key_l or "frame" in key_l or "light" in key_l or "lenhance" in key_l or "wide" in key_l -%}
-        Imaging
-    {%- elif "temp" in key_l or "heater" in key_l or "dew" in key_l -%}
-        Environment
-    {%- elif "dither" in key_l or "focus" in key_l or "track" in key_l or "mount" in key_l -%}
-        Mount and focus
-    {%- else -%}
-        General
-    {%- endif -%}
-{%- endmacro -%}
-
-{# Enable and Disable keep the old radio values: "true"/"false", or the current value on the checked side. #}
-{%- macro bool_field(key, value) -%}
-<fieldset class="ssc-segmented">
-  <legend class="ssc-field__label">{{ settings_friendly_names[key]|e }}</legend>
-  <div class="ssc-segmented__cells">
-    <label class="ssc-segmented__cell">
-      <input type="radio" id="{{ key }}_enable" name="{{ key }}" value="{{ value if value is true else 'true' }}"{% if value is true %} checked{% endif %}>
-      <span>Enable</span>
-    </label>
-    <label class="ssc-segmented__cell">
-      <input type="radio" id="{{ key }}_disable" name="{{ key }}" value="{{ 'false' if value is true else value }}"{% if value is not true %} checked{% endif %}>
-      <span>Disable</span>
-    </label>
-  </div>
-  <p class="ssc-field__help">{{ settings_helper_text[key]|e }}</p>
-</fieldset>
-{%- endmacro -%}
-
-{%- macro render_setting(key, value) -%}
-  {%- set label = settings_friendly_names[key] -%}
-  {%- set helper = settings_helper_text[key] -%}
-  {%- if key == "light_duration_min" and value == -1 -%}
-    {%- set helper = helper ~ " Your firmware may not support stack settings; using the device default (-1)." -%}
-  {%- endif -%}
-  {%- if value is true or value is false -%}
-    {{ bool_field(key, value) }}
-  {%- elif key == "temp_unit" -%}
-    {{ form.field(label, key, key, value, help=(helper ~ " C or F.")|trim, attrs='required pattern="[Cc]|[Ff]"') }}
-  {%- elif value is number -%}
-    {%- if key == "exp_ms_stack_l" -%}
-      {{ form.field(label, key, key, value, "number", help=helper ~ " Numbers only, 5 to 90000 ms.", attrs='min="5" max="90000" required') }}
-    {%- elif key == "stack_dither_pix" -%}
-      {{ form.field(label, key, key, value, "number", help=helper ~ " Numbers only, 10 to 200 pixels.", attrs='min="10" max="200" required') }}
-    {%- else -%}
-      {{ form.field(label, key, key, value, "number", help=helper ~ " Numbers only.", attrs='required') }}
-    {%- endif -%}
-  {%- else -%}
-    {{ form.field(label, key, key, value, help=helper, attrs='required') }}
-  {%- endif -%}
-{%- endmacro -%}
-
 <main class="ssc-page s-page">
   <header class="s-head">
     <h1 class="ssc-title">Settings</h1>
-    {% if firmware_ver_int is defined %}<p class="ssc-footnote s-firmware">Firmware {{ firmware_ver_int|int }}</p>{% endif %}
+    <p id="settingsFirmware" class="ssc-footnote s-firmware"{% if not firmware_ver_int %} hidden{% endif %}>{% if firmware_ver_int %}Firmware {{ firmware_ver_int|int }}{% endif %}</p>
   </header>
 
   <div class="s-column">
@@ -72,36 +17,10 @@
     {# Outside the form: it is a device-local display choice and must never be posted with the scope's settings. #}
     {% call form.group("Appearance") %}{% include 'ssc/appearance.html' ignore missing %}{% endcall %}
 
-    {% if client_master and online and settings %}
-      {% if output %}{{ ui.notice("neutral", output) }}{% endif %}
-      <form id="settingsForm" class="s-form" method="post" action="{{ action }}">
-        <p class="ssc-footnote s-saved">Changes apply immediately after save. <span id="unsavedPill" hidden>{{ ui.status("attention", "Unsaved changes") }}</span></p>
-        {% for group in ["Imaging", "Environment", "Mount and focus", "General"] %}
-          {% set ns = namespace(has_rows=false) %}
-          {% for key, value in settings.items() %}
-            {% if group_for_key(key)|trim == group %}{% set ns.has_rows = true %}{% endif %}
-          {% endfor %}
-          {% if ns.has_rows %}
-            {% call form.group(group) %}
-              {% for key, value in settings.items() %}
-                {% if group_for_key(key)|trim == group %}{{ render_setting(key, value) }}{% endif %}
-              {% endfor %}
-            {% endcall %}
-          {% endif %}
-        {% endfor %}
-        {% call form.action_bar() %}
-          <button id="resetSettingsBtn" type="button" class="ssc-button" data-kind="secondary">Reset form</button>
-          <button id="saveSettingsBtn" type="submit" class="ssc-button" data-kind="primary">Save</button>
-        {% endcall %}
-      </form>
-    {% elif not client_master %}
-      {% call form.group("") %}
-        <p>You are currently in guest mode. You can release this in the Advanced->Guest Mode of the SeeStar app.</p>
-        <p>See the <a href="https://github.com/smart-underworld/seestar_alp/wiki/Guest-Mode">Guest Mode</a> wiki page for details.</p>
-      {% endcall %}
-    {% else %}
-      {% call form.group("") %}<p>You are currently in offline mode.</p>{% endcall %}
-    {% endif %}
+    <div id="settingsContent">
+      {%- if settings_lazy %}{{ ui.skeleton(8, src=root ~ "/settings-content", target="#settingsContent") }}
+      {%- else %}{% include 'partials/settings_content.html' with context %}{% endif -%}
+    </div>
     <p class="ssc-footnote s-version">Version {{ version }}</p>
   </div>
 </main>
@@ -109,9 +28,11 @@
 
 {% block scripts %}
 <script>
-  document.addEventListener("DOMContentLoaded", function () {
+  // The form arrives after the page (from /settings-content), so wire it up whenever it lands.
+  function initSettingsForm() {
     const form = document.getElementById("settingsForm");
-    if (!form) return;
+    if (!form || form.dataset.ready) return;
+    form.dataset.ready = "true";
     const saveBtn = document.getElementById("saveSettingsBtn");
     const resetBtn = document.getElementById("resetSettingsBtn");
     const unsavedPill = document.getElementById("unsavedPill");
@@ -134,6 +55,8 @@
       refreshDirtyState();
     });
     refreshDirtyState();
-  });
+  }
+  document.addEventListener("DOMContentLoaded", initSettingsForm);
+  document.addEventListener("htmx:afterSettle", initSettingsForm);
 </script>
 {% endblock %}

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% import 'ssc/ui.html' as ui %}
 
 {% block header %}
     <div class="page-hero">
@@ -16,6 +17,6 @@
          hx-get="{{ root }}/home-content"
          hx-trigger="load, every 15s"
          hx-swap="innerHTML">
-        {% include 'partials/home_content.html' with context %}
+        {% if home_lazy %}{{ ui.skeleton(8) }}{% else %}{% include 'partials/home_content.html' with context %}{% endif %}
     </div>
 {% endblock %}

@@ -6,7 +6,7 @@
 {% endmacro %}
 
 {% macro now(state, root) %}
-<div id="t-state-data" data-state="{{ state.key }}" data-hero="{{ state.hero }}" data-dim="{{ "1" if state.dim else "0" }}" data-stop="{{ "1" if state.stop else "0" }}" data-last="{{ "1" if state.last_image else "0" }}" data-target="{{ state.stack_target|e }}"></div>
+<div id="t-state-data" data-state="{{ state.key }}" data-hero="{{ state.hero }}" data-dim="{{ "1" if state.dim else "0" }}" data-stop="{{ "1" if state.stop else "0" }}" data-last="{{ "1" if state.last_image else "0" }}" data-target="{{ state.stack_target|e }}" data-image-target="{{ state.image_target|e }}"></div>
 {% if not state.sentence_in_band %}
 <p class="t-sentence" data-tone="{{ state.tone }}">{% if state.tone != "neutral" %}{{ ui.icon("warning", 20) }} {% endif %}{{ state.sentence|e }}</p>
 {% endif %}
