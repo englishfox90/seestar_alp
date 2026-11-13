@@ -1,0 +1,39 @@
+{# The background threads behind each scope, polled by the Status page. A thread that was
+   never started is normal (the scheduler, say, until a sequence runs); one that stopped is not. #}
+{% import 'ssc/ui.html' as ui %}
+{% set threads = threads or [] %}
+{% set counts = namespace(running=0, stopped=0, idle=0) %}
+{% for thread in threads %}
+  {% if thread["running"] is true %}{% set counts.running = counts.running + 1 %}
+  {% elif thread["running"] is false %}{% set counts.stopped = counts.stopped + 1 %}
+  {% else %}{% set counts.idle = counts.idle + 1 %}{% endif %}
+{% endfor %}
+<div class="sd-services__head">
+  <h2 class="ssc-form-group__title">Background services</h2>
+  {% if threads %}
+  <p class="sd-services__summary">
+    {%- if counts.stopped %}{{ ui.status("attention", counts.stopped ~ " stopped") }}{% endif -%}
+    <span>{{ counts.running }} of {{ threads|length }} running</span>
+  </p>
+  {% endif %}
+</div>
+{% if threads %}
+<div class="ssc-group sd-services">
+  {% for thread in threads %}
+    {% set last_run = (thread["last_run"]|string).split(".")[0] %}
+    {% set state = "running" if thread["running"] is true else ("stopped" if thread["running"] is false else "idle") %}
+    <div class="ssc-row" data-thread="{{ thread["name"]|e }}" data-state="{{ state }}">
+      <span class="ssc-row__label">{{ (thread["label"] or thread["name"])|e }}
+        <span class="ssc-row__sub">{{ thread["name"]|e }}{% if last_run != "n/a" %}, last loop {{ last_run.split(" ")[-1]|e }}{% endif %}</span>
+      </span>
+      <span class="ssc-row__value">
+        {%- if state == "running" %}{{ ui.status("ok", "Running") }}
+        {%- elif state == "stopped" %}{{ ui.status("attention", "Stopped") }}
+        {%- else %}{{ ui.status("neutral", "Not started") }}{% endif -%}
+      </span>
+    </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="ssc-footnote">No scope is running here, so there are no threads to show.</p>
+{% endif %}

@@ -1,36 +1,173 @@
+{# The polled part of the Status page: the device strip, the metric cards, and a cell for
+   everything else the scope reports. Firmware varies, so a key with no card here is never
+   dropped: it lands under Details as the scope named it. #}
 {% import 'ssc/ui.html' as ui %}
-{% macro metric_row(key, value, bar=none) -%}
-<div class="ssc-row">
-  <div class="ssc-row__label">{{ key|e }}</div>
-  <div class="ssc-row__value s-metric">
-    {%- if value is float %}{{ value|round(2) }}{% elif value is true %}Yes{% elif value is false %}No{% else %}{{ value|e }}{% endif -%}
-    {%- if bar is not none %}{{ ui.bar(0 if bar < 0 else (100 if bar > 100 else bar)) }}{% endif -%}
-  </div>
-</div>
-{%- endmacro %}
-
+{% import 'ssc/dashboard.html' as dash %}
+{% set stats = stats or {} %}
+{% if telescope is defined and telescope %}{{ dash.hero(telescope, online, stats if online else {}) }}{% endif %}
 {% if online %}
   {% if stats %}
-    {% set view_keys = ['View Mode', 'View Stage', 'Target Name', 'Successful Frames', 'Failed Frames'] %}
-    {% set show_view_details = stats.get('View State', 'Idle') != 'Idle' %}
-    <div class="ssc-group">
-      {% for key, value in stats.items() %}
-        {% if key in view_keys and (not show_view_details or not value) %}
-        {% elif value is none or value == "" %}
-        {% elif key == "Wi-Fi Signal" and "dBm" in value|string %}
-          {{ metric_row(key, value, ((value|replace('dBm', '')|trim|int + 90) * 100 / 40)|int) }}
-        {% elif key == "Battery %" %}
-          {{ metric_row(key, value, value|int) }}
-        {% elif key == "SNR" %}
-          {{ metric_row(key, value, (value|float * 10)|int) }}
-        {% elif key == "Balance Sensor (angle)" %}
-          {{ metric_row(key, value) }}
-          <div class="ssc-row"><button type="button" class="ssc-button" data-kind="plain" data-open-sheet="bubbleLevelSheet">Show bubble level</button></div>
+    {# Shown in the strip above. The view's details only count while it is doing something. #}
+    {% set strip_keys = ["Firmware Version", "View State", "Scheduler Status", "Mount Mode", "View Mode", "View Stage", "Target Name", "Successful Frames", "Failed Frames"] if (telescope is defined and telescope) else [] %}
+    {% set ns = namespace(used=[], primary=[], secondary=[]) %}
+
+    {# ---- The four gauges ---- #}
+    {% set temp = stats.get("Temperature Sensor") %}
+    {% if temp is number and temp is not boolean %}
+      {% set _ = ns.used.append("Temperature Sensor") %}
+      {% set html %}
+      {% call dash.card("Temperature Sensor", "Temperature", "thermometer") %}
+        {{ dash.value(temp|round(1), "°C") }}
+        <div class="sd-card__foot">{{ dash.meter(temp * 100 / 80, "Temperature, 0 to 80 °C") }}{{ dash.hint("Internal sensor") }}</div>
+      {% endcall %}
+      {% endset %}
+      {% set _ = ns.primary.append(html) %}
+    {% endif %}
+
+    {% set battery = stats.get("Battery %") %}
+    {% if battery is not none and battery != "" and battery is not boolean and battery|int(-1) >= 0 %}
+      {% set level = battery|int %}
+      {% set charge = stats.get("Charge Status") %}
+      {% set battery_temp = stats.get("Battery Temp") %}
+      {% set charge_word = (charge|string|replace("_", " ")|trim) if charge is not none and charge != "" else "" %}
+      {% set charging = charge_word|lower == "charging" %}
+      {% set _ = ns.used.extend(["Battery %", "Charge Status", "Battery Temp"]) %}
+      {% set tone = "" if charging else ("danger" if level <= 10 else ("attention" if level <= 20 else "")) %}
+      {% set glyph = "battery-charging" if charging else ("battery-warning" if level <= 10 else ("battery-low" if level <= 35 else ("battery-medium" if level <= 70 else "battery-full"))) %}
+      {% set notes = [] %}
+      {% if tone %}{% set _ = notes.append("Low") %}{% endif %}
+      {% if charge_word %}{% set _ = notes.append(charge_word|capitalize) %}{% endif %}
+      {% if battery_temp is number and battery_temp is not boolean %}{% set _ = notes.append(battery_temp|round(1)|string ~ " °C") %}{% elif battery_temp %}{% set _ = notes.append(battery_temp|string) %}{% endif %}
+      {% set html %}
+      {% call dash.card("Battery %", "Battery", glyph, tone) %}
+        {{ dash.value(level, "%") }}
+        <div class="sd-card__foot">{{ dash.meter(level, "Battery charge") }}<p class="sd-card__hint">{% for note in notes %}<span>{{ note|e }}</span>{% endfor %}</p></div>
+      {% endcall %}
+      {% endset %}
+      {% set _ = ns.primary.append(html) %}
+    {% endif %}
+
+    {% set wifi = stats.get("Wi-Fi Signal") %}
+    {% if wifi is not none and wifi != "" %}
+      {% set _ = ns.used.append("Wi-Fi Signal") %}
+      {% set dbm = (wifi|string|replace("dBm", "")|trim)|int(1) %}
+      {% set html %}
+      {% if "dBm" in wifi|string and dbm < 0 %}
+        {% set bars = 4 if dbm >= -55 else (3 if dbm >= -67 else (2 if dbm >= -75 else 1)) %}
+        {% set word = ["Weak", "Fair", "Good", "Excellent"][bars - 1] %}
+        {% call dash.card("Wi-Fi Signal", "Wi-Fi", "wifi-high" if bars >= 3 else ("wifi-medium" if bars == 2 else "wifi-low"), "attention" if bars == 1 else "", dash.signal(bars, word)) %}
+          {{ dash.value(dbm, "dBm") }}
+          <div class="sd-card__foot">{{ dash.meter((dbm + 90) * 100 / 40, "Wi-Fi signal") }}{{ dash.hint(word) }}</div>
+        {% endcall %}
+      {% else %}
+        {% call dash.card("Wi-Fi Signal", "Wi-Fi", "wifi-slash") %}{{ dash.sentence(wifi) }}{% endcall %}
+      {% endif %}
+      {% endset %}
+      {% set _ = ns.primary.append(html) %}
+    {% endif %}
+
+    {% set storage = stats.get("Free Storage") %}
+    {% if storage is not none and storage != "" %}
+      {% set _ = ns.used.append("Free Storage") %}
+      {% set parts = (storage|string).split(" ") %}
+      {% set html %}
+      {% call dash.card("Free Storage", "Free storage", "hard-drive") %}
+        {% if parts|length == 2 and parts[0][:1] in "0123456789" and parts[0]|float(-1) >= 0 %}
+          {{ dash.value(parts[0], parts[1]) }}
+          <div class="sd-card__foot">{{ dash.hint("Left on the scope") }}</div>
         {% else %}
-          {{ metric_row(key, value) }}
+          {{ dash.sentence(storage) }}
         {% endif %}
-      {% endfor %}
-    </div>
+      {% endcall %}
+      {% endset %}
+      {% set _ = ns.primary.append(html) %}
+    {% endif %}
+
+    {# ---- The smaller readings ---- #}
+    {% set tilt = stats.get("Balance Sensor (angle)") %}
+    {% if tilt is number and tilt is not boolean %}
+      {% set _ = ns.used.append("Balance Sensor (angle)") %}
+      {% set html %}
+      {% call dash.card("Balance Sensor (angle)", "Level", "level") %}
+        {{ dash.value(tilt|round(2) ~ "°") }}
+        <div class="sd-card__foot"><button type="button" class="ssc-button" data-kind="plain" data-open-sheet="bubbleLevelSheet">Show bubble level</button></div>
+      {% endcall %}
+      {% endset %}
+      {% set _ = ns.secondary.append(html) %}
+    {% endif %}
+
+    {% set heading = stats.get("Compass Sensor (direction)") %}
+    {% if heading is number and heading is not boolean %}
+      {% set _ = ns.used.append("Compass Sensor (direction)") %}
+      {% set degrees = heading|round|int % 360 %}
+      {% set word = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][((degrees + 22.5) // 45)|int % 8] %}
+      {% set html %}
+      {% call dash.card("Compass Sensor (direction)", "Compass", "compass", "", dash.dial(degrees, word)) %}
+        {{ dash.value(degrees ~ "°") }}
+        <div class="sd-card__foot">{{ dash.hint("Heading " ~ word) }}</div>
+      {% endcall %}
+      {% endset %}
+      {% set _ = ns.secondary.append(html) %}
+    {% endif %}
+
+    {% set focus = stats.get("Focal Position") %}
+    {% if focus is number and focus is not boolean %}
+      {% set _ = ns.used.append("Focal Position") %}
+      {% set html %}
+      {% call dash.card("Focal Position", "Focuser", "crosshair") %}
+        {{ dash.value(focus|round(2) if focus is float else focus) }}
+        <div class="sd-card__foot">{{ dash.hint("Position in steps") }}</div>
+      {% endcall %}
+      {% endset %}
+      {% set _ = ns.secondary.append(html) %}
+    {% endif %}
+
+    {% for key, label, glyph in [("Heater?", "Dew heater", "drop"), ("Auto Power Off", "Auto power off", "power")] %}
+      {% set switch = stats.get(key) %}
+      {% if switch is boolean %}
+        {% set _ = ns.used.append(key) %}
+        {% set html %}
+        {% call dash.card(key, label, glyph ~ ("-fill" if switch else "")) %}
+          {{ dash.value("On" if switch else "Off") }}
+        {% endcall %}
+        {% endset %}
+        {% set _ = ns.secondary.append(html) %}
+      {% endif %}
+    {% endfor %}
+
+    {% set snr = stats.get("SNR") %}
+    {% if snr is number and snr is not boolean %}
+      {% set _ = ns.used.append("SNR") %}
+      {% set html %}
+      {% call dash.card("SNR", "SNR", "chart-line") %}
+        {{ dash.value(snr|round(2)) }}
+        <div class="sd-card__foot">{{ dash.meter(snr * 10, "Signal to noise") }}</div>
+      {% endcall %}
+      {% endset %}
+      {% set _ = ns.secondary.append(html) %}
+    {% endif %}
+
+    {% if stats.get("Info") %}{{ ui.notice("attention", stats.get("Info")) }}{% endif %}
+    {% if ns.primary %}<div class="sd-grid" data-tier="primary">{{ ns.primary|join }}</div>{% endif %}
+    {% if ns.secondary %}<div class="sd-grid" data-tier="secondary">{{ ns.secondary|join }}</div>{% endif %}
+
+    {# ---- Everything else, as the scope names it ---- #}
+    {% set rest = [] %}
+    {% for key, value in stats.items() %}
+      {% if key in ns.used or key in strip_keys or key == "Info" %}
+      {% elif value is none or value == "" %}
+      {% else %}{% set _ = rest.append((key, value)) %}{% endif %}
+    {% endfor %}
+    {% if rest %}
+    <section class="ssc-form-group">
+      <h2 class="ssc-form-group__title">Details</h2>
+      <dl class="sd-facts">
+        {% for key, value in rest %}
+        <div class="sd-fact" data-metric="{{ key|e }}"><dt>{{ key|e }}</dt><dd>{{ dash.plain(value) }}</dd></div>
+        {% endfor %}
+      </dl>
+    </section>
+    {% endif %}
   {% else %}
     {{ ui.notice("neutral", "You have the Seestar Federation Device selected. Please select an actual telescope from the dropdown.") }}
   {% endif %}

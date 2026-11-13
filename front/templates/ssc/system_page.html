@@ -4,7 +4,7 @@
 {% import 'ssc/ui.html' as ui %}
 
 {% block content %}
-<main class="ssc-page s-page">
+<main class="ssc-page s-page"{% block page_attrs %}{% endblock %}>
   <header class="s-head">
     <h1 class="ssc-title">{{ self.title() }}</h1>
     {% block head_note %}{% endblock %}

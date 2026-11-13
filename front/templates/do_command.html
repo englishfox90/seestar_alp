@@ -1,8 +1,9 @@
 {% import 'ssc/ui.html' as ui %}
 {% import 'ssc/form.html' as form %}
 
+{# Each form posts back to this page's Commands, so the reply is in view when it loads. #}
 {% macro command_form(select_id, label, action, form_id="") -%}
-<form method="post" action="{{ action }}" class="s-command"{% if form_id %} id="{{ form_id }}"{% endif %}>
+<form method="post" action="{{ action }}#commands" class="s-command"{% if form_id %} id="{{ form_id }}"{% endif %}>
   <div class="ssc-field">
     <label class="ssc-field__label" for="{{ select_id }}">{{ label|e }}</label>
     <select class="ssc-input" id="{{ select_id }}" name="command">
@@ -14,11 +15,19 @@
 </form>
 {%- endmacro %}
 
-{% if output %}
-  {% call form.group("Output") %}<div id="outputAlert" class="s-output" role="status">{{ output|e }}</div>{% endcall %}
-{% endif %}
-
-{% call form.group("Commands") %}
+<section class="ssc-form-group">
+  <h2 class="ssc-form-group__title">Commands</h2>
+  {# The scope's reply to the last command. It is there before any command has run, so the
+     forms below don't move when one does. #}
+  <div class="sd-console">
+    <p class="sd-console__bar">{{ ui.icon("terminal-window", 16) }}<span>Output</span></p>
+    {% if output %}
+    <pre id="outputAlert" class="sd-console__out" role="status" tabindex="0">{{ (output_text if output_text is defined and output_text else output)|e }}</pre>
+    {% else %}
+    <p class="sd-console__out" data-empty>The scope's reply to a command shows here.</p>
+    {% endif %}
+  </div>
+  <div class="ssc-form-group__body sd-commands">
   {% call command_form("dropdown1", "Startup and shutdown", action) %}
     <option value="scope_move_to_horizon">Scope Move to Horizon</option>
     <option value="scope_park">Scope Park</option>
@@ -85,10 +94,11 @@
     <option value="set_eq_mode">Equatorial</option>
     <option value="set_alt_az_mode">Alt Azimuth</option>
   {% endcall %}
-{% endcall %}
+  </div>
+</section>
 
 {% call form.group("Magnetic declination") %}
-  <form id="magdecform" method="post" action="{{ action }}" class="s-form">
+  <form id="magdecform" method="post" action="{{ action }}#commands" class="s-form">
     <input type="hidden" name="command" value="adjust_mag_declination">
     {{ form.toggle("Adjust mag dec", "adjust_mag_dec", "adjust_mag_dec", help="Sets your magnetic declination to the value for your current location.") }}
     {{ form.field("Add offset", "fudge_angle", "fudge_angle", help="Adjusts the declination further.") }}

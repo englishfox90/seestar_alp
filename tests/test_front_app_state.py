@@ -131,9 +131,9 @@ def test_nav_keeps_every_page_reachable():
     # Each section lists its own pages, so walk one page of each.
     html = "".join(_render_nav(path) for path in ("dashboard", "targets", "live", "settings"))
     for route in (
-        "", "dashboard", "targets", "live", "roof", "startup", "command",
+        "", "dashboard", "targets", "live", "roof", "startup", "system",
         "guestmode", "goto", "image", "mosaic", "framed_mosaic", "planning",
-        "schedule", "settings", "config", "stats", "platform-rpi", "support",
+        "schedule", "settings", "config", "platform-rpi", "support",
     ):
         assert f'href="/1/{route}"' in html, route
 
@@ -3254,11 +3254,11 @@ def _render_page(template_name, **extra):
     "template_name, extra",
     [
         ("config.html", {"config": Config}),
-        ("command.html", {"output": ""}),
-        ("stats.html", {"stats": {"Battery %": 90}}),
         ("guestmode.html", {"state": {"guest_mode": False}}),
         ("support.html", {}),
-        ("system.html", {"threads": [], "now": "now"}),
+        ("system.html", {"threads": [], "now": "now", "output": "", "stats": {"Battery %": 90}}),
+        ("system.html", {"threads": [], "now": "now", "output": "", "stats_lazy": True}),
+        ("system.html", {"threads": [], "now": "now", "online": False}),
         ("platform_rpi.html", {"platform": "raspberry_pi", "display": None, "now": "now"}),
     ],
 )
@@ -3289,23 +3289,55 @@ def test_config_escapes_values_in_attributes():
 
 
 def test_commands_page_keeps_every_form_contract():
-    html = _render_page("command.html", output="done")
+    html = _render_page("system.html", output="done", threads=[])
     assert 'id="outputAlert"' in html and "done" in html
     assert 'value="adjust_mag_declination"' in html
     assert 'name="fudge_angle"' in html
     # Flat frames need the sheet, and it can't depend on Bootstrap.
     assert 'id="flatFrameModal"' in html and "bootstrap.Modal" not in html
     assert html.count('name="command"') == 9
+    # Every form posts to the command route and lands back on the commands.
+    assert html.count('action="/1/page#commands"') == 9
+    assert 'id="commands"' in html
 
 
 def test_commands_page_hides_empty_output():
-    assert 'id="outputAlert"' not in _render_page("command.html", output={})
+    html = _render_page("system.html", output={}, threads=[])
+    assert 'id="outputAlert"' not in html
+    # The panel keeps its place, so the forms don't move when a reply arrives.
+    assert 'class="sd-console__out" data-empty' in html
+
+
+def test_command_output_is_readable_and_escaped():
+    reply = {"method": "get_focuser_position", "result": 1172, "note": "<b>"}
+    text = front_app.format_command_output(reply)
+    assert text.splitlines()[0] == "{" and '  "result": 1172,' in text
+    html = _render_page("system.html", output=reply, output_text=text, threads=[])
+    panel = html[html.index('id="outputAlert"'):]
+    panel = panel[: panel.index("</pre>")]
+    assert "&#34;result&#34;: 1172" in panel
+    assert "<b>" not in panel and "&lt;b&gt;" in panel
+    assert front_app.format_command_output("Adjust Mag Dec not selected.") == "Adjust Mag Dec not selected."
+    assert front_app.format_command_output(None) == ""
+    assert "object" in front_app.format_command_output({"value": object()})
 
 
 def test_commands_event_status_first_fill_asks_for_content():
-    html = _render_page("command.html", output="")
+    html = _render_page("system.html", output="", threads=[])
     assert "eventstatus?action=command&amp;fresh=1" in html
     assert "document.getElementById('eventStatusDiv').open" in html
+    region = html[html.index('id="eventStatusContent"'):]
+    region = region[: region.index(">")]
+    assert 'hx-trigger="every 1s [!document.hidden' in region
+    assert 'hx-sync="this:drop"' in region and 'hx-swap="innerHTML"' in region
+
+
+def test_offline_status_page_shows_no_commands_and_keeps_the_services():
+    html = _render_page("system.html", online=False, stats={}, threads=[])
+    assert "You are currently in offline mode" in html
+    assert 'name="command"' not in html and 'id="eventStatusDiv"' not in html
+    assert 'id="system-services"' in html
+    assert "Offline" in html
 
 
 def _event_status(monkeypatch, results, params):
@@ -3389,28 +3421,203 @@ def test_event_status_fresh_returns_content_when_unchanged(monkeypatch):
     assert "Filter wheel" in fresh.text
 
 
-def test_stats_rows_keep_bars_and_drop_the_storage_one():
-    template = front_app.fetch_template("partials/stats_content.html")
-    html = template.render(
-        online=True,
-        stats={
+def _stats_fragment(stats, online=True, **extra):
+    context = _minimal_context("stats-content", online=online)
+    context.update(extra)
+    return front_app.fetch_template("partials/stats_content.html").render(stats=stats, **context)
+
+
+def _card(html, key):
+    start = html.index(f'<article class="sd-card" data-metric="{key}"')
+    return html[start : html.index("</article>", start)]
+
+
+def test_stats_cards_keep_bars_and_drop_the_storage_one():
+    html = _stats_fragment(
+        {
             "Free Storage": "120.0 GB",
             "Battery %": 80,
             "Wi-Fi Signal": "Unavailable in AP mode.",
             "Temperature Sensor": 32.939999,
             "Heater?": False,
             "Balance Sensor (angle)": 1.5,
-        },
+        }
     )
-    assert html.count('role="progressbar"') == 1
-    assert 'aria-valuenow="80"' in html
-    assert "32.94" in html and "32.939999" not in html
-    assert 'data-open-sheet="bubbleLevelSheet"' in html
+    assert 'aria-valuenow="80"' in _card(html, "Battery %")
+    assert 'role="progressbar"' not in _card(html, "Free Storage")
+    assert "120.0" in _card(html, "Free Storage") and "GB" in _card(html, "Free Storage")
+    # Temperature gets a bar on a fixed 0 to 80 scale, and one decimal.
+    temperature = _card(html, "Temperature Sensor")
+    assert "32.9" in temperature and "32.939999" not in html
+    assert 'aria-valuenow="41"' in temperature
+    # A reading that is a sentence stays a sentence, with no gauge made up for it.
+    wifi = _card(html, "Wi-Fi Signal")
+    assert "Unavailable in AP mode." in wifi and "sd-signal" not in wifi
+    assert 'role="progressbar"' not in wifi
+    assert ">Off<" in _card(html, "Heater?")
+    assert 'data-open-sheet="bubbleLevelSheet"' in _card(html, "Balance Sensor (angle)")
+
+
+def test_every_stats_card_has_an_icon_and_a_name():
+    html = _stats_fragment(
+        {
+            "Temperature Sensor": 38.6,
+            "Battery %": 86,
+            "Wi-Fi Signal": "-58 dBm",
+            "Free Storage": "41.2 GB",
+            "Balance Sensor (angle)": 0.42,
+            "Compass Sensor (direction)": 127.4,
+            "Focal Position": 1172,
+            "Heater?": True,
+            "Auto Power Off": False,
+        }
+    )
+    icons = {
+        "Temperature Sensor": "thermometer",
+        "Battery %": "battery-full",
+        "Wi-Fi Signal": "wifi-high",
+        "Free Storage": "hard-drive",
+        "Compass Sensor (direction)": "compass",
+        "Focal Position": "crosshair",
+        "Heater?": "drop-fill",
+        "Auto Power Off": "power",
+    }
+    for key, icon in icons.items():
+        card = _card(html, key)
+        assert f'<use href="#{icon}"/>' in card, key
+        assert 'class="sd-card__label"' in card, key
+    # The level has no Phosphor glyph, so ui.html draws one.
+    assert "<rect" in _card(html, "Balance Sensor (angle)")
+    assert html.count('data-tier="primary"') == 1 and html.count('data-tier="secondary"') == 1
+    assert html.index('data-metric="Free Storage"') < html.index('data-tier="secondary"')
+
+
+def test_battery_card_says_charging_and_low_in_words():
+    charging = _card(
+        _stats_fragment({"Battery %": 9, "Charge Status": "charging", "Battery Temp": 27}),
+        "Battery %",
+    )
+    assert "#battery-charging" in charging and "data-tone" not in charging
+    assert ">Charging<" in charging and ">27 °C<" in charging
+    low = _card(_stats_fragment({"Battery %": 17, "Charge Status": "discharging"}), "Battery %")
+    assert 'data-tone="attention"' in low and ">Low<" in low and ">Discharging<" in low
+    empty = _card(_stats_fragment({"Battery %": 6}), "Battery %")
+    assert 'data-tone="danger"' in empty and "#battery-warning" in empty and ">Low<" in empty
+    # Charge state and battery temperature live on the card, not again under Details.
+    html = _stats_fragment({"Battery %": 50, "Charge Status": "full", "Battery Temp": 25})
+    assert 'class="sd-fact"' not in html
+
+
+def test_wifi_card_shows_strength_in_steps_and_a_word():
+    for reading, level, word in (
+        ("-50 dBm", 4, "Excellent"),
+        ("-62 dBm", 3, "Good"),
+        ("-72 dBm", 2, "Fair"),
+        ("-88 dBm", 1, "Weak"),
+    ):
+        card = _card(_stats_fragment({"Wi-Fi Signal": reading}), "Wi-Fi Signal")
+        assert f'data-level="{level}"' in card, reading
+        assert f">{word}<" in card, reading
+    # The bar keeps the scale it always had: -90 dBm empty, -50 dBm full.
+    assert 'aria-valuenow="70"' in _card(_stats_fragment({"Wi-Fi Signal": "-62 dBm"}), "Wi-Fi Signal")
+    unreadable = _card(_stats_fragment({"Wi-Fi Signal": "N/A dBm"}), "Wi-Fi Signal")
+    assert "N/A dBm" in unreadable and 'role="progressbar"' not in unreadable
+
+
+def test_compass_card_turns_a_needle_and_names_the_heading():
+    for heading, degrees, word in ((127.4, 127, "SE"), (351.0, 351, "N"), (359.7, 0, "N"), (90, 90, "E")):
+        card = _card(_stats_fragment({"Compass Sensor (direction)": heading}), "Compass Sensor (direction)")
+        assert f'style="--deg: {degrees}deg"' in card, heading
+        assert f"Heading {word}" in card, heading
+
+
+def test_stats_keys_without_a_card_are_still_shown():
+    # Firmware varies: a key this page has never heard of must not vanish.
+    html = _stats_fragment(
+        {
+            "Battery %": 80,
+            "Dew Sensor <new>": 4.5,
+            "Master client": True,
+            "Client list": "master:10.0.0.2<br>10.0.0.3",
+            "Temperature Sensor": "n/a",
+            "Heater?": "auto",
+            "Empty one": "",
+            "Missing one": None,
+        }
+    )
+    details = html[html.index('class="sd-facts"'):]
+    assert "Dew Sensor &lt;new&gt;" in details and "4.5" in details
+    assert "Master client" in details and ">Yes<" in details
+    assert "master:10.0.0.2, 10.0.0.3" in details and "<br>" not in details
+    # A known key with a value its card can't draw falls back to a plain cell.
+    assert 'data-metric="Temperature Sensor"><dt>' in details and "n/a" in details
+    assert 'data-metric="Heater?"><dt>' in details and "auto" in details
+    assert "Empty one" not in html and "Missing one" not in html
+
+
+def test_stats_that_could_not_be_read_say_so():
+    html = _stats_fragment({"Info": "Unable to get stats."})
+    assert "Unable to get stats." in html and 'class="ssc-notice"' in html
+    assert "sd-grid" not in html
+
+
+def test_device_strip_names_the_scope_and_what_it_is_doing():
+    stats = {
+        "Firmware Version": "6.45",
+        "Mount Mode": "Equatorial",
+        "Scheduler Status": "working",
+        "View State": "working",
+        "View Mode": "star",
+        "View Stage": "Stack",
+        "Target Name": "NGC <6992>",
+        "Successful Frames": 30,
+        "Failed Frames": 10,
+    }
+    html = _stats_fragment(stats)
+    strip = html[html.index('class="sd-hero"') : html.index("</section>")]
+    assert "Seestar Alpha" in strip and "192.168.11.124" in strip and "Firmware 6.45" in strip
+    assert "Online" in strip and "Equatorial" in strip
+    assert "NGC &lt;6992&gt;" in strip and "Star" in strip and "Stack" in strip
+    assert "<strong>30</strong> stacked" in strip and "<strong>10</strong> dropped" in strip
+    assert "75% kept" in strip and 'aria-valuenow="75"' in strip
+    # Said once: nothing from the strip is repeated under Details.
+    assert 'class="sd-fact"' not in html
+
+    idle = _stats_fragment({**stats, "View State": "Idle", "Target Name": "Old target"})
+    assert "Idle" in idle and "Old target" not in idle and 'class="sd-now"' not in idle
+
+
+def test_stats_fragment_keeps_the_offline_and_federation_notices():
+    offline = _stats_fragment({"Battery %": 80}, online=False)
+    assert "You are currently in offline mode" in offline
+    assert "Offline" in offline and "sd-card" not in offline
+    federation = _stats_fragment({})
+    assert "You have the Seestar Federation Device selected." in federation
+    assert "sd-card" not in federation
+    # Rendered with no telescope at all, it still says where things stand.
+    bare = front_app.fetch_template("partials/stats_content.html").render(online=True, stats={"View State": "Idle"})
+    assert "View State" in bare and "Idle" in bare
+
+
+def test_status_placeholder_is_static_and_fetches_fresh_stats():
+    html = _render_page("system.html", stats_lazy=True, threads=[], output="")
+    region = html[html.index('id="stats-content"'):]
+    opening = region[: region.index(">")]
+    assert "data-keep-on-empty" in opening and "no-htmx-fx" in opening
+    assert 'hx-get="/1/stats-content"' in opening
+    assert 'hx-trigger="every 15s [!document.hidden]"' in opening
+    assert 'hx-sync="this:drop"' in opening and 'hx-swap="innerHTML"' in opening
+    skeleton = region[region.index("data-skeleton"):]
+    skeleton = skeleton[: skeleton.index(">")]
+    assert 'hx-get="/1/stats-content?fresh=1"' in skeleton and 'hx-trigger="load"' in skeleton
+    assert 'hx-target="#stats-content"' in skeleton
+    # shell.js looks for these to say "still waiting" and to offer a retry.
+    assert "data-skeleton-text" in html and 'class="ssc-skeleton__label"' in html
 
 
 def test_polled_system_regions_survive_an_empty_reply():
     for template_name, extra in (
-        ("stats.html", {"stats": {}}),
+        ("system.html", {"stats": {}, "threads": []}),
         ("guestmode.html", {"state": {"guest_mode": False}}),
     ):
         assert "data-keep-on-empty" in _render_page(template_name, **extra)
@@ -3419,12 +3626,186 @@ def test_polled_system_regions_survive_an_empty_reply():
 
 
 def test_bubble_level_sits_outside_the_polled_stats_region():
-    html = _render_page("stats.html", stats={"Balance Sensor (angle)": 1.5})
-    assert html.index('id="stats-content"') < html.index('id="bubbleLevelSheet"')
-    fragment = front_app.fetch_template("partials/stats_content.html").render(
-        online=True, stats={"Balance Sensor (angle)": 1.5}
+    html = _render_page(
+        "system.html", stats={"Balance Sensor (angle)": 1.5}, stats_lazy=False, threads=[]
     )
+    assert html.index('id="stats-content"') < html.index('id="bubbleLevelSheet"')
+    assert html.index('id="system-services"') < html.index('id="bubbleLevelSheet"')
+    fragment = _stats_fragment({"Balance Sensor (angle)": 1.5})
     assert 'id="bubbleLevelSheet"' not in fragment
+    assert 'data-open-sheet="bubbleLevelSheet"' in fragment
+
+
+def _threads():
+    return [
+        {"name": "ALPHeartbeatMessageThread.Alpha", "label": "Scope heartbeat", "scope": "Alpha",
+         "running": True, "last_run": "2026-11-13 22:41:07.123456"},
+        {"name": "SchedulerThread.Alpha", "label": "Scheduler", "scope": "Alpha",
+         "running": "n/a", "last_run": "n/a"},
+        {"name": "Imaging<Stream>Thread.Alpha", "label": "", "scope": "Alpha",
+         "running": False, "last_run": "n/a"},
+    ]
+
+
+def test_services_card_says_each_threads_state_in_words():
+    html = front_app.fetch_template("partials/system_services.html").render(threads=_threads())
+    assert "Background services" in html
+    assert "1 of 3 running" in html and "1 stopped" in html
+    assert "Scope heartbeat" in html and "last loop 22:41:07" in html and "123456" not in html
+    for state, word in (("running", "Running"), ("idle", "Not started"), ("stopped", "Stopped")):
+        row = html[html.index(f'data-state="{state}"'):]
+        assert word in row[: row.index("</div>")], state
+    # A thread with no friendly name keeps its own, escaped.
+    assert "Imaging&lt;Stream&gt;Thread.Alpha" in html and "<Stream>" not in html
+    empty = front_app.fetch_template("partials/system_services.html").render(threads=[])
+    assert "no threads to show" in empty
+
+
+def test_services_region_polls_without_blanking():
+    html = _render_page("system.html", threads=_threads(), output="")
+    region = html[html.index('id="system-services"'):]
+    opening = region[: region.index(">")]
+    assert 'hx-get="/1/system-services"' in opening
+    assert 'hx-trigger="every 15s [!document.hidden]"' in opening
+    assert 'hx-sync="this:drop"' in opening and "data-keep-on-empty" in opening
+    # Sent with the page, so there is nothing to wait for.
+    assert "Scope heartbeat" in region
+
+
+class _Thread:
+    def __init__(self, name, alive):
+        self.name = name
+        self._alive = alive
+        self.last_run = "2026-11-13 22:41:07.5"
+
+    def is_alive(self):
+        return self._alive
+
+
+def _fake_scope(monkeypatch):
+    device = type("Device", (), {})()
+    device.get_msg_thread = _Thread("ALPReceiveMessageThread.Alpha", True)
+    device.heartbeat_msg_thread = _Thread("ALPHeartbeatMessageThread.Alpha", False)
+    device.scheduler_thread = None
+    device.mosaic_thread = None
+    imager = type("Imager", (), {})()
+    imager.heartbeat_msg_thread = _Thread("ImagingHeartbeatMessageThread.Alpha", True)
+    imager.get_stream_thread = None
+    imager.get_image_thread = _Thread("SomethingNew.Alpha", True)
+    monkeypatch.setattr(
+        front_app,
+        "get_telescopes",
+        lambda: [{"device_num": 1, "name": "Alpha"}, {"device_num": 2, "name": "Beta"}],
+    )
+    # Scope 2 is in the config but was never started here.
+    monkeypatch.setattr(front_app.telescope, "seestar_dev", {1: device})
+    monkeypatch.setattr(front_app.telescope, "seestar_imager", {1: imager})
+
+
+def test_thread_status_names_threads_and_skips_a_scope_that_is_not_running(monkeypatch):
+    _fake_scope(monkeypatch)
+    threads = front_app.get_thread_status()
+    assert [t["name"].split(".")[1] for t in threads] == ["Alpha"] * 7
+    by_name = {t["name"]: t for t in threads}
+    assert by_name["ALPReceiveMessageThread.Alpha"]["label"] == "Scope messages"
+    assert by_name["ALPReceiveMessageThread.Alpha"]["running"] is True
+    assert by_name["ALPHeartbeatMessageThread.Alpha"]["running"] is False
+    assert by_name["SchedulerThread.Alpha"]["running"] == "n/a"
+    assert by_name["SchedulerThread.Alpha"]["last_run"] == "n/a"
+    assert by_name["SomethingNew.Alpha"]["label"] == "SomethingNew"
+
+
+def test_services_endpoint_answers_204_only_to_the_viewer_who_has_the_content(monkeypatch):
+    front_app.SystemServicesResource._last_render_by_key.clear()
+    _fake_scope(monkeypatch)
+    monkeypatch.setattr(
+        front_app, "get_context", lambda _tid, _req: _minimal_context("system-services")
+    )
+
+    def poll(agent):
+        resp = DummyResp()
+        req = DummyHTMXReq(relative_uri="/1/system-services", headers={"User-Agent": agent})
+        front_app.SystemServicesResource.on_get(req, resp, 1)
+        return resp
+
+    first = poll("phone")
+    assert first.status == falcon.HTTP_200 and "Scope messages" in first.text
+    assert poll("phone").status == falcon.HTTP_204
+    # Another viewer has not seen it, so their poll is not turned into "unchanged".
+    assert poll("laptop").status == falcon.HTTP_200
+
+
+@pytest.mark.parametrize(
+    "resource, uri",
+    [
+        (front_app.SystemResource(), "/1/system"),
+        (front_app.StatsResource(), "/1/stats"),
+        (front_app.CommandResource(), "/1/command"),
+    ],
+)
+def test_old_and_new_addresses_all_open_the_status_page(monkeypatch, resource, uri):
+    monkeypatch.setattr(front_app, "get_device_state", _fail_if_called("get_device_state"))
+    monkeypatch.setattr(front_app, "do_action_device", _fail_if_called("do_action_device"))
+    _fake_scope(monkeypatch)
+    path = uri.rsplit("/", 1)[1]
+    monkeypatch.setattr(front_app, "get_context", lambda _tid, _req: _minimal_context(path))
+    resp = DummyResp()
+
+    resource.on_get(DummyHTMXReq(relative_uri=uri), resp, 1)
+
+    html = resp.text
+    assert "<title>Status - SSC</title>" in html
+    assert 'data-layout="dashboard"' in html
+    for part in ('id="stats-content"', 'id="eventStatusDiv"', 'id="system-services"', 'id="commands"'):
+        assert part in html, part
+    assert 'action="/1/command#commands"' in html
+    assert "Scope messages" in html
+    # The sub-navigation marks Status whichever address was used, and the scope menu keeps it.
+    assert re.findall(r'class="ssc-subnav__item" href="([^"]*)" aria-current="page"', html) == ["/1/system"]
+    assert f'href="/0/{path}"' in html
+
+
+def test_command_post_renders_the_reply_on_the_status_page(monkeypatch):
+    monkeypatch.setattr(front_app, "do_command", lambda _req, _resp, _tid: {"result": 1172})
+    _fake_scope(monkeypatch)
+    monkeypatch.setattr(front_app, "get_context", lambda _tid, _req: _minimal_context("command"))
+    resp = DummyResp()
+
+    front_app.CommandResource().on_post(DummyHTMXReq(relative_uri="/1/command"), resp, 1)
+
+    assert 'id="outputAlert"' in resp.text and "&#34;result&#34;: 1172" in resp.text
+    assert 'id="stats-content"' in resp.text
+
+
+def test_offline_commands_post_to_the_federation_as_before(monkeypatch):
+    _fake_scope(monkeypatch)
+    monkeypatch.setattr(
+        front_app, "get_context", lambda _tid, _req: _minimal_context("command", online=False)
+    )
+    # action is in the context even though an offline page shows no forms.
+    captured = {}
+    real = front_app.render_template
+
+    def spy(req, resp, name, **context):
+        captured.update(context)
+        return real(req, resp, name, **context)
+
+    monkeypatch.setattr(front_app, "render_template", spy)
+    front_app.CommandResource().on_get(DummyHTMXReq(relative_uri="/1/command"), DummyResp(), 1)
+    assert captured["action"] == "/0/command"
+
+
+def test_dashboard_styles_are_loaded_and_meet_the_theme_and_motion_rules():
+    public = Path(front_app.__file__).parent / "public/ssc"
+    assert '@import url("dashboard.css") layer(pages);' in (public / "ssc.css").read_text()
+    css = (public / "dashboard.css").read_text()
+    # Colour only through tokens, so Day, Night and Red all hold (test_design_rules checks values).
+    assert "var(--ssc-surface)" in css and "var(--ssc-orange)" in css
+    # Polled readings never move: no transitions or animations to switch off for reduced motion.
+    assert "transition" not in css and "animation" not in css and "@keyframes" not in css
+    # Phone first, then the wider grids.
+    assert "repeat(2, minmax(0, 1fr))" in css
+    assert "@media (min-width: 768px)" in css and "@media (min-width: 1200px)" in css
 
 
 @pytest.mark.parametrize(

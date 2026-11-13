@@ -40,8 +40,9 @@ The design language and framework for the whole web UI. The owner approved this 
 - [x] Tonight, Plan, Scope and System with a shared sub-navigation, on old and new pages
 - [x] Targets, Automation and Settings on the new shell
 - [x] Schedule, Live, Prepare and capture pages restyled on `base.html`
-- [x] Config, Commands, Stats, Guest mode, Support, System and Platform on the new shell, as one 640 column like Settings
+- [x] Config, Guest mode, Support and Platform on the new shell, as one 640 column like Settings
 - [x] Per-device Auto, Day, Night and Red
+- [x] Stats, Commands and System merged into one Status dashboard: device strip, metric cards with icons and gauges, event status, commands with a reply panel, background services. **Seen only in static renders so far, not on the scope or a real iPhone.**
 - [x] Phosphor icons and idiomorph
 
 ### Next
@@ -58,6 +59,7 @@ The design language and framework for the whole web UI. The owner approved this 
 
 ## Decision log
 
+- **2026-11-13:** Status dashboard. The owner found Stats, System and Commands utilitarian and asked for one device dashboard with cards and icons, so the three are one page, Status, at `/system`; `/stats` and `/command` render the same page, and Commands in the sub-navigation is a jump to its place on it. This amends two rules for this page only: it uses the full page width rather than the 640 column, and its readings are a grid of cards (`ssc/dashboard.html`, `dashboard.css`), which "Metric: never in a tile grid" ruled out. Everything else holds: cards are plain surface panels with no shadow, gradient or glow; colour appears only as status, and each status is also a word; gauges are the 4px bar plus two small ones (signal steps, a compass needle), drawn in CSS from tokens. Nothing on the page animates, since it is all polled data. A gauge is drawn only for a reading with a real scale: free storage has no total, so it has no bar, and temperature has a bar on a fixed 0 to 80 °C scale but no warning tone, because no threshold is known to be right. Battery turns orange at 20% and red at 10% when not charging. A stat with no card (new firmware, guest-mode clients) is listed under Details as the scope names it, and a known stat with a value its card can't draw falls back there too. The command reply is the one place with a fixed-pitch face, because it is the firmware's JSON. The background threads get friendly names with the thread's own name beneath, and are now polled every 15s.
 - **2026-11-10:** iPhone Duo tab rail. Where Safari reports a safe area on one side only (the camera and status column), `rail.js` marks `data-rail` on `<html>` and the tab bar becomes a rail in that column, tabs at its foot; the page steps in by the rail and leaves no room at the bottom. Apple's Duo guidance moves bars to the side. No user agent names the Duo, so this reads the inset shape; a phone on its side has insets on both sides and keeps the bottom bar. Only the Home Screen app gets the rail: in the Safari browser the column holds Safari's own buttons, and a rail beside them squeezed the page. Duo opened hides its inner camera, so there is no column to read: the installed app on a wide touch screen gets the rail on the right (the closed phone's side) in place of the sections in the top bar. In the Safari browser the tab bar takes the page's colour, so with the address bar floating below it the bar reads as the page's foot rather than a strip over a black gap. Legacy pages now use `viewport-fit=cover` like the shell, so the rail sits in the same place on every page. The top bar has a little room above and below, since on Duo no status bar pads it. The manifest has no `start_url`, so the Home Screen app opens on the page it was added from (Tonight, say), and its scope stays the whole app.
 - **2026-11-10:** Touch and feel, from a review against Emil Kowalski's skills (apple-design and others): no tap flash, visible pressed states, sheets that leave the way they came, state changes that fade, and no motion on polled data or legacy page loads. Reduced motion now keeps short fades; Red stays instant. Kept over the skills: glass only on navigation, the hairline under the top bar, the 600ms image fade, and no hold-to-confirm.
 - **2026-11-10:** iPhone Duo (Safari 27.1): side safe areas everywhere, and a short-landscape layout (closed and turned, about 594 by 368) where the tab bar slims and the image gets the height. Fold and posture APIs wait until they leave feature flags. The app has its own icon (a framing ring) and a manifest, so it installs to the Home Screen as SSC.
@@ -237,10 +239,10 @@ html[data-theme="red"] img,html[data-theme="red"] canvas,html[data-theme="red"] 
 | Polar align (`pa_refine`) | T4 | Scope › Prepare | Restyle |
 | Settings | T3 | System | Rewrite rows only |
 | Config | T3 | System | On the shell. Fields come from `device/config.py` |
-| Commands (+`do_command`) | T3 | System | On the shell |
+| Commands (+`do_command`) | Dashboard | System › Status | Part of Status (2026-11-13). `/command` renders it |
 | Console | T2 | System › Advanced | Leave. It has a route but no template |
-| System page | T2 | System | On the shell |
-| Stats | T2 | System | On the shell |
+| System page | Dashboard | System › Status | Status, full width (2026-11-13) |
+| Stats | Dashboard | System › Status | Part of Status. `/stats` renders it |
 | Guest Mode | T2 | System | On the shell |
 | Platform | T3 | System | On the shell |
 | Support | T2 | System | On the shell |
@@ -274,7 +276,8 @@ I did not render Console, System, Search, Position, Config, Image, Planning, Pla
 | Wide nav | Same 4 items, height 44, weight 600 when active | active | `.navbar-nav` |
 | Image viewer | Full screen on black, pinch and pan, close 44, metadata below, pure black in Night | loading, stale, failed | new |
 | Pier thumbnail | At least 120 wide on phones, whole image, tap to swap with the stack. Desktop shows both images in full, sharing top and bottom edges | stale, offline, hidden | new |
-| Metric | Label 13 above, value 28, unit 15. Maximum 3, never in a tile grid | stale shows "—" | `.focus-value` |
+| Metric | Label 13 above, value 28, unit 15. Maximum 3, never in a tile grid (Status alone has cards, below) | stale shows "—" | `.focus-value` |
+| Metric card (Status only) | Surface panel, inset 16. Icon 20 in a 32 tile, label 13, value 28 (20 in the second row), unit 15, then a bar or a 13 hint on the bottom edge. Two across on phones, one row per tier when wide | attention, danger (icon, bar and a word), a sentence in place of a number shows "—" | stat rows |
 | Bar | Height 4, radius 2, fill-2 track | value, split (kept and dropped) | `.progress`, `.metric-bar` |
 | Chart | SVG, 1px grid, 2px line, tabular labels 13, no legend box, direct labels | empty, partial | focus SVG |
 | Empty | One sentence, one optional action | n/a | ad hoc |

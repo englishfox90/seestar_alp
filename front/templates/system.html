@@ -1,26 +1,53 @@
+{# Status: the device's stats, its event status and commands, and the background threads,
+   on one page. /system, /stats and /command all render it. Spec: front/DESIGN.md,
+   decision of 2026-11-13. Three regions poll on their own and none of them holds a sheet. #}
 {% extends 'ssc/system_page.html' %}
-{% import 'ssc/form.html' as form %}
 {% import 'ssc/ui.html' as ui %}
+{% import 'ssc/dashboard.html' as dash %}
 
-{% block title %}System{% endblock %}
+{% block title %}Status{% endblock %}
+
+{% block page_attrs %} data-layout="dashboard"{% endblock %}
+
+{% block head_note %}<p class="ssc-footnote s-firmware">Refreshes every 15 s</p>{% endblock %}
 
 {% block body %}
-<section class="ssc-form-group">
-  <h2 class="ssc-form-group__title">Background threads</h2>
-  <div class="ssc-group">
-    {% for thread in threads %}
-      {% set last_run = (thread["last_run"]|string).split(".")[0] %}
-      <div class="ssc-row">
-        <span class="ssc-row__label">{{ thread["name"]|e }}{% if last_run != "n/a" %}<span class="ssc-row__sub">Last loop {{ last_run|e }}</span>{% endif %}</span>
-        <span class="ssc-row__value">
-          {%- if thread["running"] is true %}{{ ui.status("ok", "Running") }}
-          {%- elif thread["running"] is false %}{{ ui.status("attention", "Stopped") }}
-          {%- else %}{{ ui.status("neutral", "Not started") }}{% endif -%}
-        </span>
-      </div>
-    {% endfor %}
-  </div>
-</section>
-{% endblock %}
+<div id="stats-content" class="sd-stats no-htmx-fx" data-keep-on-empty
+     hx-get="{{ root }}/stats-content"
+     hx-trigger="every 15s [!document.hidden]"
+     hx-sync="this:drop"
+     hx-swap="innerHTML">
+  {% if stats_lazy %}{{ dash.skeleton(src=root ~ "/stats-content?fresh=1", target="#stats-content") }}{% else %}{% include 'partials/stats_content.html' with context %}{% endif %}
+</div>
 
-{% block version %}Version {{ version }}, updated {{ (now|string).split(".")[0] }}{% endblock %}
+<div class="sd-columns"{% if not online %} data-single{% endif %}>
+  <div class="sd-column">
+    {% if online %}
+    <details id="eventStatusDiv" class="s-disclosure sd-events" open>
+      <summary class="ssc-form-group__title">Event status</summary>
+      <div id="eventStatusContent" class="ssc-group no-htmx-fx"
+           hx-get="{{ root }}/eventstatus?action=command"
+           hx-trigger="every 1s [!document.hidden &amp;&amp; document.getElementById('eventStatusDiv').open]"
+           hx-sync="this:drop"
+           hx-swap="innerHTML"></div>
+      {# The polls answer 204 when nothing changed, so the first fill has to ask for the content. #}
+      <div class="no-htmx-fx" hx-get="{{ root }}/eventstatus?action=command&amp;fresh=1" hx-trigger="load" hx-target="#eventStatusContent" hx-swap="innerHTML"></div>
+    </details>
+    {% endif %}
+    <section id="system-services" class="ssc-form-group no-htmx-fx" data-keep-on-empty
+             hx-get="{{ root }}/system-services"
+             hx-trigger="every 15s [!document.hidden]"
+             hx-sync="this:drop"
+             hx-swap="innerHTML">
+      {% include 'partials/system_services.html' with context %}
+    </section>
+  </div>
+  {% if online %}
+  <div class="sd-column" id="commands">
+    {% include 'do_command.html' with context %}
+  </div>
+  {% endif %}
+</div>
+{# Outside the polled regions, so a refresh can't close it. #}
+{% include 'partials/bubble_level.html' with context %}
+{% endblock %}

@@ -11,3 +11,4 @@
 @import url("plan.css") layer(pages);
 @import url("red-floor.css");
 @import url("settings.css") layer(pages);
+@import url("dashboard.css") layer(pages);

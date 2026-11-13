@@ -5,7 +5,9 @@
    (schedule/image, live/star) highlight it. A device number is already gone from partial_path.
 
    Left out on purpose: /console has a route but no template, so it only returns an error,
-   and /pa_refine alone is a bare fragment with no nav. Polar align lives on Prepare. #}
+   and /pa_refine alone is a bare fragment with no nav. Polar align lives on Prepare.
+   Stats, Commands and the old System page are one page, Status: /stats and /command still
+   open it, and Commands is a jump to its place on that page. #}
 {% set sections = [
     {"key": "tonight", "label": "Tonight", "icon": "tonight", "pages": [
         {"label": "Tonight", "href": root ~ "/dashboard", "match": ["dashboard"]},
@@ -29,13 +31,11 @@
     {"key": "system", "label": "System", "icon": "system", "pages": [
         {"label": "Settings", "href": root ~ "/settings", "match": ["settings"]},
         {"label": "Config", "href": root ~ "/config", "match": ["config"]},
-        {"label": "Commands", "href": root ~ "/command", "match": ["command"]},
-        {"label": "Stats", "href": root ~ "/stats", "match": ["stats"]},
+        {"label": "Status", "href": root ~ "/system", "match": ["system", "stats", "command"]},
+        {"label": "Commands", "href": root ~ "/system#commands", "match": []},
         {"label": "Guest mode", "href": root ~ "/guestmode", "match": ["guestmode"]},
         {"label": "Support", "href": root ~ "/support", "match": ["support"]},
-    ] + ([{"label": "Platform", "href": root ~ "/platform-rpi", "match": ["platform-rpi"]}] if platform == "raspberry_pi" else []) + [
-        {"label": "System", "href": root ~ "/system", "match": ["system"]},
-    ]},
+    ] + ([{"label": "Platform", "href": root ~ "/platform-rpi", "match": ["platform-rpi"]}] if platform == "raspberry_pi" else [])},
 ] %}
 {% set first_segment = ((partial_path or "")|string).split("/")[0] %}
 {% set found = namespace(section=none, page=none) %}

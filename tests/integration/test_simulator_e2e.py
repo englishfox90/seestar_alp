@@ -73,6 +73,10 @@ def _build_front_test_app():
     )
     app.add_route("/{telescope_id:int}/stats", front_app.StatsResource())
     app.add_route("/{telescope_id:int}/command", front_app.CommandResource())
+    app.add_route("/{telescope_id:int}/system", front_app.SystemResource())
+    app.add_route(
+        "/{telescope_id:int}/system-services", front_app.SystemServicesResource()
+    )
     app.add_route("/{telescope_id:int}/guestmode", front_app.GuestModeResource())
     app.add_route("/{telescope_id:int}/live", front_app.LivePage())
     app.add_route("/{telescope_id:int}/live/{mode}", front_app.LivePage())
@@ -493,6 +497,7 @@ def test_05_htmx_fragment_endpoints(front_sim_bridge):
     paths = [
         "/1/home-content",
         "/1/stats-content",
+        "/1/system-services",
         "/1/guestmode-content",
         "/1/eventstatus?action=goto",
     ]
@@ -520,6 +525,27 @@ def test_05b_system_pages_on_the_shell(front_sim_bridge):
         assert "ssc-page" in resp.text, path
         assert "bootstrap" not in resp.text, path
         assert "Seestar Federation" in resp.text, path
+
+
+def test_05b2_stats_commands_and_system_are_one_status_page(front_sim_bridge):
+    client = front_sim_bridge["client"]
+    for path in ["/1/system", "/1/stats", "/1/command"]:
+        resp = client.simulate_get(path)
+        assert resp.status_code == 200, path
+        assert "<title>Status - SSC</title>" in resp.text, path
+        # The stats follow from their own fetch; the rest is in the page.
+        assert 'hx-get="/1/stats-content?fresh=1"' in resp.text, path
+        assert 'id="system-services"' in resp.text, path
+        assert 'id="eventStatusDiv"' in resp.text, path
+        assert resp.text.count('name="command"') == 9, path
+    fragment = client.simulate_get(
+        "/1/stats-content",
+        query_string="fresh=1",
+        headers={"HX-Current-URL": "http://localhost/1/system"},
+    )
+    assert fragment.status_code == 200
+    assert 'class="sd-hero"' in fragment.text
+    assert "sd-card" in fragment.text
 
 
 def test_05c_commands_event_status_fills_after_a_reload(front_sim_bridge):

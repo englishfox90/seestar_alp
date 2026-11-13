@@ -61,12 +61,13 @@ def _subnav(html):
         ("", "Scope", "Device"),
         ("settings", "System", "Settings"),
         ("config", "System", "Config"),
-        ("command", "System", "Commands"),
-        ("stats", "System", "Stats"),
+        # Stats, Commands and System are one page; the old addresses still open it.
+        ("command", "System", "Status"),
+        ("stats", "System", "Status"),
         ("guestmode", "System", "Guest mode"),
         ("support", "System", "Support"),
         ("platform-rpi", "System", "Platform"),
-        ("system", "System", "System"),
+        ("system", "System", "Status"),
     ],
 )
 def test_the_section_and_page_follow_the_path_and_its_sub_paths(path, section, page):
@@ -94,6 +95,14 @@ def test_conditional_pages_leave_the_sub_navigation():
     assert "/1/planning" not in html
     html = _render("ssc/nav.html", "settings", platform="darwin")
     assert "/1/platform-rpi" not in html
+
+
+def test_commands_is_a_jump_to_its_place_on_status():
+    html = _render("ssc/nav.html", "system")
+    assert 'href="/1/system#commands"' in html
+    assert 'id="commands"' in (TEMPLATES / "system.html").read_text()
+    # Only Status is marked current: the jump is not a page of its own.
+    assert _current_page(html) == ["Status"]
 
 
 def test_polar_align_points_at_the_panel_on_prepare():
@@ -140,7 +149,7 @@ def test_every_nav_link_on_every_page_resolves_to_a_route(monkeypatch):
             assert app._router.find(href) is not None, href
     # Everything the page table names is among them.
     for route in ("dashboard", "targets", "roof", "schedule", "framed_mosaic", "planning", "mosaic", "live",
-                  "goto", "image", "startup", "", "settings", "config", "command", "stats", "guestmode",
+                  "goto", "image", "startup", "", "settings", "config", "guestmode",
                   "support", "platform-rpi", "system"):
         assert f"/1/{route}" in seen, route
 
@@ -156,6 +165,8 @@ def test_no_page_route_loses_its_way_into_the_nav():
         "/toggleuitheme", "/toggleplanningcard", "/collapseplanningcard", "/updatetwilighttimes",
         "/getbalancesensor", "/gensupportbundle", "/getplanetcoordinates", "/getcometcoordinates",
         "/localsearch", "/getminorplanetcoordinates", "/getaavsocoordinates", "/home-content",
+        "/stats", "/command",  # the old addresses of Status, which render the same page
+        "/system-services",
         "/stats-content", "/settings-content", "/guestmode-content", "/auth-status", "/plan", "/scope", "/api", "/imaging",
     }
     for route in _registered_routes():

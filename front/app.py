@@ -2747,28 +2747,7 @@ class CommandResource(BaseResource):
 
     @staticmethod
     def command(req, resp, telescope_id, output):
-        context = get_context(telescope_id, req)
-        if not context["online"]:
-            telescope_id = 0
-
-        current = do_action_device("get_schedule", telescope_id, {})
-        if current is not None:
-            schedule = current["Value"]
-            state = schedule["state"]
-        else:
-            schedule = {}
-            state = "stopped"
-
-        render_template(
-            req,
-            resp,
-            "command.html",
-            state=state,
-            schedule=schedule,
-            action=f"/{telescope_id}/command",
-            output=output,
-            **context,
-        )
+        render_system_dashboard(req, resp, telescope_id, output=output)
 
 
 class ConsoleResource(BaseResource):
@@ -4779,13 +4758,10 @@ class PlanningResource:
 
 
 class StatsResource:
-    # Sent with a placeholder; the stats follow from /stats-content?fresh=1.
+    # Stats, Commands and System are one page now. The old addresses still open it.
     @staticmethod
     def on_get(req, resp, telescope_id=1):
-        now = datetime.now()
-        context = get_context(telescope_id, req)
-
-        render_template(req, resp, "stats.html", stats_lazy=True, now=now, **context)
+        render_system_dashboard(req, resp, telescope_id)
 
 
 class StatsContentResource:
@@ -4957,57 +4933,134 @@ def Object(**kwargs):
     return type("Object", (), kwargs)
 
 
-class SystemResource(BaseResource):
-    def if_null(self, thread, name):
+# What each background thread does, in the words the System page uses. A thread this
+# doesn't know keeps its own name.
+THREAD_LABELS = {
+    "ALPReceiveMessageThread": "Scope messages",
+    "ALPHeartbeatMessageThread": "Scope heartbeat",
+    "SchedulerThread": "Scheduler",
+    "MosaicThread": "Mosaic",
+    "ImagingHeartbeatMessageThread": "Imaging heartbeat",
+    "ImagingStreamThread": "Image stream",
+    "ImagingReceiveImageThread": "Image receiver",
+}
+
+
+def get_thread_status():
+    """The background threads of every scope, for the System page.
+
+    ``running`` is True, False, or "n/a" for a thread that has not been started.
+    """
+
+    def if_null(thread, name):
         if thread is None:
             return Object(name=name, is_alive=lambda: "n/a")
-        else:
-            return thread
+        return thread
 
-    def on_get(self, req, resp, telescope_id=1):
-        now = datetime.now()
-        context = get_context(telescope_id, req)
-        threads = []
-        for tel in get_telescopes():
-            telescope_id = tel["device_num"]
-            telescope_name = tel["name"]
+    threads = []
+    for tel in get_telescopes():
+        telescope_id = tel["device_num"]
+        telescope_name = tel["name"]
+        try:
             imager = telescope.get_seestar_imager(telescope_id)
             dev = telescope.get_seestar_device(telescope_id)
-            for t in (
-                self.if_null(
-                    dev.get_msg_thread, f"ALPReceiveMessageThread.{telescope_name}"
-                ),
-                self.if_null(
-                    dev.heartbeat_msg_thread,
-                    f"ALPHeartbeatMessageThread.{telescope_name}",
-                ),
-                self.if_null(dev.scheduler_thread, f"SchedulerThread.{telescope_name}"),
-                self.if_null(dev.mosaic_thread, f"MosaicThread.{telescope_name}"),
-                self.if_null(
-                    imager.heartbeat_msg_thread,
-                    f"ImagingHeartbeatMessageThread.{telescope_name}",
-                ),
-                self.if_null(
-                    imager.get_stream_thread, f"ImagingStreamThread.{telescope_name}"
-                ),
-                self.if_null(
-                    imager.get_image_thread,
-                    f"ImagingReceiveImageThread.{telescope_name}",
-                ),
-            ):
-                threads.append(
-                    {
-                        "name": t.name,
-                        "running": t.is_alive(),
-                        "last_run": getattr(t, "last_run", "n/a"),
-                    }
-                )
-        # for t in threading.enumerate():
-        #    threads.append({
-        #        "name": t.name,
-        #        "running": t.is_alive(),
-        #    })
-        render_template(req, resp, "system.html", now=now, threads=threads, **context)
+        except (KeyError, IndexError):
+            # Listed in the config but not started here, so it has no threads to show.
+            continue
+        for t in (
+            if_null(dev.get_msg_thread, f"ALPReceiveMessageThread.{telescope_name}"),
+            if_null(
+                dev.heartbeat_msg_thread,
+                f"ALPHeartbeatMessageThread.{telescope_name}",
+            ),
+            if_null(dev.scheduler_thread, f"SchedulerThread.{telescope_name}"),
+            if_null(dev.mosaic_thread, f"MosaicThread.{telescope_name}"),
+            if_null(
+                imager.heartbeat_msg_thread,
+                f"ImagingHeartbeatMessageThread.{telescope_name}",
+            ),
+            if_null(imager.get_stream_thread, f"ImagingStreamThread.{telescope_name}"),
+            if_null(
+                imager.get_image_thread,
+                f"ImagingReceiveImageThread.{telescope_name}",
+            ),
+        ):
+            kind, _, scope_name = str(t.name).partition(".")
+            threads.append(
+                {
+                    "name": t.name,
+                    "label": THREAD_LABELS.get(kind, kind),
+                    "scope": scope_name,
+                    "running": t.is_alive(),
+                    "last_run": getattr(t, "last_run", "n/a"),
+                }
+            )
+    return threads
+
+
+def format_command_output(output):
+    """A command's reply as text for the System page's output panel."""
+    if isinstance(output, (dict, list)):
+        try:
+            return json.dumps(output, indent=2, default=str)
+        except (TypeError, ValueError):
+            return str(output)
+    return "" if output is None else str(output)
+
+
+def render_system_dashboard(req, resp, telescope_id, output=None):
+    """The System page: device stats, event status, commands and background threads.
+
+    /system, /stats and /command all render it. The stats take several round trips
+    to the scope, so the page is sent with a placeholder and they follow from
+    /stats-content?fresh=1.
+    """
+    now = datetime.now()
+    context = get_context(telescope_id, req)
+    command_id = telescope_id if context["online"] else 0
+
+    render_template(
+        req,
+        resp,
+        "system.html",
+        stats_lazy=True,
+        now=now,
+        threads=get_thread_status(),
+        action=f"/{command_id}/command",
+        output=output,
+        output_text=format_command_output(output),
+        **context,
+    )
+
+
+class SystemResource(BaseResource):
+    def on_get(self, req, resp, telescope_id=1):
+        render_system_dashboard(req, resp, telescope_id)
+
+
+class SystemServicesResource:
+    """The background threads card, polled by the System page."""
+
+    _last_render_by_key = {}
+    _lock = threading.Lock()
+
+    @staticmethod
+    def on_get(req, resp, telescope_id=1):
+        context = get_context(telescope_id, req)
+        render_fragment(
+            req,
+            resp,
+            "partials/system_services.html",
+            threads=get_thread_status(),
+            **context,
+        )
+        # Keyed by viewer: one person's poll must not turn another's change into a 204.
+        respond_204_if_unchanged(
+            resp,
+            SystemServicesResource._last_render_by_key,
+            SystemServicesResource._lock,
+            ("system-services", int(telescope_id), get_request_cache_identity(req)),
+        )
 
 
 class SimbadResource:
@@ -5992,6 +6045,8 @@ class FrontMain:
         app.add_route("/schedule/upload", ScheduleUploadResource())
         app.add_route("/startup", StartupResource())
         app.add_route("/stats", StatsResource())
+        # No bare /system: that address is the System section's short URL.
+        app.add_route("/system-services", SystemServicesResource())
         app.add_route("/home-content", HomeContentResource())
         app.add_route("/stats-content", StatsContentResource())
         app.add_route("/settings-content", SettingsContentResource())
@@ -6089,6 +6144,9 @@ class FrontMain:
         app.add_route("/{telescope_id:int}/guestmode", GuestModeResource())
         app.add_route("/{telescope_id:int}/support", SupportResource())
         app.add_route("/{telescope_id:int}/system", SystemResource())
+        app.add_route(
+            "/{telescope_id:int}/system-services", SystemServicesResource()
+        )
         app.add_route("/{telescope_id:int}/eventstatus", EventStatus())
         app.add_route(
             "/{telescope_id:int}/gensupportbundle", GenSupportBundleResource()

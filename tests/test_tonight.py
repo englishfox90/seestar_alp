@@ -553,7 +553,7 @@ def test_new_nav_reaches_exactly_what_the_legacy_nav_does():
     [("dashboard", "dashboard")]
     + [(r, "targets") for r in ("targets", "roof", "schedule", "framed_mosaic", "planning", "mosaic")]
     + [(r, "live") for r in ("live", "goto", "image", "startup", "")]
-    + [(r, "settings") for r in ("settings", "config", "command", "stats", "guestmode", "support", "platform-rpi", "system")],
+    + [(r, "settings") for r in ("settings", "config", "guestmode", "support", "platform-rpi", "system")],
 )
 def test_every_route_is_reachable_from_the_new_nav(route, partial_path):
     assert f'href="/1/{route}"' in _ssc_nav(partial_path=partial_path)

@@ -1,0 +1,130 @@
+{# The Status page's parts: the device strip, metric cards and their small gauges.
+   Styles: public/ssc/dashboard.css. Spec: front/DESIGN.md, decision of 2026-11-13.
+   Text is escaped here, because this template environment does not autoescape.
+   Every gauge says its reading in words too, so it holds in Red and for a screen reader. #}
+{% import 'ssc/ui.html' as ui %}
+
+{# How a value with no card of its own reads: in a detail cell, or as a card's text. #}
+{% macro plain(value) -%}
+{%- if value is boolean %}{{ "Yes" if value else "No" }}
+{%- elif value is float %}{{ value|round(2) }}
+{%- else %}{{ (value|string).split("<br>")|select|join(", ")|e }}{% endif -%}
+{%- endmacro %}
+
+{# One metric. key is the scope's own name for it, kept for tests and for anyone reading
+   the page source next to the firmware's reply. #}
+{% macro card(key, label, icon, tone="", aside="") -%}
+<article class="sd-card" data-metric="{{ key|e }}"{% if tone %} data-tone="{{ tone }}"{% endif %}>
+  <header class="sd-card__head">
+    <span class="sd-card__glyph">{{ ui.icon(icon, 20) }}</span>
+    <h3 class="sd-card__label">{{ label|e }}</h3>
+    {# A small gauge from this file (signal, dial), already markup. #}
+    {{ aside }}
+  </header>
+  {{ caller() }}
+</article>
+{%- endmacro %}
+
+{% macro value(text, unit="") -%}
+<p class="sd-card__value">{{ text|e }}{% if unit %}<span class="sd-card__unit">{{ unit|e }}</span>{% endif %}</p>
+{%- endmacro %}
+
+{# A reading that is a sentence, not a number ("Unavailable in AP mode."). #}
+{% macro sentence(text) -%}
+<p class="sd-card__value" data-empty>&mdash;</p>
+<p class="sd-card__hint">{{ text|e }}</p>
+{%- endmacro %}
+
+{% macro hint(text) -%}
+<p class="sd-card__hint">{{ text|e }}</p>
+{%- endmacro %}
+
+{# The 4px bar, 0 to 100. label says what it measures. #}
+{% macro meter(percent, label) -%}
+{%- set percent = [[percent|int, 0]|max, 100]|min -%}
+<div class="ssc-bar" role="progressbar" aria-label="{{ label|e }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ percent }}"><span class="ssc-bar__fill" style="--value: {{ percent }}%"></span></div>
+{%- endmacro %}
+
+{# Signal strength as four steps. #}
+{% macro signal(level, word) -%}
+<span class="sd-signal" data-level="{{ level }}" role="img" aria-label="Signal {{ word|e }}, {{ level }} of 4"><span></span><span></span><span></span><span></span></span>
+{%- endmacro %}
+
+{# A compass needle. North is up. #}
+{% macro dial(degrees, word) -%}
+<span class="sd-dial" role="img" aria-label="Heading {{ degrees }}&deg; {{ word|e }}" style="--deg: {{ degrees }}deg"><span class="sd-dial__needle"></span></span>
+{%- endmacro %}
+
+{# The strip across the top: which scope, whether it answers, and what it is doing. #}
+{% macro hero(telescope, online, stats) -%}
+{%- set firmware = stats.get("Firmware Version") -%}
+{%- set view_state = stats.get("View State") -%}
+{%- set scheduler = stats.get("Scheduler Status") -%}
+{%- set mount = stats.get("Mount Mode") -%}
+{%- set active = view_state is not none and view_state != "" and view_state != "Idle" -%}
+{%- set view_tone = {"working": "ok", "fail": "danger"}.get(view_state|string|lower, "neutral") -%}
+<section class="sd-hero" aria-label="Device">
+  <div class="sd-hero__id">
+    <span class="sd-hero__glyph">{{ ui.icon("telescope", 24) }}</span>
+    <div class="sd-hero__text">
+      <h2 class="sd-hero__name">{{ telescope["name"]|e }}</h2>
+      <p class="sd-hero__meta">
+        {%- if telescope["ip_address"] %}<span>{{ telescope["ip_address"]|e }}</span>{% endif -%}
+        {%- if firmware is not none and firmware != "" %}<span data-metric="Firmware Version">Firmware {{ firmware|e }}</span>{% endif -%}
+      </p>
+    </div>
+    <span class="sd-hero__link">{% if online %}{{ ui.status("ok", "Online") }}{% else %}{{ ui.status("attention", "Offline") }}{% endif %}</span>
+  </div>
+  {% if (view_state is not none and view_state != "") or scheduler or mount %}
+  <dl class="sd-hero__facts">
+    {% if view_state is not none and view_state != "" %}<div class="sd-hero__fact" data-metric="View State"><dt>View</dt><dd>{{ ui.status(view_tone, view_state|string|capitalize) }}</dd></div>{% endif %}
+    {% if scheduler %}<div class="sd-hero__fact" data-metric="Scheduler Status"><dt>Scheduler</dt><dd>{{ scheduler|string|capitalize|e }}</dd></div>{% endif %}
+    {% if mount %}<div class="sd-hero__fact" data-metric="Mount Mode"><dt>Mount</dt><dd>{{ mount|e }}</dd></div>{% endif %}
+  </dl>
+  {% endif %}
+  {% if active %}
+    {%- set target = stats.get("Target Name") -%}
+    {%- set mode = stats.get("View Mode") -%}
+    {%- set stage = stats.get("View Stage") -%}
+    {%- set stacked = stats.get("Successful Frames") -%}
+    {%- set failed = stats.get("Failed Frames") -%}
+    {%- set has_frames = (stacked is number and stacked is not boolean) or (failed is number and failed is not boolean) -%}
+    {% if target or mode or stage or has_frames %}
+    <div class="sd-now">
+      <div class="sd-now__text">
+        <p class="sd-now__label">Now</p>
+        {%- set title = target or mode or stage or view_state -%}
+        <p class="sd-now__target"{% if target %} data-metric="Target Name"{% endif %}>{{ (title|string if target else title|string|capitalize)|e }}</p>
+        {% if (mode and title != mode) or (stage and title != stage) %}<p class="sd-now__sub">{% if mode and title != mode %}<span data-metric="View Mode">{{ mode|string|capitalize|e }}</span>{% endif %}{% if stage and title != stage %}<span data-metric="View Stage">{{ stage|e }}</span>{% endif %}</p>{% endif %}
+      </div>
+      {% if has_frames %}
+        {%- set kept = stacked if (stacked is number and stacked is not boolean) else 0 -%}
+        {%- set dropped = failed if (failed is number and failed is not boolean) else 0 -%}
+        {%- set total = kept + dropped -%}
+        {%- set share = (kept * 100 / total)|round|int if total > 0 else 0 -%}
+      <div class="sd-now__frames">
+        <p class="sd-now__counts"><span data-metric="Successful Frames"><strong>{{ kept }}</strong> stacked</span><span data-metric="Failed Frames"><strong>{{ dropped }}</strong> dropped</span>{% if total > 0 %}<span>{{ share }}% kept</span>{% endif %}</p>
+        {% if total > 0 %}{{ meter(share, "Frames kept") }}{% endif %}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  {% endif %}
+</section>
+{%- endmacro %}
+
+{# The stats placeholder, in the shape of what replaces it. Static: nothing loops while the
+   scope answers. shell.js finds it by data-skeleton and turns a failed fetch into a retry. #}
+{% macro skeleton(src, target, label="Loading from the scope…") -%}
+<div class="ssc-skeleton sd-skeleton" data-skeleton role="status" hx-get="{{ src|e }}" hx-trigger="load" hx-target="{{ target|e }}" hx-swap="innerHTML">
+  <p class="ssc-skeleton__label"><span data-skeleton-text>{{ label|e }}</span></p>
+  <div class="sd-hero" aria-hidden="true">
+    <div class="sd-hero__id"><span class="sd-hero__glyph"></span><div class="sd-hero__text"><span class="ssc-skeleton__bar"></span><span class="ssc-skeleton__bar" data-part="value"></span></div></div>
+  </div>
+  <div class="sd-grid" data-tier="primary" aria-hidden="true">
+    {%- for _ in range(4) %}
+    <div class="sd-card"><div class="sd-card__head"><span class="sd-card__glyph"></span><span class="ssc-skeleton__bar"></span></div><span class="ssc-skeleton__bar" data-part="value"></span></div>
+    {%- endfor %}
+  </div>
+</div>
+{%- endmacro %}
