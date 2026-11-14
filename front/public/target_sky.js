@@ -59,7 +59,8 @@
   const SHADE_FILL = "rgba(150, 150, 160, 0.28)";
   const SHADE_EDGE = "rgba(255, 255, 255, 0.75)";
   let shadeLayer = null;
-  let shadePending = false;
+  // The view the shading was last painted for. null asks for a fresh paint.
+  let painted = null;
   let shape = { cells: [], lines: [] };
   let win = null;
   let reachCache = new Map();
@@ -97,6 +98,9 @@
     return `Above ${floor} from ${from} to ${to}, peak ${Math.round(found.peak)}°`;
   }
 
+  const sinDeg = (deg) => Math.sin((deg * Math.PI) / 180);
+  const cosDeg = (deg) => Math.cos((deg * Math.PI) / 180);
+
   // Its own canvas, between the sky and the markers. Aladin's filled polygons dim the wrong
   // parts of a whole-sky view, where a band wraps around, and leave seams between bands.
   function shadeCanvas() {
@@ -111,15 +115,15 @@
     return shadeLayer;
   }
 
+  // False until Aladin has made the canvas it goes on.
   function paintShade() {
-    shadePending = false;
     const canvas = shadeCanvas();
-    if (!canvas) return;
+    if (!canvas) return false;
     const box = canvas.parentElement.getBoundingClientRect();
     const ratio = window.devicePixelRatio || 1;
     canvas.width = Math.round(box.width * ratio);
     canvas.height = Math.round(box.height * ratio);
-    if (!win || !win.steps.length || !reachOn()) return;
+    if (!win || !win.steps.length || !reachOn()) return true;
     const ctx = canvas.getContext("2d");
     ctx.scale(ratio, ratio);
     ctx.fillStyle = SHADE_FILL;
@@ -127,7 +131,15 @@
     // Zoomed in, one can simply be wider than the view.
     const wrapping = aladin.getFov()[0] > 100;
     const tooWide = Math.max(box.width, box.height) / 3;
-    const place = ([ra, dec]) => aladin.world2pix(((ra % 360) + 360) % 360, dec);
+    // Aladin still places points on the far side of the sky, mirrored and wildly far out, so
+    // zoomed in a cell from the opposite side spanned the whole view and shaded it. Only the
+    // half of the sky facing the view can be on it in the usual projection, or in any view
+    // narrower than a hemisphere.
+    const hemisphere = !wrapping || aladin.getProjectionName() === "SIN";
+    const [centreRa, centreDec] = aladin.getRaDec();
+    const facing = ([ra, dec]) =>
+      !hemisphere || sinDeg(dec) * sinDeg(centreDec) + cosDeg(dec) * cosDeg(centreDec) * cosDeg(ra - centreRa) > 0;
+    const place = (point) => (facing(point) ? aladin.world2pix(((point[0] % 360) + 360) % 360, point[1]) : null);
     ctx.beginPath();
     shape.cells.forEach(function (cell) {
       const corners = cell.map(place);
@@ -163,12 +175,32 @@
     ctx.lineJoin = "round";
     ctx.setLineDash([6, 5]);
     ctx.stroke();
+    return true;
   }
 
   function drawShade() {
-    if (shadePending) return;
-    shadePending = true;
-    window.requestAnimationFrame(paintShade);
+    painted = null;
+  }
+
+  // Where a few points spread round the sky land, and the view's size: any pan, zoom,
+  // projection or resize changes it. At least one is always on the visible side.
+  const VIEW_PROBES = [[0, 0], [120, 30], [240, -30], [0, 89], [180, -89]];
+  function viewKey() {
+    const spots = VIEW_PROBES.map(function ([ra, dec]) {
+      const spot = aladin.world2pix(ra, dec);
+      return spot ? `${spot[0].toFixed(1)},${spot[1].toFixed(1)}` : "-";
+    });
+    return `${view.clientWidth}x${view.clientHeight} ${spots.join(" ")}`;
+  }
+
+  // Aladin only reports a zoom when the field of view changes. Zoomed out past the whole sky
+  // the field stays at its limit while the sky keeps shrinking, so it goes quiet and the
+  // shading kept its old size. Its reports also come at most every 100 ms, so the shading
+  // trailed a zoom. Checking each frame keeps it on the sky, and repaints only on a change.
+  function followView() {
+    const key = viewKey();
+    if (key !== painted && paintShade()) painted = key;
+    window.requestAnimationFrame(followView);
   }
 
   function showReachNote() {
@@ -209,9 +241,7 @@
 
   function setUpReach() {
     if (!window.SkyReach || !card.dataset.skyWindow) return;
-    ["positionChanged", "zoomChanged", "projectionChanged", "resizeChanged"].forEach((name) =>
-      aladin.on(name, drawShade)
-    );
+    window.requestAnimationFrame(followView);
     const toggle = field("target-sky-reach-on");
     let saved = null;
     try {

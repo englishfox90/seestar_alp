@@ -613,3 +613,25 @@ def test_saving_framing_keeps_wide_targets_single_frames(rig):
     assert saved.framed and saved.camera == "main"
     bad = {**body, "mosaic_scale": "1", "camera": "infrared"}
     assert rig.client.simulate_post("/1/targets/framing", headers=FORM, body=urlencode(bad)).status_code == 400
+
+
+def test_shading_follows_the_view_every_frame():
+    """Zoomed out past the whole sky, Aladin's field stays at its limit and zoomChanged goes
+    quiet while the sky keeps shrinking, so the shading can't wait on Aladin's events."""
+    from pathlib import Path
+
+    script = (Path(__file__).parent.parent / "front/public/target_sky.js").read_text()
+    assert "aladin.on(name, drawShade)" not in script
+    assert "window.requestAnimationFrame(followView)" in script
+    assert "aladin.world2pix(ra, dec)" in script[script.index("function viewKey") :]
+
+
+def test_shading_skips_the_far_side_of_the_sky():
+    """Aladin places far-side points mirrored and far out: zoomed in, one cell from the opposite
+    side of the sky spanned the whole view and shaded sky that was well in reach."""
+    from pathlib import Path
+
+    script = (Path(__file__).parent.parent / "front/public/target_sky.js").read_text()
+    paint = script[script.index("function paintShade") : script.index("function drawShade")]
+    assert "const place = (point) => (facing(point) ?" in paint
+    assert 'aladin.getProjectionName() === "SIN"' in paint
