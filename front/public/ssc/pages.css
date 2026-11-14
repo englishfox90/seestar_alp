@@ -31,6 +31,14 @@
 .t-site__links { display: flex; flex-wrap: wrap; gap: var(--ssc-space-2) var(--ssc-space-5); margin: 0; font-size: var(--ssc-text-footnote); }
 .t-site__news { display: block; margin: 0; }
 #t-site-news:empty { display: none; }
+.t-forecast { display: flex; flex-direction: column; gap: var(--ssc-space-2); }
+.t-forecast p { margin: 0; }
+.t-forecast__headline { font-weight: var(--ssc-weight-strong); }
+.t-forecast__headline::before { content: ""; display: inline-block; width: 0.6em; height: 0.6em; margin-right: var(--ssc-space-2); border-radius: var(--ssc-radius-full); background: var(--ssc-text-3); vertical-align: 0.05em; }
+.t-forecast__headline[data-tone="ok"]::before { background: var(--ssc-green); }
+.t-forecast__headline[data-tone="attention"]::before { background: var(--ssc-orange); }
+.t-forecast__headline[data-tone="danger"]::before { background: var(--ssc-red); }
+.t-forecast__nights { display: flex; flex-wrap: wrap; gap: var(--ssc-space-1) var(--ssc-space-4); margin: 0; padding: 0; list-style: none; font-size: var(--ssc-text-footnote); color: var(--ssc-text-2); }
 
 /* Each image says when it's from, so a clock for the page only speaks up once it stops. */
 .t-updated[data-tone="neutral"] {

@@ -341,6 +341,7 @@ Minimum touch target is 44 everywhere, including small buttons on touch.
 | Text and state change | 160ms fade |
 | Sheet in / out | 240ms / 180ms |
 | New image cross-fade | 600ms |
+| Tonight's sky intro, once per page load | 400–1000ms ride to now (in-out, scaled by how far now is), then 300–700ms for the rest of the night (ease-out) |
 
 Use `ease-out`. No loops, including `dash-pulse`, which `AGENTS.md`'s rule on unbounded animations already discourages. `prefers-reduced-motion` and Red use instant changes, except sheets at 100ms.
 

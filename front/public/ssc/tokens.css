@@ -168,6 +168,11 @@
     /* Pressed: scale reads on black where a fade of a dark tint does not. */
     --ssc-press-scale: 0.98;
     --ssc-ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+    --ssc-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    /* The sky chart's one-time intro: the night drawn up to now. */
+    --ssc-motion-sky: 1000ms;
+    --ssc-motion-sky-rest: 700ms;
+    --ssc-sky-height: 136px;
 }
 
 @media (min-width: 768px) {
@@ -177,6 +182,7 @@
         --ssc-text-input: 0.9375rem;
         --ssc-gutter: var(--ssc-space-6);
         --ssc-night-height: 12px;
+        --ssc-sky-height: 180px;
     }
 }
 
@@ -195,6 +201,8 @@
     --ssc-motion-expand: 0ms;
     --ssc-motion-menu: 0ms;
     --ssc-motion-image: 0ms;
+    --ssc-motion-sky: 0ms;
+    --ssc-motion-sky-rest: 0ms;
     --ssc-text-body: 1rem;
     --ssc-text-footnote: 0.9375rem;
     --ssc-text-caption: 0.8125rem;
@@ -209,6 +217,8 @@
         --ssc-motion-expand: 0ms;
         --ssc-motion-menu: 100ms;
         --ssc-motion-image: 0ms;
+        --ssc-motion-sky: 0ms;
+        --ssc-motion-sky-rest: 0ms;
         --ssc-press-scale: 1;
     }
 }

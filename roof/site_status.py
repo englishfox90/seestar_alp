@@ -61,6 +61,11 @@ class _Feed:
                     self.ok = False
             return self._data
 
+    def peek(self):
+        """The last answer without fetching, for a page that polls every few seconds."""
+        with self._lock:
+            return self._data
+
 
 _roof_feed = _Feed(ROOF_STATE_URL)
 _news_feed = _Feed(ANNOUNCEMENTS_URL)
@@ -84,6 +89,25 @@ def building_roof(rows, number, clock, now) -> dict | None:
                 "stale": updated is None or now - updated > STALE_AFTER_S,
             }
     return None
+
+
+def street(rows, number, clock, now) -> list:
+    """This building and its two nearest neighbours in the feed, in number order, each
+    with its roof as the feed reports it: ours is in the middle unless it's at an end."""
+    numbers = sorted(
+        {row["device_number"] for row in rows or () if isinstance(row, dict) and isinstance(row.get("device_number"), int)}
+    )
+    below = [n for n in numbers if n < number]
+    above = [n for n in numbers if n > number]
+    if below and above:
+        picked = [below[-1], number, above[0]]
+    else:
+        picked = sorted([number] + (below[-2:] if below else above[:2]))
+    out = []
+    for n in picked:
+        roof = building_roof(rows, n, clock, now) or {"name": f"Building {n}", "open": None, "stale": True}
+        out.append({"number": n, "name": roof["name"], "open": None if roof["stale"] else roof["open"], "ours": n == number})
+    return out
 
 
 def news_items(rows, clock) -> list:

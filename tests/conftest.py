@@ -33,3 +33,17 @@ def _keep_roof_automation_off_live_state(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(Config, "path_to_dat", str(base / "config.toml"))
     monkeypatch.setattr(automation, "_instance", None)
     monkeypatch.setattr(automation, "_target_queue", None, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _keep_roof_forecast_offline(monkeypatch):
+    """No test fetches the Clear Sky Chart or Open-Meteo: Tonight and site.json ask
+    roof.forecast for the outlook, which would otherwise go to the network."""
+    from roof import forecast
+
+    def offline(*args, **kwargs):
+        raise OSError("tests stay offline")
+
+    monkeypatch.setattr(forecast, "_csc", forecast._Source(offline))
+    monkeypatch.setattr(forecast, "_meteo", forecast._Source(offline))
+    monkeypatch.setattr(forecast, "_memo", {"key": None, "value": None})

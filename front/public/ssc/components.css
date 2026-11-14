@@ -311,6 +311,205 @@ li:last-child > .ssc-menu__item { border-bottom: 0; }
 @starting-style {
     .ssc-sheet[open]::backdrop { opacity: 0; }
 }
+/* Sky chart: sun and moon altitude, the roof's lane above it, the site on the horizon. */
+.ssc-sky { margin: 0; padding-top: var(--ssc-space-7); }
+.ssc-sky__plot { position: relative; height: var(--ssc-sky-height); }
+.ssc-sky__sweep { position: absolute; inset: 0; }
+.ssc-sky__svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.ssc-sky__dark { fill: var(--ssc-fill-1); }
+.ssc-sky__grid { stroke: var(--ssc-separator); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.ssc-sky__horizon { position: absolute; left: 0; right: 0; top: var(--horizon); height: 1px; background: var(--ssc-text-2); }
+.ssc-sky__curve { fill: none; stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.ssc-sky__curve[data-body="sun"] { stroke: var(--ssc-orange); }
+.ssc-sky__curve[data-body="moon"] { stroke: var(--ssc-text-1); }
+.ssc-sky__curve[data-below] { stroke-width: 1; stroke-dasharray: 3 4; opacity: 0.45; }
+
+/* The roof's lane, above the plot. Record before now is solid; forecast after it is
+   hollow or hatched, so the states read without colour (Red makes them one hue). */
+.ssc-sky__roof { position: absolute; left: 0; right: 0; bottom: 100%; height: var(--ssc-night-height); }
+.ssc-sky__roofspan {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--start);
+    width: calc(var(--end) - var(--start));
+}
+.ssc-sky__roofspan[data-state="open"] { background: var(--ssc-green); }
+.ssc-sky__roofspan[data-state="closed"] {
+    background-color: var(--ssc-canvas);
+    background-image: repeating-linear-gradient(45deg, var(--ssc-red) 0 1.5px, transparent 1.5px 4px);
+}
+.ssc-sky__roofspan[data-state="unknown"] { border-block: 1px dashed var(--ssc-text-3); }
+.ssc-sky__roofspan[data-state="fc-open"] { border-block: 2px solid var(--ssc-green); }
+.ssc-sky__roofspan[data-state="fc-maybe"] { border-block: 2px dotted var(--ssc-orange); }
+.ssc-sky__roofspan[data-state="fc-closed"] { background: repeating-linear-gradient(45deg, var(--ssc-red) 0 1.5px, transparent 1.5px 6px); }
+.ssc-sky__rooflabel {
+    position: absolute;
+    left: 0;
+    bottom: 100%;
+    margin-bottom: var(--ssc-space-1);
+    display: none;
+    color: var(--ssc-text-2);
+    font-size: var(--ssc-text-caption);
+    white-space: nowrap;
+}
+.ssc-sky__rooflabel[data-tier="1"] { display: block; }
+
+.ssc-sky__now {
+    position: absolute;
+    top: calc(-1 * var(--ssc-night-height));
+    bottom: 0;
+    left: var(--at);
+    width: 2px;
+    transform: translateX(-50%);
+    background: var(--ssc-text-1);
+}
+
+/* Rise and set: a half disc on the horizon, its time under it. Sun on the first row,
+   moon on the second; phones show the time alone. */
+.ssc-sky__rs { position: absolute; left: var(--at); top: var(--horizon); }
+.ssc-sky__rsdisc {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 14px;
+    height: 7px;
+    transform: translateX(-50%);
+    border-radius: var(--ssc-radius-round) var(--ssc-radius-round) 0 0;
+}
+.ssc-sky__rs[data-body="sun"] .ssc-sky__rsdisc { background: var(--ssc-orange); }
+.ssc-sky__rs[data-body="moon"] .ssc-sky__rsdisc { background: var(--ssc-text-1); }
+.ssc-sky__rstext {
+    position: absolute;
+    top: var(--ssc-space-2);
+    left: 0;
+    transform: translateX(-50%);
+    color: var(--ssc-text-2);
+    font-size: var(--ssc-text-caption);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.ssc-sky__rs[data-body="moon"] .ssc-sky__rstext { top: calc(var(--ssc-space-2) + 1.3em); }
+.ssc-sky__rs[data-edge="start"] .ssc-sky__rstext { transform: translateX(-8px); }
+.ssc-sky__rs[data-edge="end"] .ssc-sky__rstext { transform: translateX(calc(-100% + 8px)); }
+.ssc-sky__rsword { display: none; }
+
+.ssc-sky__body {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    width: 16px;
+    height: 16px;
+}
+.ssc-sky__body[data-body="moon"] { width: 20px; height: 20px; }
+/* Centred on its point by the svg, which leaves the body's transform to the intro. */
+.ssc-sky__body svg { display: block; width: 100%; height: 100%; transform: translate(-50%, -50%); }
+.ssc-sky__body[data-body="sun"] .ssc-sky__lit { fill: var(--ssc-orange); }
+.ssc-sky__lit { fill: var(--ssc-text-1); }
+.ssc-sky__shade { fill: var(--ssc-canvas); stroke: var(--ssc-text-3); stroke-width: 1; }
+.ssc-sky__body[data-up="0"] { opacity: 0.45; }
+.ssc-sky__body[data-gone] { opacity: 0; }
+.ssc-sky__phase { position: absolute; left: var(--x); top: var(--y); }
+.ssc-sky__phasedisc { position: absolute; width: 20px; height: 20px; transform: translate(-50%, -50%); }
+.ssc-sky__phasedisc svg { display: block; width: 100%; height: 100%; }
+
+/* The site on the horizon: our building between its neighbours, all with our roof's
+   state. Closed sits flush, one sealed block; open rolls half off onto a rail. Only our
+   open roof is green, and unknown is drawn hollow. */
+.ssc-sky__obs {
+    position: absolute;
+    left: var(--at);
+    top: var(--horizon);
+    display: flex;
+    align-items: flex-end;
+    /* Wider than an open roof's overhang (half a building), so a rolled-off roof never
+       meets the next building: 13px into 16px on phones, 17px into 24px wider. */
+    gap: var(--ssc-space-5);
+    transform: translate(-50%, -100%);
+}
+.ssc-sky__bldg { position: relative; display: flex; flex-direction: column; gap: 0; width: 20px; }
+.ssc-sky__bldg[data-ours] { width: 26px; }
+.ssc-sky__bldgwall { height: 11px; background: var(--ssc-text-3); }
+.ssc-sky__bldg[data-ours] .ssc-sky__bldgwall {
+    height: 14px;
+    background: linear-gradient(var(--ssc-canvas) 0 0) 50% 100% / 5px 8px no-repeat, var(--ssc-text-1);
+}
+.ssc-sky__bldgroof {
+    height: 4px;
+    border-radius: var(--ssc-radius-bar) var(--ssc-radius-bar) 0 0;
+    background: var(--ssc-text-3);
+    transition: transform var(--ssc-motion-sheet) var(--ssc-ease-out);
+}
+.ssc-sky__bldg[data-ours] .ssc-sky__bldgroof { background: var(--ssc-text-1); }
+.ssc-sky__bldg[data-open="1"] .ssc-sky__bldgroof { transform: translateX(50%); }
+.ssc-sky__bldg[data-ours][data-open="1"] .ssc-sky__bldgroof { background: var(--ssc-green); }
+.ssc-sky__bldg[data-open="1"]::after {
+    content: "";
+    position: absolute;
+    left: 100%;
+    top: 4px;
+    width: 50%;
+    height: 1px;
+    background: var(--ssc-text-3);
+}
+.ssc-sky__bldg[data-open=""] .ssc-sky__bldgwall { background: none; border: 1px dashed var(--ssc-text-3); }
+.ssc-sky__bldg[data-open=""] .ssc-sky__bldgroof { height: 1px; background: var(--ssc-text-3); }
+.ssc-sky__bldg[data-ours][data-open=""] .ssc-sky__bldgwall { border-color: var(--ssc-text-1); }
+.ssc-sky__bldg[data-ours][data-open=""] .ssc-sky__bldgroof { background: var(--ssc-text-1); }
+
+.ssc-sky__ticks { position: relative; height: 1.4em; color: var(--ssc-text-3); font-size: var(--ssc-text-caption); }
+.ssc-sky__ticks span { position: absolute; left: var(--at); transform: translateX(-50%); }
+
+/* Under the sky, the Night Line becomes its plan lane on the same time axis. */
+.ssc-night[data-under-sky] .ssc-night__track,
+.ssc-night[data-under-sky] .ssc-night__labels { margin-inline: var(--ssc-night-l) var(--ssc-night-r); }
+.ssc-night[data-under-sky] .ssc-night__ends { display: none; }
+
+.ssc-sky__legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ssc-space-2) var(--ssc-space-5);
+    margin-top: var(--ssc-space-3);
+    color: var(--ssc-text-2);
+    font-size: var(--ssc-text-footnote);
+}
+.ssc-sky__key::before {
+    content: "";
+    display: inline-block;
+    width: 14px;
+    height: 2px;
+    margin-right: var(--ssc-space-2);
+    vertical-align: 0.3em;
+}
+.ssc-sky__key[data-key="sun"]::before { background: var(--ssc-orange); }
+.ssc-sky__key[data-key="moon"]::before { background: var(--ssc-text-1); }
+.ssc-sky__roofnow { color: var(--ssc-text-1); }
+.ssc-sky__roofnow::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: var(--ssc-space-2);
+    border-radius: var(--ssc-radius-full);
+    background: var(--ssc-red);
+}
+.ssc-sky__roofnow[data-open="1"]::before { background: var(--ssc-green); }
+
+@media (min-width: 768px) {
+    .ssc-sky__rooflabel[data-tier="2"] { display: block; }
+    .ssc-sky__rsword { display: inline; }
+    .ssc-sky__obs { gap: var(--ssc-space-6); }
+    .ssc-sky__bldg { width: 26px; }
+    .ssc-sky__bldg[data-ours] { width: 34px; }
+    .ssc-sky__bldgwall { height: 14px; }
+    .ssc-sky__bldg[data-ours] .ssc-sky__bldgwall { height: 18px; background-size: 5px 10px, auto; }
+}
+
+/* Until tonight.js plays the intro, and never more than a moment if it can't. */
+#t-night[data-intro] .ssc-sky__plot { animation: ssc-sky-wait 1ms 1500ms backwards; }
+@keyframes ssc-sky-wait { from { opacity: 0; } }
+
 @media (prefers-reduced-motion: reduce) {
     .ssc-sheet, .ssc-sheet[open] { transform: none; }
     @starting-style { .ssc-sheet[open] { transform: none; } }

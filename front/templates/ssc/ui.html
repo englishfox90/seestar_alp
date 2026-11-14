@@ -96,8 +96,8 @@
 </div>
 {%- endmacro %}
 
-{% macro night_line(data) -%}
-<div class="ssc-night" role="img" aria-label="{{ data.label|e }}">
+{% macro night_line(data, sky=none) -%}
+<div class="ssc-night" role="img" aria-label="{{ data.label|e }}"{% if sky and sky.available %} data-under-sky style="--ssc-night-l: {{ sky.sunset }}%; --ssc-night-r: {{ (100 - sky.sunrise)|round(2) }}%"{% endif %}>
 {% if data.available %}
   <div class="ssc-night__track">
     {% if data.dark %}<span class="ssc-night__dark" style="--start: {{ data.dark.start }}%; --end: {{ data.dark.end }}%"></span>{% endif %}
@@ -118,6 +118,78 @@
   <p class="ssc-footnote">{{ data.label|e }}</p>
 {% endif %}
 </div>
+{%- endmacro %}
+
+{# Sun and moon altitude over the night, with the roof's record and forecast along the top.
+   Curves are SVG stretched to the width; everything else is HTML at the same percentages. #}
+{# A moon disc showing its phase: the dark disc with the lit part drawn over it, its
+   terminator an ellipse. Waxing is lit on the right as seen from the north. #}
+{% macro moon_disc(lit, waxing) -%}
+{%- set rx = (6 * (1 - 2 * lit / 100)|abs)|round(2) -%}
+<svg viewBox="-8 -8 16 16" aria-hidden="true"><circle class="ssc-sky__shade" r="6"/><path class="ssc-sky__lit" d="M0-6A6 6 0 0 1 0 6A{{ rx }} 6 0 0 {{ 0 if lit < 50 else 1 }} 0-6Z"{% if not waxing %} transform="scale(-1 1)"{% endif %}/></svg>
+{%- endmacro %}
+
+{# Sun and moon altitude over the night, the roof's lane above it, and the site's
+   buildings on the horizon. Curves are SVG stretched to the width; everything else is
+   HTML at the same percentages. #}
+{% macro sky_chart(data) -%}
+{% if data and data.available %}
+{%- set moon_now = data.bodies|selectattr("name", "equalto", "moon")|first -%}
+<figure class="ssc-sky" role="img" aria-label="{{ data.label|e }}" data-now="{{ data.now if data.now is not none else '' }}" style="--horizon: {{ data.view.horizon / data.view.h * 100 }}%">
+  <div class="ssc-sky__plot">
+    <div class="ssc-sky__sweep">
+      <div class="ssc-sky__roof">{% for span in data.roof %}<span class="ssc-sky__roofspan" data-state="{{ span.state }}" style="--start: {{ span.start }}%; --end: {{ span.end }}%">{% if span.label %}<span class="ssc-sky__rooflabel" data-tier="{{ span.tier }}">{{ span.label|e }}</span>{% endif %}</span>{% endfor %}</div>
+      <svg class="ssc-sky__svg" viewBox="0 0 {{ data.view.w }} {{ data.view.h }}" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <clipPath id="ssc-sky-up"><rect x="0" y="0" width="{{ data.view.w }}" height="{{ data.view.horizon }}"/></clipPath>
+          <clipPath id="ssc-sky-down"><rect x="0" y="{{ data.view.horizon }}" width="{{ data.view.w }}" height="{{ data.view.h - data.view.horizon }}"/></clipPath>
+        </defs>
+        {% if data.dark %}<rect class="ssc-sky__dark" x="{{ data.dark.x }}" y="0" width="{{ data.dark.w }}" height="{{ data.view.h }}"/>{% endif %}
+        {% for x in data.grid %}<line class="ssc-sky__grid" x1="{{ x }}" x2="{{ x }}" y1="0" y2="{{ data.view.h }}"/>{% endfor %}
+        {% for body, d in (("moon", data.moon_path), ("sun", data.sun_path)) %}
+        <path class="ssc-sky__curve" data-body="{{ body }}" d="{{ d }}" clip-path="url(#ssc-sky-up)"/>
+        <path class="ssc-sky__curve" data-body="{{ body }}" data-below="1" d="{{ d }}" clip-path="url(#ssc-sky-down)"/>
+        {% endfor %}
+      </svg>
+      {#- The phase on the arc only while the moon isn't up now; up, its marker shows it. #}
+      {% if data.phase and not (moon_now and moon_now.up) %}
+      <span class="ssc-sky__phase" style="--x: {{ data.phase.x }}%; --y: {{ data.phase.y }}%"><span class="ssc-sky__phasedisc">{{ moon_disc(data.phase.lit, data.phase.shadow <= 0) }}</span></span>
+      {% endif %}
+    </div>
+    <span class="ssc-sky__horizon"></span>
+    <span class="ssc-sky__obs" style="--at: {{ data.middle }}%" aria-hidden="true">
+      {% for b in data.buildings %}
+      <span class="ssc-sky__bldg" data-open="{% if b.open %}1{% elif b.open is sameas false %}0{% endif %}"{% if b.ours %} data-ours{% endif %}>
+        <span class="ssc-sky__bldgroof"></span><span class="ssc-sky__bldgwall"></span>
+      </span>
+      {% endfor %}
+    </span>
+    {% for event in data.horizon_events %}
+    <span class="ssc-sky__rs" data-body="{{ event.body }}" data-kind="{{ event.kind }}"{% if event.edge %} data-edge="{{ event.edge }}"{% endif %} style="--at: {{ event.at }}%">
+      <span class="ssc-sky__rsdisc"></span><span class="ssc-sky__rstext"><span class="ssc-sky__rsword">{{ event.word|e }} </span>{{ event.time|e }}</span>
+    </span>
+    {% endfor %}
+    {% if data.now is not none %}<span class="ssc-sky__now" style="--at: {{ data.now }}%"></span>{% endif %}
+    {% for body in data.bodies %}
+    <span class="ssc-sky__body" data-body="{{ body.name }}" data-up="{{ 1 if body.up else 0 }}"{% if body.gone %} data-gone{% endif %} style="--x: {{ body.x }}%; --y: {{ body.y }}%">
+      {% if body.name == "moon" %}{{ moon_disc(body.lit, body.waxing) }}{% else %}<svg viewBox="-8 -8 16 16" aria-hidden="true"><circle class="ssc-sky__lit" r="6"/></svg>{% endif %}
+    </span>
+    {% endfor %}
+  </div>
+  <div class="ssc-sky__ticks" aria-hidden="true">{% for tick in data.ticks %}<span style="--at: {{ tick.at }}%">{{ tick.text }}</span>{% endfor %}</div>
+</figure>
+{% endif %}
+{%- endmacro %}
+
+{# Under the Night Line, so the plan lane sits right under the axis it shares. #}
+{% macro sky_legend(data) -%}
+{% if data and data.available %}
+<div class="ssc-sky__legend" aria-hidden="true">
+  {% if data.roof_now is not none %}<span class="ssc-sky__roofnow" data-open="{{ 1 if data.roof_now else 0 }}">{% if data.buildings[0].label %}Building {{ (data.buildings|selectattr("ours")|first).label|e }} roof{% else %}Roof{% endif %} {{ "open" if data.roof_now else "closed" }} now</span>{% endif %}
+  <span class="ssc-sky__key" data-key="sun">Sun</span>
+  <span class="ssc-sky__key" data-key="moon">Moon · {{ data.moon_name|e }} {{ data.moon_lit }}%</span>
+</div>
+{% endif %}
 {%- endmacro %}
 
 {# A native dialog. It sits outside polled regions, so a poll can't close it. #}

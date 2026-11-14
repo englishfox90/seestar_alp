@@ -10,7 +10,7 @@ import time
 import falcon
 
 from roof import config as roof_config
-from roof import dashboard, site_status
+from roof import dashboard, forecast, site_status
 from roof.automation import get_automation, night_history, session_log, target_queue
 from roof.sessions import _PANEL_SUFFIX, base_name, counts
 from roof.sun import night_key
@@ -124,9 +124,12 @@ class DashboardSite:
 
     @staticmethod
     def on_get(req, resp, telescope_id=1):
-        data = site_status.site_data(
-            roof_config.load(), get_automation().status().get("safe"), dashboard.site_clock
-        )
+        settings = roof_config.load()
+        data = site_status.site_data(settings, get_automation().status().get("safe"), dashboard.site_clock)
+        try:
+            data["forecast"] = forecast.latest(settings, dashboard.site_clock, dashboard._front().site_timezone())
+        except Exception as e:
+            data["forecast"] = {"pending": False, "nights": [], "sources": [f"Forecast failed: {e}"]}
         resp.content_type = "application/json"
         resp.set_header("Cache-Control", "no-store")
         resp.text = json.dumps(data)

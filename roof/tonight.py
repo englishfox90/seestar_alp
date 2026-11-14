@@ -17,7 +17,7 @@ import falcon
 import pydash
 
 from roof import config as roof_config
-from roof import dashboard, focus, night_web, planner, schedule_tools, site_status
+from roof import dashboard, focus, forecast, night_web, planner, schedule_tools, site_status, sky_chart
 from roof.sessions import base_name
 from roof.sun import night_key
 
@@ -764,7 +764,34 @@ def _roof_record(plan, settings, now) -> dict:
         except Exception:
             pass
     sunset = (plan.get("window") or {}).get("sunset")
-    return {"closed": [], "unknown": [{"start": sunset, "end": now}] if sunset is not None else []}
+    # From before the roof's window opens, which the sky chart shows and the Night Line clips.
+    return {"closed": [], "unknown": [{"start": sunset - 3600, "end": now}] if sunset is not None else []}
+
+
+def _outlook(plan, settings, now):
+    """The roof forecast for the night shown, or None. Never waits on the network."""
+    try:
+        found = forecast.latest(settings, dashboard.site_clock, dashboard._front().site_timezone(), now)
+    except Exception:
+        return None
+    for night in (found or {}).get("nights") or ():
+        if night["night"] == plan.get("night"):
+            return night
+    return None
+
+
+def _sky(plan, settings, now, clock, record, status) -> dict:
+    """Sun, moon and roof over the night shown. Missing, the page leaves it out.
+    The buildings' roofs are Starfront's feed as site.json last fetched it."""
+    try:
+        street = None
+        if settings.site_building:
+            street = site_status.street(site_status._roof_feed.peek(), settings.site_building, clock, now)
+        return sky_chart.sky_chart(
+            plan["window"], settings.lat, settings.lon, now, clock, record, _outlook(plan, settings, now), status.get("safe"), street
+        )
+    except Exception:
+        return {"available": False}
 
 
 def gather_plan(status, settings, now, clock) -> dict:
@@ -843,12 +870,14 @@ def build(telescope_id) -> dict:
         stop_requested_at=_stop_requested_at,
         here=here,
     )
+    record = _roof_record(plan, settings, now)
     return {
         "state": state,
         "status": status,
         "roof_lines": roof_status(status),
         "site": site_status.links(settings) if settings.site_building else None,
-        "line": night_line(plan["window"], plan["blocks"], now, clock, _roof_record(plan, settings, now)),
+        "line": night_line(plan["window"], plan["blocks"], now, clock, record),
+        "sky": _sky(plan, settings, now, clock, record, status),
         "plan": plan,
         "steps": dashboard.tracker_steps(status, events)["steps"] if state["steps"] else [],
         "details": details_rows(status, stack, events, clock),

@@ -634,6 +634,7 @@
     const warning = document.getElementById("t-site-warning");
     warning.hidden = !site.disagree;
     warning.textContent = site.disagree ? "Sentinel reads the roof safe, but the building reports it closed." : "";
+    showForecast(site.forecast);
     // Text from another service: only ever set as text.
     const news = document.getElementById("t-site-news");
     news.replaceChildren(
@@ -651,6 +652,50 @@
     );
   }
 
+  // Roof forecast from roof/forecast.py: tonight in a line, then the next nights.
+  function showForecast(fc) {
+    const box = document.getElementById("t-forecast");
+    if (!box) return;
+    const line = (cls, text) => {
+      const p = document.createElement("p");
+      p.className = cls;
+      p.textContent = text;
+      return p;
+    };
+    if (!fc) {
+      box.replaceChildren(line("ssc-footnote", "No roof forecast: no site location is set."));
+      return;
+    }
+    if (fc.pending) {
+      box.replaceChildren(line("ssc-footnote", ["Working out the roof forecast…", ...(fc.sources || [])].join(" ")));
+      return;
+    }
+    const nights = fc.nights || [];
+    const parts = [];
+    const first = nights[0];
+    if (first) {
+      const head = line("t-forecast__headline", `${first.label}: ${first.headline}`);
+      head.dataset.tone = first.tone;
+      parts.push(head);
+      const detail = [first.detail, first.dew].filter(Boolean).join(" ");
+      if (detail) parts.push(line("", detail));
+    }
+    if (nights.length > 1) {
+      const list = document.createElement("ul");
+      list.className = "t-forecast__nights";
+      nights.slice(1).forEach(function (n) {
+        const item = document.createElement("li");
+        item.textContent = `${n.label}: ${n.headline.replace(/^Roof /, "")}`;
+        item.title = n.detail || "";
+        list.append(item);
+      });
+      parts.push(list);
+    }
+    const notes = ["From ClearDarkSky and Open-Meteo; a model, not the roof monitor.", ...(fc.sources || [])];
+    parts.push(line("ssc-footnote", notes.join(" ")));
+    box.replaceChildren(...parts);
+  }
+
   const chart = document.getElementById("t-site-chart");
   if (chart) {
     chart.addEventListener("error", () => chart.closest("a").setAttribute("hidden", ""));
@@ -659,6 +704,85 @@
       if (!document.hidden) chart.src = chart.src.replace(/&t=\d+/, "") + "&t=" + Date.now();
     }, 900000);
   }
+  // The sky chart's intro, once per page load. Two phases: the sun and moon ride their
+  // curves to now (in-out, longer the further now is into the night), then the rest of
+  // the night, the forecast, unrolls (ease-out). Labels left of now arrive with the
+  // ride, the rest with the unroll, and open roofs roll off last, ours first. Polls
+  // replace the chart's contents every few seconds, so only these first elements ever
+  // animate. Red and reduced motion set both times to 0.
+  (function skyIntro() {
+    const night = document.getElementById("t-night");
+    if (!night || !night.hasAttribute("data-intro")) return;
+    const sky = night.querySelector(".ssc-sky");
+    const css = getComputedStyle(document.documentElement);
+    const ms = (name) => parseFloat(css.getPropertyValue(name)) || 0;
+    const duration = ms("--ssc-motion-sky");
+    const rest = ms("--ssc-motion-sky-rest");
+    const fade = ms("--ssc-motion-fade") || 160;
+    const slide = ms("--ssc-motion-sheet");
+    const ease = css.getPropertyValue("--ssc-ease-out").trim() || "ease-out";
+    const ride = "cubic-bezier(0.45, 0, 0.55, 1)";
+    night.removeAttribute("data-intro");
+    if (!sky || !duration || typeof sky.animate !== "function") return;
+
+    const svg = sky.querySelector(".ssc-sky__svg");
+    const plot = sky.querySelector(".ssc-sky__plot");
+    const view = svg.viewBox.baseVal;
+    const box = plot.getBoundingClientRect();
+    const nowPct = parseFloat(sky.dataset.now);
+    const hasNow = nowPct > 0;
+    const share = hasNow ? nowPct / 100 : 0;
+    const d1 = hasNow ? duration * (0.4 + 0.6 * share) : 0;
+    const d2 = rest * (0.45 + 0.55 * (1 - share));
+    const total = d1 + d2;
+    const toNow = total ? d1 / total : 0;
+
+    // The top inset leaves room for the roof lane and its labels above the plot.
+    const reveal = [{ clipPath: "inset(-3em 100% 0 0)", easing: hasNow ? ride : ease }];
+    if (hasNow) reveal.push({ offset: toNow, clipPath: `inset(-3em ${100 - nowPct}% 0 0)`, easing: ease });
+    reveal.push({ clipPath: "inset(-3em 0% 0 0)" });
+    sky.querySelector(".ssc-sky__sweep").animate(reveal, { duration: total, fill: "backwards" });
+
+    // Each body follows its curve's points over the ride, in step with the reveal's
+    // first phase: same duration and curve, offsets linear in x as the reveal is.
+    if (hasNow) {
+      const nowX = (nowPct / 100) * view.width;
+      sky.querySelectorAll(".ssc-sky__body").forEach(function (body) {
+        const curve = sky.querySelector(`.ssc-sky__curve[data-body="${body.dataset.body}"]`);
+        if (!curve) return;
+        const nowY = (parseFloat(body.style.getPropertyValue("--y")) / 100) * view.height;
+        const shift = (x, y) =>
+          `translate(${((x - nowX) / view.width) * box.width}px, ${((y - nowY) / view.height) * box.height}px)`;
+        const frames = curve
+          .getAttribute("d")
+          .slice(1)
+          .split(" L")
+          .map((pair) => pair.split(",").map(Number))
+          .filter(([x]) => x < nowX)
+          .map(([x, y]) => ({ offset: x / nowX, transform: shift(x, y), opacity: 1 }));
+        // Below the floor by now: it rides down to it and fades there.
+        const end = body.hasAttribute("data-gone") ? 0 : getComputedStyle(body).opacity;
+        frames.push({ offset: 1, transform: "translate(0px, 0px)", opacity: end });
+        body.animate(frames, { duration: d1, easing: ride, fill: "backwards" });
+      });
+    }
+
+    sky.querySelectorAll(".ssc-sky__now, .ssc-sky__rs").forEach(function (el, i) {
+      const at = parseFloat(el.style.getPropertyValue("--at"));
+      const delay = (hasNow && at <= nowPct ? d1 : total) + i * 60;
+      el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: fade, delay: delay, easing: ease, fill: "backwards" });
+    });
+    if (slide) {
+      const open = Array.from(sky.querySelectorAll('.ssc-sky__bldg[data-open="1"]'));
+      open.sort((a, b) => b.hasAttribute("data-ours") - a.hasAttribute("data-ours"));
+      open.forEach(function (bldg, i) {
+        const roof = bldg.querySelector(".ssc-sky__bldgroof");
+        const opening = { duration: slide, delay: total + 80 + i * 60, easing: ease, fill: "backwards" };
+        roof.animate([{ transform: "translateX(0)" }, { transform: getComputedStyle(roof).transform }], opening);
+      });
+    }
+  })();
+
   pollSite();
   setInterval(pollSite, 60000);
   setInterval(pollStack, 15000);
