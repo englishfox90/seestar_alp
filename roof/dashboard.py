@@ -193,6 +193,9 @@ def target_list_plan(status, session, targets, log, settings, now, altitude=None
                 "start": block["start"],
                 "end": block["end"],
                 "goal": goal_text(target, log) if target else None,
+                # For the sky chart's altitude arcs.
+                "ra": block.get("ra"),
+                "dec": block.get("dec"),
             }
         )
     return {

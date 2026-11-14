@@ -59,7 +59,7 @@
     </div>
   </div>
 
-  <section id="t-night" class="t-night no-htmx-fx" aria-label="Night Line" data-intro>{{ ui.sky_chart(sky) }}{{ ui.night_line(line, sky) }}{{ ui.sky_legend(sky) }}</section>
+  <section id="t-night" class="t-night no-htmx-fx" aria-label="Night Line. Use the arrow keys to step through the night." tabindex="0" data-intro>{{ ui.sky_chart(sky) }}{{ ui.night_line(line, sky) }}{{ ui.sky_legend(sky) }}</section>
 
   {% if site %}
   <section class="t-site" id="t-site" aria-label="Forecast and site status">

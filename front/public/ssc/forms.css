@@ -33,6 +33,19 @@
     font-size: var(--ssc-text-input);
     font-variant-numeric: tabular-nums;
 }
+/* Safari draws a native select at its own height, whatever min-height says, so a
+   select drops the native look and draws its chevron: two triangles meeting. */
+select.ssc-input {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: var(--ssc-space-7);
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--ssc-text-2) 50%),
+        linear-gradient(135deg, var(--ssc-text-2) 50%, transparent 50%);
+    background-position: calc(100% - 19px) 55%, calc(100% - 14px) 55%;
+    background-size: 5px 5px;
+    background-repeat: no-repeat;
+}
 .ssc-input:focus-visible { outline: var(--ssc-space-1) solid var(--ssc-accent); outline-offset: 0; }
 .ssc-field[data-tone="danger"] .ssc-input { outline: var(--ssc-space-1) solid var(--ssc-red); }
 .ssc-input:disabled { opacity: 0.6; }

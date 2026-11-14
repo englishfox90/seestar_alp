@@ -564,7 +564,7 @@ def night_line(window, blocks=(), now=None, clock=_plain_clock, roof=None) -> di
     drawn = []
     phone_labels = 0
     labelled_to = None
-    for block in blocks:
+    for index, block in enumerate(blocks):
         if block.get("start") is None or block.get("end") is None:
             continue
         start, end = percent(block["start"]), percent(block["end"])
@@ -581,7 +581,7 @@ def night_line(window, blocks=(), now=None, clock=_plain_clock, roof=None) -> di
             phone_labels += 1
             if phone_labels > MAX_PHONE_LABELS:
                 tier = 2
-        drawn.append({"name": block["name"], "start": start, "end": end, "state": state, "tier": tier})
+        drawn.append({"index": index, "name": block["name"], "start": start, "end": end, "state": state, "tier": tier})
         word = {"done": "passed", "now": "now", "next": "next"}[state]
         words.append(f"{block['name']} {clock(block['start'])} to {clock(block['end'])}, {word}.")
 
@@ -788,7 +788,8 @@ def _sky(plan, settings, now, clock, record, status) -> dict:
         if settings.site_building:
             street = site_status.street(site_status._roof_feed.peek(), settings.site_building, clock, now)
         return sky_chart.sky_chart(
-            plan["window"], settings.lat, settings.lon, now, clock, record, _outlook(plan, settings, now), status.get("safe"), street
+            plan["window"], settings.lat, settings.lon, now, clock, record, _outlook(plan, settings, now), status.get("safe"), street,
+            plan.get("blocks"),
         )
     except Exception:
         return {"available": False}

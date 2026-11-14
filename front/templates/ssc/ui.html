@@ -102,7 +102,7 @@
   <div class="ssc-night__track">
     {% if data.dark %}<span class="ssc-night__dark" style="--start: {{ data.dark.start }}%; --end: {{ data.dark.end }}%"></span>{% endif %}
     {% for span in data.unknown %}<span class="ssc-night__unknown" style="--start: {{ span.start }}%; --end: {{ span.end }}%"></span>{% endfor %}
-    {% for block in data.blocks %}<span class="ssc-night__block" data-state="{{ block.state }}" style="--start: {{ block.start }}%; --end: {{ block.end }}%"></span>{% endfor %}
+    {% for block in data.blocks %}<span class="ssc-night__block" data-state="{{ block.state }}" data-target="{{ block.index }}" style="--start: {{ block.start }}%; --end: {{ block.end }}%"></span>{% endfor %}
     {% for span in data.closed %}<span class="ssc-night__closed" style="--start: {{ span.start }}%; --end: {{ span.end }}%"></span>{% endfor %}
     {% if data.now is not none %}<span class="ssc-night__now" style="--at: {{ data.now }}%"></span>{% endif %}
   </div>
@@ -150,6 +150,8 @@
         <path class="ssc-sky__curve" data-body="{{ body }}" d="{{ d }}" clip-path="url(#ssc-sky-up)"/>
         <path class="ssc-sky__curve" data-body="{{ body }}" data-below="1" d="{{ d }}" clip-path="url(#ssc-sky-down)"/>
         {% endfor %}
+        {#- A target's altitude over its block, drawn while the hover is on it. #}
+        {% for t in data.target_paths %}<path class="ssc-sky__target" data-target="{{ t.index }}" d="{{ t.d }}" clip-path="url(#ssc-sky-up)"/>{% endfor %}
       </svg>
       {#- The phase on the arc only while the moon isn't up now; up, its marker shows it. #}
       {% if data.phase and not (moon_now and moon_now.up) %}
@@ -176,6 +178,7 @@
     </span>
     {% endfor %}
   </div>
+  {% if data.hover %}<script type="application/json" class="ssc-sky__data">{{ data.hover|tojson }}</script>{% endif %}
   <div class="ssc-sky__ticks" aria-hidden="true">{% for tick in data.ticks %}<span style="--at: {{ tick.at }}%">{{ tick.text }}</span>{% endfor %}</div>
 </figure>
 {% endif %}

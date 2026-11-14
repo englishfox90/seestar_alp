@@ -126,3 +126,27 @@ def test_our_building_sits_between_its_neighbours_with_real_roofs():
     assert data["roof_now"] is False and data["buildings"][2]["ours"]
     # No feed at all: ours alone.
     assert sc.sky_chart(WINDOW, LAT, LON, now, clock, roof_safe=True)["buildings"] == [{"label": "", "open": True, "ours": True}]
+
+
+def test_the_hover_reads_altitudes_roof_and_targets():
+    now = at("2026-11-14T23:00")
+    blocks = [
+        {"name": "M42", "kind": "Single", "start": at("2026-11-14T22:00"), "end": at("2026-11-15T01:00"),
+         "progress": "now", "goal": "3.0 of 10 h", "ra": 5.588, "dec": -5.39},
+        {"name": "Here", "kind": "Single", "start": at("2026-11-15T01:00"), "end": at("2026-11-15T02:00"), "ra": None, "dec": None},
+    ]  # fmt: skip
+    outlook = {"hours": [{"start": now, "end": at("2026-11-15T09:00"), "state": "closed", "why": "cloud 90%"}]}
+    data = sc.sky_chart(WINDOW, LAT, LON, now, clock, {"closed": [], "unknown": []}, outlook, True, blocks=blocks)
+    hover = data["hover"]
+    first = hover["samples"][0]
+    assert first[0] == 0 and first[1] == clock(WINDOW["sunset"] - sc.MARGIN_S) and first[2] > 0
+    assert hover["span_min"] == round((WINDOW["sunrise"] - WINDOW["sunset"] + 2 * sc.MARGIN_S) / 60)
+    assert [r[2] for r in hover["roof"]][-1] == "Roof likely closed"
+    assert hover["reasons"][0][2] == "cloud 90%"
+    # Only a target with a position gets an arc; it keeps its index in the plan.
+    (m42,) = hover["targets"]
+    assert m42["index"] == 0 and m42["state"] == "Imaging now" and m42["when"] == "22:00 to 01:00"
+    # Orion climbs through the evening, high by one in the morning.
+    assert m42["alts"][0][1] < m42["alts"][-1][1] and m42["alts"][-1][1] > 40
+    assert [p["index"] for p in data["target_paths"]] == [0]
+    assert sc.twilight(-10) == "Nautical twilight" and sc.twilight(-20) == "Dark"

@@ -51,6 +51,36 @@ def altitudes(lat, lon, times) -> dict:
     return out
 
 
+def target_altitudes(lat, lon, ra_hours, dec_deg, times) -> list[float]:
+    """A fixed target's altitude in degrees at each time. RA in hours, Dec in degrees."""
+    observer = ephem.Observer()
+    observer.lat, observer.lon = str(lat), str(lon)
+    observer.pressure = 0
+    body = ephem.FixedBody()
+    body._ra = ephem.hours(math.radians(float(ra_hours) * 15.0))
+    body._dec = ephem.degrees(math.radians(float(dec_deg)))
+    body._epoch = ephem.J2000
+    out = []
+    for when in times:
+        observer.date = _ephem_date(when)
+        body.compute(observer)
+        out.append(math.degrees(body.alt))
+    return out
+
+
+def twilight(sun_alt: float) -> str:
+    """What the sky is doing at a sun altitude, in the words astronomers use."""
+    if sun_alt >= -0.833:
+        return "Daylight"
+    if sun_alt >= -6:
+        return "Civil twilight"
+    if sun_alt >= -12:
+        return "Nautical twilight"
+    if sun_alt >= -18:
+        return "Astronomical twilight"
+    return "Dark"
+
+
 def y_of(alt: float, top: float = ALT_TOP) -> float:
     """Above the horizon scaled to ``top``, below it to ALT_BOTTOM, each side on its own."""
     if alt >= 0:
@@ -174,6 +204,42 @@ def _roof_lane(spans, pct) -> list:
     return out
 
 
+def _hover(times, alt, pct, clock, roof, outlook, targets, span) -> dict:
+    """What the chart's hover reads, small enough to ride in the page: altitudes every
+    STEP_S with the site clock at each, the roof's spans, the forecast's reasons by
+    hour, and each target. Positions are percentages of the chart's width."""
+    reasons = []
+    for h in (outlook or {}).get("hours") or ():
+        if h.get("why"):
+            reasons.append([pct(h["start"]), pct(h["end"]), h["why"]])
+    shown = []
+    for t in targets:
+        b = t["block"]
+        shown.append({
+            "index": t["index"],
+            "name": b.get("name") or "",
+            "kind": b.get("kind") or "",
+            "when": f"{clock(b['start'])} to {clock(b['end'])}",
+            "state": {"done": "Done", "now": "Imaging now", "next": "Planned"}.get(b.get("progress") or "next", "Planned"),
+            "goal": b.get("goal") or "",
+            "start": t["start"],
+            "end": t["end"],
+            "alts": [[pct(w), round(a, 1)] for w, a in zip(t["times"], t["alts"])],
+        })  # fmt: skip
+    return {
+        "step_min": STEP_S // 60,
+        "samples": [
+            [pct(t), clock(t), round(s, 1), round(m, 1), round(lit)]
+            for t, s, m, lit in zip(times, alt["sun"], alt["moon"], alt["moon_lit"])
+        ],
+        "twilight": [[-0.833, "Daylight"], [-6, "Civil twilight"], [-12, "Nautical twilight"], [-18, "Astronomical twilight"]],
+        "roof": [[pct(s), pct(e), _ROOF_WORDS[state], state] for s, e, state in roof],
+        "reasons": reasons,
+        "targets": shown,
+        "span_min": round(span / 60),
+    }
+
+
 _ROOF_WORDS = {
     "open": "Roof open",
     "closed": "Roof closed",
@@ -184,12 +250,34 @@ _ROOF_WORDS = {
 }
 
 
-def sky_chart(window, lat, lon, now=None, clock=str, record=None, outlook=None, roof_safe=None, buildings=None) -> dict:
+def _targets(blocks, lat, lon, start, end, pct):
+    """The plan's blocks inside the chart with their altitude over the block: what a
+    hover shows, and the arc it draws. Blocks without a fixed position are left out."""
+    out = []
+    for index, block in enumerate(blocks or ()):
+        s, e = block.get("start"), block.get("end")
+        if s is None or e is None or block.get("ra") is None or block.get("dec") is None:
+            continue
+        s, e = max(s, start), min(e, end)
+        if e <= s:
+            continue
+        times = [s + k * STEP_S for k in range(int((e - s) // STEP_S) + 1)]
+        if times[-1] < e:
+            times.append(e)
+        try:
+            alts = target_altitudes(lat, lon, block["ra"], block["dec"], times)
+        except (TypeError, ValueError):
+            continue
+        out.append({"index": index, "block": block, "times": times, "alts": alts, "start": pct(s), "end": pct(e)})
+    return out
+
+
+def sky_chart(window, lat, lon, now=None, clock=str, record=None, outlook=None, roof_safe=None, buildings=None, blocks=None) -> dict:
     """Everything the page draws. ``window`` is the plan's night (sunset, sunrise,
     dark_start, dark_end); ``outlook`` is the night's entry from roof.forecast;
     ``buildings`` is site_status.street: ours between its neighbours, each roof as
     Starfront's feed reports it. Ours falls back to ``roof_safe`` when the feed has
-    no fresh answer."""
+    no fresh answer. ``blocks`` is the plan's targets, with ra (hours) and dec."""
     window = window or {}
     sunset, sunrise = window.get("sunset"), window.get("sunrise")
     if sunset is None or sunrise is None or sunrise <= sunset or not (lat or lon):
@@ -204,10 +292,11 @@ def sky_chart(window, lat, lon, now=None, clock=str, record=None, outlook=None, 
     if times[-1] < end:
         times.append(end)
     alt = altitudes(lat, lon, times)
-    top = plot_top(alt["sun"], alt["moon"])
+    targets = _targets(blocks, lat, lon, start, end, pct)
+    top = plot_top(alt["sun"], alt["moon"], *(t["alts"] for t in targets))
 
-    def path(values):
-        return "M" + " L".join(f"{round((t - start) * VIEW_W / span, 1)},{y_of(a, top)}" for t, a in zip(times, values))
+    def path(values, at=times):
+        return "M" + " L".join(f"{round((t - start) * VIEW_W / span, 1)},{y_of(a, top)}" for t, a in zip(at, values))
 
     words = [f"Sun sets {clock(sunset)} and rises {clock(sunrise)}."]
     def event(body, kind, when):
@@ -285,8 +374,11 @@ def sky_chart(window, lat, lon, now=None, clock=str, record=None, outlook=None, 
     if window.get("dark_start") is not None and window.get("dark_end") is not None:
         dark = {"x": round(pct(window["dark_start"]) * VIEW_W / 100, 1), "w": round((pct(window["dark_end"]) - pct(window["dark_start"])) * VIEW_W / 100, 1)}
 
+    hover = _hover(times, alt, pct, clock, roof, outlook, targets, span)
     return {
         "available": True,
+        "hover": hover,
+        "target_paths": [{"index": t["index"], "d": path(t["alts"], t["times"])} for t in targets],
         "view": {"w": VIEW_W, "h": VIEW_H, "horizon": y_of(0, top)},
         "horizon_pct": round(y_of(0, top) * 100 / VIEW_H, 2),
         "horizon_events": horizon,

@@ -225,6 +225,7 @@
     if (typeof Idiomorph === "undefined") return;
     event.detail.shouldSwap = false;
     Idiomorph.morph(event.detail.target, Array.from(event.detail.fragment.childNodes), { morphStyle: "innerHTML" });
+    event.detail.target.dispatchEvent(new CustomEvent("ssc:morphed"));
   });
 
   // An empty answer must not blank the state or the hardware rows. Focus and auth are
@@ -781,6 +782,197 @@
         roof.animate([{ transform: "translateX(0)" }, { transform: getComputedStyle(roof).transform }], opening);
       });
     }
+  })();
+
+  // Hover over the sky chart or Night Line: a line at that time and a card with the sun,
+  // the moon, the roof and the target planned then, its altitude arc drawn on the chart.
+  // Touch scrubs with a horizontal drag; arrow keys step when the section has focus. The
+  // card and line live on <body>, because polls morph #t-night's contents.
+  (function skyHover() {
+    const night = document.getElementById("t-night");
+    if (!night) return;
+    const tip = document.createElement("div");
+    tip.className = "ssc-skytip";
+    tip.hidden = true;
+    const cursor = document.createElement("div");
+    cursor.className = "ssc-skycursor";
+    cursor.hidden = true;
+    document.body.append(cursor, tip);
+    let at = null; // percent of the chart's width, or null when hidden
+    let byKey = false;
+    let cache = { el: null, data: null };
+
+    function data() {
+      const el = night.querySelector(".ssc-sky__data");
+      if (!el) return null;
+      if (cache.el !== el || cache.text !== el.textContent) {
+        try {
+          cache = { el: el, text: el.textContent, data: JSON.parse(el.textContent) };
+        } catch (e) {
+          cache = { el: el, text: el.textContent, data: null };
+        }
+      }
+      return cache.data;
+    }
+
+    function around(samples, p) {
+      let i = 0;
+      while (i < samples.length - 2 && samples[i + 1][0] <= p) i++;
+      const a = samples[i];
+      const b = samples[i + 1] || a;
+      const f = b[0] > a[0] ? Math.min(1, Math.max(0, (p - a[0]) / (b[0] - a[0]))) : 0;
+      return { a: a, f: f, lerp: (k) => a[k] + (b[k] - a[k]) * f };
+    }
+
+    function clockAt(d, p) {
+      const { a } = around(d.samples, p);
+      const [h, m] = a[1].split(":").map(Number);
+      const total = h * 60 + m + Math.round(((p - a[0]) / 100) * d.span_min);
+      const mins = ((total % 1440) + 1440) % 1440;
+      return String(Math.floor(mins / 60)).padStart(2, "0") + ":" + String(mins % 60).padStart(2, "0");
+    }
+
+    function twilight(d, sun) {
+      for (const [floor, word] of d.twilight) if (sun >= floor) return word;
+      return "Dark";
+    }
+
+    const within = (p) => (span) => p >= span[0] && p < span[1];
+    const deg = (v) => String(Math.round(v)).replace("-", "\u2212") + "°";
+
+    function row(cls, ...parts) {
+      const p = document.createElement("p");
+      p.className = cls;
+      p.append(...parts);
+      return p;
+    }
+    function key(kind, text) {
+      const s = document.createElement("span");
+      s.className = "ssc-skytip__key";
+      s.dataset.key = kind;
+      s.textContent = text;
+      return s;
+    }
+
+    function render() {
+      const d = data();
+      const plot = night.querySelector(".ssc-sky__plot");
+      if (at === null || !d || !plot) return hide();
+      const p = at;
+      const box = plot.getBoundingClientRect();
+      const x = box.left + (p / 100) * box.width;
+      const s = around(d.samples, p);
+      const sun = s.lerp(2);
+      const moon = s.lerp(3);
+      const lit = Math.round(s.lerp(4));
+
+      const parts = [row("ssc-skytip__time", clockAt(d, p) + " ", key("sky", twilight(d, sun)))];
+      parts.push(row("ssc-skytip__line", key("sun", "Sun " + deg(sun)), " ", key("moon", (moon >= 0 ? "Moon " + deg(moon) : "Moon down") + " · " + lit + "% lit")));
+      const roof = d.roof.find(within(p));
+      if (roof) {
+        const why = roof[3].startsWith("fc-") && roof[3] !== "fc-open" ? d.reasons.find(within(p)) : null;
+        const line = row("ssc-skytip__line", key("roof-" + roof[3], roof[2]));
+        if (why) line.append(" · " + why[2]);
+        parts.push(line);
+      }
+      const target = d.targets.find((t) => p >= t.start && p <= t.end);
+      if (target) {
+        const t = around(target.alts, p);
+        const name = row("ssc-skytip__target", target.name);
+        const meta = [target.state, target.when, target.kind].filter(Boolean).join(" · ");
+        parts.push(name, row("ssc-skytip__line", meta));
+        parts.push(row("ssc-skytip__line", "Altitude " + deg(t.lerp(1)) + (target.goal ? " · " + target.goal : "")));
+      }
+      tip.replaceChildren(...parts);
+      showTarget(target ? target.index : null);
+
+      // The line runs from the roof lane down through the Night Line.
+      const lane = night.querySelector(".ssc-sky__roof");
+      const track = night.querySelector(".ssc-night__track");
+      const top = lane ? lane.getBoundingClientRect().top : box.top;
+      const bottom = track ? track.getBoundingClientRect().bottom : box.bottom;
+      cursor.hidden = false;
+      cursor.style.transform = `translate(${Math.round(x)}px, ${Math.round(top)}px)`;
+      cursor.style.height = Math.round(bottom - top) + "px";
+
+      tip.hidden = false;
+      const w = tip.offsetWidth;
+      const h = tip.offsetHeight;
+      const gap = 12;
+      let left = x + gap;
+      if (left + w > window.innerWidth - 8) left = x - gap - w;
+      left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+      let y = top - h - gap;
+      if (y < 8) y = bottom + gap;
+      tip.style.transform = `translate(${Math.round(left)}px, ${Math.round(y)}px)`;
+    }
+
+    function showTarget(index) {
+      night.querySelectorAll(".ssc-sky__target[data-on], .ssc-night__block[data-on]").forEach((el) => {
+        if (el.dataset.target !== String(index)) el.removeAttribute("data-on");
+      });
+      if (index === null) return;
+      night.querySelectorAll(`.ssc-sky__target[data-target="${index}"], .ssc-night__block[data-target="${index}"]`).forEach((el) => el.setAttribute("data-on", ""));
+    }
+
+    function hide() {
+      at = null;
+      tip.hidden = true;
+      cursor.hidden = true;
+      showTarget(null);
+    }
+
+    function fromPointer(event) {
+      const plot = night.querySelector(".ssc-sky__plot");
+      if (!plot || !data()) return null;
+      const box = plot.getBoundingClientRect();
+      const p = ((event.clientX - box.left) / box.width) * 100;
+      return p >= 0 && p <= 100 ? p : null;
+    }
+
+    night.addEventListener("pointermove", function (event) {
+      if (event.pointerType === "touch" && !event.isPrimary) return;
+      byKey = false;
+      at = fromPointer(event);
+      at === null ? hide() : render();
+    });
+    night.addEventListener("pointerdown", function (event) {
+      if (event.pointerType !== "touch") return;
+      at = fromPointer(event);
+      at === null ? hide() : render();
+    });
+    night.addEventListener("pointerleave", function (event) {
+      if (event.pointerType !== "touch" && !byKey) hide();
+    });
+    document.addEventListener("pointerdown", function (event) {
+      if (at !== null && !night.contains(event.target)) hide();
+    });
+    window.addEventListener("scroll", function () { if (!byKey) hide(); }, { passive: true });
+    window.addEventListener("resize", hide);
+
+    night.addEventListener("keydown", function (event) {
+      const d = data();
+      if (!d) return;
+      const step = (d.step_min / d.span_min) * 100;
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault();
+        byKey = true;
+        const start = at === null ? parseFloat(night.querySelector(".ssc-sky")?.dataset.now) || 50 : at;
+        at = Math.max(0, Math.min(100, start + (event.key === "ArrowRight" ? step : -step)));
+        tip.setAttribute("aria-live", "polite");
+        render();
+      } else if (event.key === "Escape" && at !== null) {
+        hide();
+      }
+    });
+    night.addEventListener("focusout", function () {
+      if (byKey) hide();
+      tip.removeAttribute("aria-live");
+    });
+    // A poll's morph replaces the target arcs and data; draw the same moment again.
+    night.addEventListener("ssc:morphed", function () {
+      if (at !== null) render();
+    });
   })();
 
   pollSite();
