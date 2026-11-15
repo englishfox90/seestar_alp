@@ -2,7 +2,7 @@
 
 import json
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import ephem
@@ -231,6 +231,16 @@ def test_a_setting_season_presses_harder_than_one_with_room():
     assert setting is not None and setting[1] < "2027-01-01"
     assert planner.season_pressure(40.0, setting, key, CFG) > 0.25
     assert planner.season_pressure(40.0, planner.season_left(seasons[orion.id], key), key, CFG) < 0.1
+
+
+def test_last_usable_night_is_exact_not_the_sample():
+    cygnus = framed(min_session_hours=1.0)
+    key = "2026-11-14"
+    sampled = planner.season_left(planner.season_profile([cygnus], CFG, key)[cygnus.id], key)[1]
+    last = planner.last_usable_night(cygnus, CFG, sampled)
+    day = lambda key, n: (datetime.fromisoformat(key) + timedelta(days=n)).date().isoformat()  # noqa: E731
+    assert sampled <= last < day(sampled, planner.SEASON_STRIDE)
+    assert planner._usable_s(planner._Night(day(last, 1), CFG), cygnus, CFG) == 0
 
 
 def test_pressure_fades_when_the_season_ends_far_off():

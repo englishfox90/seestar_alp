@@ -228,6 +228,32 @@ def _season_key(target, cfg, key):
     )  # fmt: skip
 
 
+def _usable_s(night, target, cfg) -> float:
+    """Seconds of a night clear for the target in runs of at least its minimum session."""
+    floor_s = max(target.min_session_hours * 3600, STEP_S)
+    usable_s, run = 0.0, 0
+    for ok in night.masks(target)[1] + [False]:
+        if ok:
+            run += 1
+            continue
+        run_s = run * STEP_S - cfg.switch_overhead_s
+        if run_s >= floor_s:
+            usable_s += run_s
+        run = 0
+    return usable_s
+
+
+def last_usable_night(target, cfg: PlanConfig, sampled_last: str) -> str:
+    """The exact last usable night, from the last sampled one season_left gives."""
+    day, last = datetime.fromisoformat(sampled_last), sampled_last
+    for offset in range(1, SEASON_STRIDE):
+        key = (day + timedelta(days=offset)).date().isoformat()
+        if _usable_s(_Night(key, cfg), target, cfg) <= 0:
+            break
+        last = key
+    return last
+
+
 def season_profile(targets, cfg: PlanConfig, key: str) -> dict:
     """Target id -> [(night key, usable hours)], one sample every SEASON_STRIDE nights
     from ``key`` for SEASON_DAYS, each standing for SEASON_STRIDE nights.
@@ -251,18 +277,7 @@ def season_profile(targets, cfg: PlanConfig, key: str) -> dict:
             night_key_ = (day + timedelta(days=offset)).date().isoformat()
             night = _Night(night_key_, cfg)
             for target in missing:
-                clear = night.masks(target)[1]
-                floor_s = max(target.min_session_hours * 3600, STEP_S)
-                usable_s, run = 0.0, 0
-                for ok in clear + [False]:
-                    if ok:
-                        run += 1
-                        continue
-                    run_s = run * STEP_S - cfg.switch_overhead_s
-                    if run_s >= floor_s:
-                        usable_s += run_s
-                    run = 0
-                profiles[target.id].append((night_key_, usable_s * SEASON_STRIDE / 3600))
+                profiles[target.id].append((night_key_, _usable_s(night, target, cfg) * SEASON_STRIDE / 3600))
         for target in missing:
             _season_cache[_season_key(target, cfg, key)] = profiles[target.id]
             out[target.id] = profiles[target.id]

@@ -85,16 +85,16 @@ def _plan_row(plan, names) -> dict:
     }
 
 
-def _season_end(profile, key) -> str | None:
+def _season_end(target, profile, key, cfg) -> str | None:
     """The last night a target is usable this season, if that's within about two
     months: soon enough for the planner to be pushing it."""
     season = planner.season_left(profile, key) if profile else None
     if not season or not season[0]:
         return None
-    last = datetime.fromisoformat(season[1])
-    if (last - datetime.fromisoformat(key)).days > 2 * planner.SEASON_URGENT_DAYS:
+    if (datetime.fromisoformat(season[1]) - datetime.fromisoformat(key)).days > 2 * planner.SEASON_URGENT_DAYS:
         return None
-    return last.strftime("%b %-d")
+    last = planner.last_usable_night(target, cfg, season[1])
+    return datetime.fromisoformat(last).strftime("%b %-d")
 
 
 def _context() -> dict:
@@ -144,7 +144,7 @@ def _context() -> dict:
                 "sessions": progress.sessions,
                 "rate": round(progress.measured_rate * 100) if progress.measured_rate else None,
                 "finish": _night_label(finished[target.id]) if target.id in finished else None,
-                "season_end": _season_end(seasons.get(target.id), first_key),
+                "season_end": _season_end(target, seasons.get(target.id), first_key, plan_cfg),
             }
         )
     rows = [_plan_row(plan, names) for plan in plans[:SHOWN_NIGHTS]]
