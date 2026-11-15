@@ -1081,6 +1081,40 @@ def test_mosaic_panels_step_by_the_scopes_own_field(monkeypatch, seestar):
     assert seen and all(fov == pytest.approx((134.6 / 60, 239.2 / 60)) for fov in seen)
 
 
+def test_a_mosaic_may_use_the_wide_camera_but_never_both():
+    from device.seestar_device import Seestar
+
+    assert Seestar.normalize_camera("wide", single_frame=False) == "wide"
+    assert Seestar.normalize_camera("both", single_frame=False) == "main"
+    assert Seestar.normalize_camera("both", single_frame=True) == "both"
+
+
+def test_wide_mosaic_panels_step_by_the_wide_field(monkeypatch, seestar):
+    from device.seestar_util import Util
+
+    seen = []
+    real = Util.mosaic_next_center_spacing
+    seestar.product_model = "Seestar S30P"
+    _run_mosaic_panels(monkeypatch, seestar, 2, 1, check_horizon=False)
+    monkeypatch.setattr(
+        "device.seestar_device.Util.mosaic_next_center_spacing",
+        lambda *args: seen.append(args[3]) or real(*args),
+    )
+    monkeypatch.setattr(seestar, "start_wide_stack", lambda *_a: True)
+    monkeypatch.setattr(seestar, "stop_wide_camera", lambda: None)
+    seestar.schedule["state"] = "working"
+    seestar.mosaic_thread_fn("Core", 17.76, -29.0, False, 5, 2, 1, 20, 80, False, "", 1, 5, camera="wide")
+    assert seen and all(fov == pytest.approx((31.1, 52.65)) for fov in seen)
+
+
+def test_a_wide_mosaic_falls_back_to_the_telescope_without_a_measured_field(monkeypatch, seestar):
+    seestar.product_model = "Seestar S50"
+    _run_mosaic_panels(monkeypatch, seestar, 2, 1, check_horizon=False)
+    monkeypatch.setattr(seestar, "start_wide_stack", lambda *_a: pytest.fail("used the wide camera"))
+    seestar.schedule["state"] = "working"
+    seestar.mosaic_thread_fn("Core", 17.76, -29.0, False, 5, 2, 1, 20, 80, False, "", 1, 5, camera="wide")
+
+
 def test_late_get_device_state_reply_after_sync_timeout_confirms_eq_mode(
     monkeypatch, seestar
 ):

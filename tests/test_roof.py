@@ -594,6 +594,8 @@ def test_dry_run_sends_nothing_to_the_real_device_and_walks_transitions(tmp_path
         schedule = {"state": "stopped", "list": [], "item_number": 0}
         scheduler_thread = None
         framing_status = None
+        imaging_camera = "main"  # read, with event_state, for a wide angle stack
+        event_state = {}
         sent = []
 
         def send_message_param_sync(self, data):

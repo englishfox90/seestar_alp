@@ -38,6 +38,17 @@ def panel_of(view_target: str) -> str | None:
     return match.group(0)[1:] if match and len(match.group(0)) == 3 else None
 
 
+def camera_of(row) -> str:
+    """Which camera a run was: "wide", or "main" for the telescope (older rows)."""
+    return row.get("camera") or "main"
+
+
+def counted_camera(target) -> str:
+    """The camera whose stacks count toward a target: the wide angle camera for a
+    wide target, otherwise the telescope (a "both" target is counted by it)."""
+    return "wide" if getattr(target, "camera", "main") == "wide" and not target.framed else "main"
+
+
 def counts(target, row) -> bool:
     """Whether a run counts toward its target's goal. Single frames always do. A framed
     run does when its saved image came out covered, or with no image judged, once it ran
@@ -93,6 +104,10 @@ class SessionLog:
             )
             if stacking:
                 self._note(state, night, now)
+            wide = bool(getattr(state, "wide_target", "")) and getattr(state, "wide_stacked", 0) > 0
+            if wide:
+                self._note_wide(state, night, now)
+            stacking = stacking or wide
             if self._dirty_since is not None and (
                 not stacking or now - self._dirty_since >= SAVE_EVERY_S
             ):
@@ -119,6 +134,38 @@ class SessionLog:
             dropped=state.dropped,
             wall_s=state.stack_lapse_s,
             scale=state.mosaic_scale or 1.0,
+            last_seen=now,
+        )
+        if self._dirty_since is None:
+            self._dirty_since = now
+
+    # Without the firmware's elapsed time, a wide run is the same run while its
+    # count keeps going and it was seen this recently.
+    WIDE_GAP_S = 180
+
+    def _note_wide(self, state, night, now):
+        target, name = base_name(state.wide_target), state.wide_target
+        lapse = state.wide_lapse_s
+        row = None
+        for r in reversed(self._rows[-20:]):
+            if camera_of(r) != "wide" or r.get("name") != name:
+                continue
+            if lapse is not None:
+                if abs(r["started"] - (now - lapse)) < SAME_RUN_TOLERANCE_S:
+                    row = r
+            elif now - r.get("last_seen", 0) <= self.WIDE_GAP_S and state.wide_stacked >= r.get("stacked", 0):
+                row = r
+            break
+        if row is None:
+            started = now - (lapse or 0.0)
+            row = {"target": target, "name": name, "night": night, "started": started, "camera": "wide"}
+            self._rows.append(row)
+        row["exposure_s"] = state.wide_exposure_s or row.get("exposure_s", 0.0)
+        row.update(
+            stacked=state.wide_stacked,
+            dropped=state.wide_dropped,
+            wall_s=lapse if lapse is not None else now - row["started"],
+            scale=1.0,
             last_seen=now,
         )
         if self._dirty_since is None:
@@ -177,7 +224,9 @@ class SessionLog:
         key = base_name(target.name)
         for row in self.rows():
             panel = panel_of(row.get("name"))
-            if row["target"] == key and panel in hours and counts(target, row):
+            if row["target"] != key or camera_of(row) != counted_camera(target):
+                continue
+            if panel in hours and counts(target, row):
                 hours[panel] += row["stacked"] * (row.get("exposure_s") or 0) / 3600
         return hours
 
@@ -187,8 +236,9 @@ class SessionLog:
         key = base_name(target.name)
         counted = partial = wall = stacked_s = 0.0
         sessions = 0
+        camera = counted_camera(target)
         for row in self.rows():
-            if row["target"] != key:
+            if row["target"] != key or camera_of(row) != camera:
                 continue
             hours = row["stacked"] * (row.get("exposure_s") or 0) / 3600
             wall += row.get("wall_s", 0)

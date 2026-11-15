@@ -55,7 +55,8 @@ def _framing(target) -> str:
     if target.framed:
         return f"Framed {target.mosaic_scale:g}x at {target.mosaic_angle:g}°"
     if target.mosaic:
-        return f"Mosaic {target.panels_ra} across by {target.panels_dec} up, {target.panel_overlap}% overlap"
+        camera = ", wide angle" if target.camera == "wide" else ""
+        return f"Mosaic {target.panels_ra} across by {target.panels_dec} up{camera}, {target.panel_overlap}% overlap"
     return {"wide": "Single frame, wide angle", "both": "Single frame, both cameras"}.get(
         target.camera, "Single frame"
     )
@@ -174,7 +175,7 @@ def _sky_targets() -> list[dict]:
             "dec": t.dec,
             "scale": t.mosaic_scale,
             "angle": t.mosaic_angle,
-            "camera": "main" if t.framed or t.mosaic else t.camera,
+            "camera": "main" if t.framed or (t.mosaic and t.camera != "wide") else t.camera,
             "panels_ra": t.panels_ra if t.mosaic else 1,
             "panels_dec": t.panels_dec if t.mosaic else 1,
             "overlap": t.panel_overlap,
@@ -301,7 +302,9 @@ def _form_panels(form, target) -> dict:
         raise falcon.HTTPBadRequest(description="panels or overlap is out of range")
     changes = {"panels_ra": across, "panels_dec": up, "panel_overlap": overlap}
     if across * up > 1:
-        changes.update(mosaic_scale=1.0, camera="main")
+        # A mosaic is the telescope's or the wide angle camera's panels, never both.
+        camera = form.get("camera", target.camera)
+        changes.update(mosaic_scale=1.0, camera="wide" if camera == "wide" else "main")
         if not target.mosaic:
             changes["min_session_hours"] = target_queue.DEFAULT_MOSAIC_PANEL_HOURS * across * up
     return changes

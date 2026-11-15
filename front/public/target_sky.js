@@ -292,10 +292,15 @@
     fields(camera).forEach((size) => frames.add(polygon(ra, dec, size, frameScale, frameAngle, color, lineWidth)));
   }
 
-  // A traditional mosaic: one telescope frame per panel, where the scope will point.
+  // The field a mosaic's panels are spaced by: the wide angle camera's for a wide one.
+  function panelField(t) {
+    return t.camera === "wide" && wide ? wide : { w: fovW, h: fovH };
+  }
+
+  // A traditional mosaic: one frame per panel, where the scope will point.
   function addPanels(t, color, lineWidth) {
-    const size = { w: fovW, h: fovH };
-    window.FrameGeometry.panelCentres(t.ra, t.dec, t.panels_ra, t.panels_dec, t.overlap, fovW, fovH).forEach(
+    const size = panelField(t);
+    window.FrameGeometry.panelCentres(t.ra, t.dec, t.panels_ra, t.panels_dec, t.overlap, size.w, size.h).forEach(
       function ([ra, dec]) {
         frames.add(polygon(ra, dec, size, 1, 0, color, lineWidth));
       }
@@ -318,6 +323,7 @@
       panels_ra: parseInt(field("target-sky-panels-ra").value, 10),
       panels_dec: parseInt(field("target-sky-panels-dec").value, 10),
       overlap: parseInt(field("target-sky-overlap").value, 10),
+      camera: current.camera,
     };
   }
 
@@ -366,9 +372,12 @@
     field("target-sky-panels-ra-value").textContent = panels.panels_ra;
     field("target-sky-panels-dec-value").textContent = panels.panels_dec;
     field("target-sky-overlap-value").textContent = `${panels.overlap}%`;
-    // A mosaic is imaged by the telescope.
-    field("target-sky-camera").hidden = !wide || mosaic;
-    if (mosaic) current.camera = "main";
+    // A mosaic is one camera's panels, so it can't be Both.
+    field("target-sky-camera").hidden = !wide;
+    if (mosaic && current.camera === "both") current.camera = "main";
+    document.querySelectorAll('input[name="target-sky-camera"][value="both"]').forEach(function (radio) {
+      radio.disabled = mosaic;
+    });
     const single = current.camera !== "main";
     field("target-sky-scale").disabled = single;
     document.querySelectorAll('input[name="target-sky-camera"]').forEach(function (radio) {
@@ -404,7 +413,8 @@
     if (mosaicMode()) {
       const t = panelsNow();
       const keep = (100 - t.overlap) / 100;
-      size = { w: fovW * (1 + (t.panels_ra - 1) * keep), h: fovH * (1 + (t.panels_dec - 1) * keep) };
+      const one = panelField(t);
+      size = { w: one.w * (1 + (t.panels_ra - 1) * keep), h: one.h * (1 + (t.panels_dec - 1) * keep) };
     }
     aladin.setFoV(
       window.FrameGeometry.fitFov(size.w, size.h, mosaicMode() ? 1 : scale(), mosaicMode() ? 0 : angle(), rect.width, rect.height)

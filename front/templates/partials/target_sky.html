@@ -59,7 +59,7 @@
       {# Shown by target_sky.js when the model's wide angle field is known. #}
       <div id="target-sky-camera" hidden>
         {{ form.segmented("Camera", "target-sky-camera", [{"value": "main", "label": "Telescope"}, {"value": "wide", "label": "Wide"}, {"value": "both", "label": "Both"}], selected="main") }}
-        <p class="ssc-footnote">Wide and Both image a single frame, so the scale stays at 1x.</p>
+        <p class="ssc-footnote">Wide and Both image a single frame, so the scale stays at 1x. A mosaic is the telescope's panels or the wide angle camera's, never both.</p>
       </div>
 
       <form id="target-sky-add" class="plan-stack" method="post" action="{{ root_path }}{{ page_root }}/add" hidden>

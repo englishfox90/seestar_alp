@@ -60,13 +60,28 @@ class Util:
         "S30 Pro": (134.6, 239.2),
     }
 
+    # The wide angle camera's field, (RA, Dec) arcminutes on the same axes, where it
+    # has been measured: the S30 Pro's from the plate solve of a wide stack.
+    MODEL_WIDE_FOV_ARCMIN = {"S30 Pro": (1866.0, 3159.0)}
+
+    @staticmethod
+    def _model_key(product_model):
+        compact = re.sub(r"[\s_-]+", "", str(product_model or "")).lower()
+        m = re.search(r"s(30|50)(pro|p(?!lus))?", compact)
+        return None if not m else f"S{m.group(1)}" + (" Pro" if m.group(2) else "")
+
+    @staticmethod
+    def model_wide_fov_deg(product_model):
+        """(RA, Dec) extent in degrees of the wide angle camera's field, or None where
+        it hasn't been measured."""
+        field = Util.MODEL_WIDE_FOV_ARCMIN.get(Util._model_key(product_model))
+        return (field[0] / 60.0, field[1] / 60.0) if field else None
+
     @staticmethod
     def model_fov_deg(product_model):
         """(RA, Dec) extent in degrees of a model's telescope field, the S50's when the
         model is unknown. Accepts the firmware's names: "Seestar S30P", "S30 Pro", ..."""
-        compact = re.sub(r"[\s_-]+", "", str(product_model or "")).lower()
-        m = re.search(r"s(30|50)(pro|p(?!lus))?", compact)
-        key = "S50" if not m else f"S{m.group(1)}" + (" Pro" if m.group(2) else "")
+        key = Util._model_key(product_model) or "S50"
         short, long_ = Util.MODEL_FOV_ARCMIN[key]
         return short / 60.0, long_ / 60.0
 

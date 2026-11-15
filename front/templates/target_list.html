@@ -62,7 +62,8 @@
             </div>
             {{ form.field("Exposure (s)", "target-exposure-" ~ t.id, "exposure_s", value=t.exposure_s, type="number", attrs='min="1" max="90" step="any" required') }}
             {{ form.segmented("Filter", "lp_filter", filter_options, selected="on" if t.lp_filter else "off") }}
-            {% if not t.framed and not t.mosaic %}{{ form.segmented("Camera", "camera", camera_options, selected=t.camera) }}{% endif %}
+            {% if t.mosaic %}{{ form.segmented("Camera", "camera", camera_options[:2], selected=t.camera if t.camera == "wide" else "main") }}
+            {% elif not t.framed %}{{ form.segmented("Camera", "camera", camera_options, selected=t.camera) }}{% endif %}
             {% if not t.framed %}
             {{ form.field("Panels across", "target-panels-ra-" ~ t.id, "panels_ra", value=t.panels_ra, type="number", attrs='min="1" max="' ~ max_panels ~ '" step="1" required', help="RA. 1 across and 1 up is a single frame") }}
             {{ form.field("Panels up", "target-panels-dec-" ~ t.id, "panels_dec", value=t.panels_dec, type="number", attrs='min="1" max="' ~ max_panels ~ '" step="1" required', help="Dec") }}

@@ -170,6 +170,8 @@ def target_item(target: dict) -> dict:
         )
         if panels.get("selected"):
             params["selected_panels"] = ";".join(panels["selected"])
+        if panels.get("camera") == "wide":
+            params["camera"] = "wide"  # panels spaced by the wide angle camera's field
         return {"action": "start_mosaic", "params": params}
     params.update(ra_num=1, dec_num=1, panel_overlap_percent=PANEL_OVERLAP)
     if target.get("camera") in ("wide", "both"):

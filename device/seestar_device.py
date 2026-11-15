@@ -1781,9 +1781,12 @@ class Seestar:
         camera = str(camera or "main").lower()
         if camera not in Seestar.CAMERAS:
             camera = "main"
-        # The wide camera covers a whole mosaic in one frame, so a mosaic
-        # always uses the telescope.
-        return camera if single_frame else "main"
+        # A mosaic is one camera's panels: the telescope's, or the wide angle
+        # camera's for a sky too big even for it. Never both, since panels spaced
+        # for one camera leave the other's frames scattered.
+        if single_frame:
+            return camera
+        return "wide" if camera == "wide" else "main"
 
     def start_wide_stack(self, target_name: str, is_use_autofocus: bool) -> bool:
         """Switch to the wide angle camera, focus it, and start it stacking.
@@ -1794,6 +1797,9 @@ class Seestar:
         ``iscope_start_stack``. A telescope stack already running keeps going.
         """
         self.logger.info("%s: starting the wide angle camera", self.device_name)
+        # A new stack: the last one's count mustn't be read as this one's.
+        with self.event_state_lock:
+            self.event_state.pop("WideStack", None)
         result = self.send_message_param_sync(
             {
                 "method": "iscope_start_view",
@@ -2560,14 +2566,28 @@ class Seestar:
         # Set while the wide angle camera is stacking, so every way out of
         # this function also stops it.
         wide_active = False
-        # Panels step by this scope's own field; the S50's when the model isn't known.
-        panel_fov = Util.model_fov_deg(getattr(self, "product_model", ""))
+        # Panels step by the imaging camera's own field; the telescope's is the
+        # S50's when the model isn't known.
+        model = getattr(self, "product_model", "")
+        panel_fov = Util.model_fov_deg(model)
+        if camera == "wide" and nRA * nDec > 1:
+            wide_fov = Util.model_wide_fov_deg(model)
+            if wide_fov is None:
+                self.logger.warning(
+                    "No measured wide angle field for %s, so this mosaic uses the telescope.",
+                    model or "this model",
+                )
+                camera = "main"
+                self.imaging_camera = camera
+            else:
+                panel_fov = wide_fov
         if nRA * nDec > 1:
             self.logger.info(
-                "  panel field   : %.2f x %.2f deg (%s)",
+                "  panel field   : %.2f x %.2f deg (%s, %s)",
                 panel_fov[0],
                 panel_fov[1],
-                getattr(self, "product_model", "") or "model unknown, S50",
+                model or "model unknown, S50",
+                "wide angle camera" if camera == "wide" else "telescope",
             )
         try:
             spacing_result = Util.mosaic_next_center_spacing(

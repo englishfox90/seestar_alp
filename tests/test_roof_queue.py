@@ -1293,8 +1293,8 @@ def test_a_mosaics_centre_must_clear_the_horizon_by_its_spread():
     alone = single("Sadr", ra=wide.ra, dec=wide.dec)
     night = planner._Night(NIGHT, CFG)
     assert sum(night.masks(wide)[0]) < sum(night.masks(alone)[0])
-    assert planner.panel_spread_deg(wide, CFG) > 4  # an S30 Pro 3x3 spreads far
-    assert planner.panel_spread_deg(alone, CFG) == 0
+    assert len(planner.panel_centres(wide, CFG)) == 9
+    assert planner.panel_centres(alone, CFG) == []
 
 
 def test_a_mosaic_block_becomes_a_start_mosaic_with_its_panels():
@@ -1337,10 +1337,10 @@ def test_the_page_turns_a_target_into_a_mosaic_and_back(page, monkeypatch):
     client.simulate_post("/targets/add", headers=FORM, body="name=Sadr&ra=20.37&dec=40.26&goal_hours=4")
     target = queue_web._queue().all()[0]
     base = f"id={target.id}&goal_hours=4&min_session_hours={target.min_session_hours}&prior_hours=0&priority=normal&enabled=on"
-    client.simulate_post("/targets/update", headers=FORM, body=base + "&camera=wide&panels_ra=2&panels_dec=3&panel_overlap=15")
+    client.simulate_post("/targets/update", headers=FORM, body=base + "&camera=both&panels_ra=2&panels_dec=3&panel_overlap=15")
     target = queue_web._queue().all()[0]
     assert (target.panels_ra, target.panels_dec, target.panel_overlap) == (2, 3, 15)
-    assert target.mosaic and target.camera == "main"
+    assert target.mosaic and target.camera == "main"  # never both: the telescope's panels
     assert target.min_session_hours == pytest.approx(3.0)  # untouched, so a mosaic's default
 
     framing = f"id={target.id}&ra=20.37&dec=40.26&mosaic_scale=1.5&mosaic_angle=0"
@@ -1407,3 +1407,112 @@ def test_a_single_frame_from_the_sky_view_stays_one(page, monkeypatch):
     client.simulate_post("/targets/add", headers=FORM, body=body)
     target = queue_web._queue().all()[0]
     assert not target.mosaic and not target.framed and target.camera == "wide"
+
+
+# ---- wide angle mosaics ----------------------------------------------------
+
+
+def wide_state(name="Core_21", stacked=30, lapse=None, exposure=10.0, **kw):
+    return ScopeState(wide_target=name, wide_stacked=stacked, wide_lapse_s=lapse, wide_exposure_s=exposure, **kw)
+
+
+def test_a_wide_mosaic_keeps_its_camera_from_the_page(page, monkeypatch):
+    client, queue_web = _sky_page(page, monkeypatch)
+    body = "name=Core&ra=17.76&dec=-29&goal_hours=2&mosaic_scale=1.0&mosaic_angle=0&camera=wide&panels_ra=2&panels_dec=1&panel_overlap=20"
+    client.simulate_post("/targets/add", headers=FORM, body=body)
+    target = queue_web._queue().all()[0]
+    assert target.mosaic and target.camera == "wide"
+    assert "wide angle" in queue_web._framing(target)
+
+
+def test_wide_stacks_are_their_own_runs_and_count_only_for_a_wide_target(tmp_path):
+    log = SessionLog(str(tmp_path / "s.json"))
+    # The telescope and the wide camera stacking the same panel at once.
+    both = replace(
+        stacking("Core_21", stacked=100, lapse=1200, exposure=10),
+        wide_target="Core_21", wide_stacked=60, wide_exposure_s=10.0,
+    )
+    log.observe(both, "n", 10_000)
+    rows = log.rows()
+    assert sorted(r.get("camera", "main") for r in rows) == ["main", "wide"]
+    wide = mosaic("Core", across=2, up=1, camera="wide")
+    tele = mosaic("Core", across=2, up=1)
+    assert log.panel_hours(wide)["21"] == pytest.approx(60 * 10 / 3600)
+    assert log.panel_hours(tele)["21"] == pytest.approx(100 * 10 / 3600)
+
+
+def test_a_wide_run_without_elapsed_time_continues_while_it_counts_up(tmp_path):
+    log = SessionLog(str(tmp_path / "s.json"))
+    log.observe(wide_state(stacked=10), "n", 1_000)
+    log.observe(wide_state(stacked=20), "n", 1_060)
+    log.observe(wide_state(stacked=30), "n", 1_120)
+    (row,) = log.rows()
+    assert row["stacked"] == 30 and row["wall_s"] == 120 and row["camera"] == "wide"
+    log.observe(wide_state(stacked=5), "n", 1_180)  # counted from zero again: a new run
+    log.observe(wide_state("Core_11", stacked=5), "n", 1_240)  # the next panel
+    assert len(log.rows()) == 3
+
+
+def test_a_wide_mosaics_panels_spread_by_the_wide_field():
+    tele = mosaic("Core", across=2, up=1)
+    wide = replace(tele, camera="wide")
+    gap = lambda t: abs(planner.panel_centres(t, CFG)[1][0] - planner.panel_centres(t, CFG)[0][0]) * 15  # noqa: E731
+    assert gap(wide) > 10 * gap(tele)
+
+
+@pytest.mark.parametrize("across, up, camera", [(2, 2, "main"), (3, 2, "main"), (2, 1, "wide"), (1, 3, "wide")])
+def test_planner_panels_sit_where_the_device_points(across, up, camera):
+    from device.seestar_util import Util
+
+    cfg = replace(CFG, fov_deg=Util.model_fov_deg("S30 Pro"), wide_fov_deg=Util.model_wide_fov_deg("S30 Pro"))
+    target = mosaic("Core", ra=17.76, dec=-29.0, across=across, up=up, camera=camera, panel_overlap=20)
+    fov = cfg.wide_fov_deg if camera == "wide" else cfg.fov_deg
+    # The device's own stepping, as mosaic_thread_fn does it.
+    d_ra, d_dec = Util.mosaic_next_center_spacing(target.ra, target.dec, 20, fov)
+    ra = target.ra + (d_ra / 2 if across % 2 == 0 else 0)
+    dec = target.dec + (d_dec / 2 if up % 2 == 0 else 0)
+    expected, cur_dec = [], dec - (up // 2) * d_dec
+    for _ in range(up):
+        step = Util.mosaic_next_center_spacing(ra, cur_dec, 20, fov)[0]
+        cur_ra = ra - (across // 2) * step
+        for _ in range(across):
+            expected.append((cur_ra % 24, cur_dec))
+            cur_ra += step
+        cur_dec += d_dec
+    got = planner.panel_centres(target, cfg)
+    assert [v for p in got for v in p] == pytest.approx([v for p in expected for v in p])
+
+
+def test_a_wide_mosaic_is_scheduled_on_the_wide_camera():
+    target = mosaic("Core", across=2, up=1, camera="wide")
+    plan = planner.NightPlan(key=NIGHT, dark_start=0, dark_end=9000)
+    plan.blocks.append(planner.Block(target, 0, 2 * 3600, 2 * 180, 1.0))
+    params = next(i for i in to_schedule(plan)["list"] if i["action"] == "start_mosaic")["params"]
+    assert params["camera"] == "wide" and params["ra_num"] == 2
+
+
+def test_the_scope_reads_the_wide_stack_with_its_panel():
+    class Dev:
+        is_connected = True
+        device_name = "x"
+        schedule = {
+            "state": "working",
+            "item_number": 1,
+            "list": [{"action": "start_mosaic", "params": {"target_name": "Core", "ra_num": 2, "dec_num": 1}}],
+        }
+        scheduler_thread = None
+        framing_status = None
+        imaging_camera = "wide"
+        event_state = {
+            "WideStack": {"Event": "Stack", "stacked_frame": 42, "dropped_frame": 3},
+            "scheduler": {"cur_scheduler_item": {"cur_ra_panel_num": 2, "cur_dec_panel_num": 1}},
+        }
+
+        def send_message_param_sync(self, data):
+            if data["method"] == "get_device_state":
+                return {"result": {"setting": {"second_camera": {"exp_ms": {"stack_l": 10000}}}}}
+            return {"result": {}}
+
+    state = RealScope(lambda: Dev()).read()
+    assert (state.wide_target, state.wide_stacked, state.wide_dropped) == ("Core_21", 42, 3)
+    assert state.wide_exposure_s == 10.0 and state.wide_lapse_s is None

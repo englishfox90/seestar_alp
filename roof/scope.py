@@ -35,6 +35,13 @@ class ScopeState:
     mosaic_estimate_h: float | None = None  # the firmware's time for this framing
     gain: int | None = None
     framing: dict | None = None  # the device's framing guard: its latest outcome
+    # The wide angle camera's stack, while a schedule item images with it. Its
+    # events, not the app state, carry it: View.Stack is the telescope's.
+    wide_target: str = ""  # the stack's name, with a mosaic's _<ra><dec> panel
+    wide_stacked: int = 0
+    wide_dropped: int = 0
+    wide_lapse_s: float | None = None  # None when the events don't say
+    wide_exposure_s: float = 0.0
 
 
 def _failed(res) -> str | None:
@@ -95,6 +102,7 @@ class RealScope:
                 mosaic_scale=float(mosaic["scale"]),
                 mosaic_estimate_h=float(estimate) if isinstance(estimate, (int, float)) else None,
             )
+        state = self._wide(dev, state, items, number, device_state)
         app_state = self._rpc(dev, "iscope_get_app_state")
         view = app_state.get("View") or {}
         plan = app_state.get("ViewPlan") or {}
@@ -113,6 +121,35 @@ class RealScope:
             plan_state=str(plan.get("state", "")),
             target=target or str(view.get("target_name", "")),
             gain=view.get("gain") if isinstance(view.get("gain"), int) else None,
+        )
+
+    @staticmethod
+    def _wide(dev, state, items, number, device_state) -> ScopeState:
+        """The wide angle camera's stack, when the running item images with it."""
+        if getattr(dev, "imaging_camera", "main") not in ("wide", "both") or state.sched_state != "working":
+            return state
+        events = getattr(dev, "event_state", None) or {}
+        stack = events.get("WideStack")
+        if not isinstance(stack, dict) or not stack.get("stacked_frame"):
+            return state
+        params = items[number - 1].get("params", {}) if 1 <= number <= len(items) else {}
+        name = params.get("target_name") or state.target
+        if not name:
+            return state
+        item = (events.get("scheduler") or {}).get("cur_scheduler_item") or {}
+        panels = int(params.get("ra_num", 1) or 1) * int(params.get("dec_num", 1) or 1)
+        if panels > 1 and item.get("cur_ra_panel_num") and item.get("cur_dec_panel_num"):
+            name = f"{name}_{item['cur_ra_panel_num']}{item['cur_dec_panel_num']}"
+        lapse = stack.get("lapse_ms")
+        second = (device_state.get("setting") or {}).get("second_camera") or {}
+        exposure = ((second.get("exp_ms") or {}).get("stack_l") or 0) / 1000
+        return replace(
+            state,
+            wide_target=str(name),
+            wide_stacked=int(stack.get("stacked_frame") or 0),
+            wide_dropped=int(stack.get("dropped_frame") or 0),
+            wide_lapse_s=float(lapse) / 1000 if isinstance(lapse, (int, float)) else None,
+            wide_exposure_s=float(exposure) if isinstance(exposure, (int, float)) else 0.0,
         )
 
     @staticmethod

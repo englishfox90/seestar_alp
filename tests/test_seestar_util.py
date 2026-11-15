@@ -224,3 +224,9 @@ def test_s30_pro_panels_step_by_its_own_field():
     assert ra_step == pytest.approx(134.6 / 60 / 15 * 0.8)  # hours
     # About three times the S50's spacing this always used.
     assert dec_step / Util.mosaic_next_center_spacing(0.0, 0.0, 20)[1] == pytest.approx(3.09, rel=0.01)
+
+
+def test_wide_field_is_known_only_where_measured():
+    assert Util.model_wide_fov_deg("Seestar S30P") == pytest.approx((31.1, 52.65))
+    assert Util.model_wide_fov_deg("Seestar S50") is None
+    assert Util.model_wide_fov_deg("") is None

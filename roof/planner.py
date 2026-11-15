@@ -59,6 +59,9 @@ class PlanConfig:
     # The telescope's (RA, Dec) field in degrees, for how far a mosaic's panels spread.
     # None: the widest model's, so a mosaic is never thought lower than it is.
     fov_deg: tuple | None = None
+    # The wide angle camera's field, for a wide mosaic. None: the S30 Pro's, the
+    # only one measured.
+    wide_fov_deg: tuple | None = None
     # Moon separation/width in deg/days at full moon. LP is Target Scheduler's
     # default; no filter is a stricter starting guess.
     moon_lp: tuple = (60.0, 7.0)
@@ -163,29 +166,44 @@ class _Night:
     def _ephem_date(when: float):
         return ephem.Date(datetime.fromtimestamp(when, timezone.utc).replace(tzinfo=None))
 
-    def masks(self, target) -> tuple[list[bool], list[bool]]:
-        """(high enough, high enough and clear of the moon) for each dark step."""
-        cfg = self.cfg
+    @staticmethod
+    def _body(ra_h, dec):
         body = ephem.FixedBody()
-        body._ra = ephem.hours(math.radians(target.ra * 15.0))
-        body._dec = ephem.degrees(math.radians(target.dec))
+        body._ra = ephem.hours(math.radians(ra_h * 15.0))
+        body._dec = ephem.degrees(math.radians(dec))
         body._epoch = ephem.J2000
+        return body
+
+    def _above(self, body) -> bool:
+        cfg = self.cfg
+        altitude = math.degrees(body.alt)
+        floor = cfg.min_alt_deg
+        if cfg.horizon is not None:
+            floor = max(floor, cfg.horizon.altitude_at(math.degrees(body.az)) + cfg.horizon_margin_deg)
+        return altitude >= floor
+
+    def masks(self, target) -> tuple[list[bool], list[bool]]:
+        """(high enough, high enough and clear of the moon) for each dark step. A
+        mosaic is high enough when every one of its panels is."""
+        cfg = self.cfg
+        body = self._body(target.ra, target.dec)
+        panels = [self._body(ra, dec) for ra, dec in panel_centres(target, cfg)]
         default = cfg.moon_lp if target.lp_filter else cfg.moon_no_filter
         separation = target.moon_sep_deg if target.moon_sep_deg is not None else default[0]
         width = target.moon_width_days if target.moon_width_days is not None else default[1]
         high, clear = [], []
-        spread = panel_spread_deg(target, cfg)
         for when, (moon_alt, moon_ra, moon_dec, age) in zip(self.times, self._moon):
             self._observer.date = self._ephem_date(when)
             body.compute(self._observer)
-            altitude = math.degrees(body.alt)
-            floor = cfg.min_alt_deg
-            if cfg.horizon is not None:
-                floor = max(
-                    floor,
-                    cfg.horizon.altitude_at(math.degrees(body.az)) + cfg.horizon_margin_deg,
-                )
-            above = altitude - spread >= floor
+            if panels:
+                above = True
+                for panel in panels:
+                    panel.compute(self._observer)
+                    if not self._above(panel):
+                        above = False
+                        break
+            else:
+                above = self._above(body)
             distance = math.degrees(ephem.separation((body.ra, body.dec), (moon_ra, moon_dec)))
             moon_ok = moon_alt <= 0 or distance >= moon_required_separation(age, separation, width)
             high.append(above)
@@ -195,19 +213,44 @@ class _Night:
 
 # The widest field of any model (the S30 Pro's), in degrees (RA, Dec).
 WIDEST_FOV_DEG = (134.6 / 60, 239.2 / 60)
+# The S30 Pro's wide angle camera, measured from a plate-solved wide stack.
+WIDE_FOV_DEG = (1866.0 / 60, 3159.0 / 60)
 
 
-def panel_spread_deg(target, cfg) -> float:
-    """How far a mosaic's outermost panel centre sits from its centre, in degrees: the
-    centre has to clear the horizon by this for every panel to. 0 for one panel."""
+def panel_fov_deg(target, cfg) -> tuple:
+    """The field a mosaic's panels are spaced by: its camera's."""
+    if getattr(target, "camera", "main") == "wide":
+        return cfg.wide_fov_deg or WIDE_FOV_DEG
+    return cfg.fov_deg or WIDEST_FOV_DEG
+
+
+def panel_centres(target, cfg) -> list[tuple[float, float]]:
+    """A mosaic's panel centres (RA hours, Dec deg), stepped exactly as ALP's
+    mosaic_thread_fn steps them; empty for one panel."""
     if not getattr(target, "mosaic", False):
-        return 0.0
-    ra_deg, dec_deg = cfg.fov_deg or WIDEST_FOV_DEG
-    step = 1 - target.panel_overlap / 100.0
-    return math.hypot(
-        (target.panels_ra - 1) / 2 * ra_deg * step,
-        (target.panels_dec - 1) / 2 * dec_deg * step,
-    )
+        return []
+    ra_deg, dec_deg = panel_fov_deg(target, cfg)
+    keep = 1 - target.panel_overlap / 100.0
+
+    def ra_step(dec):  # hours
+        return 1.0 if abs(dec) > 85 else ra_deg / 15.0 * keep / math.cos(math.radians(dec))
+
+    dec_step = dec_deg * keep
+    centre_ra, centre_dec = target.ra, target.dec
+    if target.panels_ra % 2 == 0:
+        centre_ra += ra_step(target.dec) / 2
+    if target.panels_dec % 2 == 0:
+        centre_dec += dec_step / 2
+    out = []
+    dec = centre_dec - (target.panels_dec // 2) * dec_step
+    for _ in range(target.panels_dec):
+        step = ra_step(dec)
+        ra = centre_ra - (target.panels_ra // 2) * step
+        for _ in range(target.panels_ra):
+            out.append((ra % 24.0, max(-90.0, min(90.0, dec))))
+            ra += step
+        dec += dec_step
+    return out
 
 
 def switch_overhead(target, cfg) -> float:
@@ -255,7 +298,7 @@ def _season_key(target, cfg, key):
         key, cfg.lat, cfg.lon, cfg.sun_max_deg, cfg.min_alt_deg, horizon, cfg.horizon_margin_deg,
         cfg.moon_lp, cfg.moon_no_filter, cfg.switch_overhead_s,
         target.ra, target.dec, target.lp_filter, target.moon_sep_deg, target.moon_width_days,
-        target.framed, target.min_session_hours, cfg.fov_deg,
+        target.framed, target.min_session_hours, cfg.fov_deg, cfg.wide_fov_deg, target.camera,
         getattr(target, "panels_ra", 1), getattr(target, "panels_dec", 1), getattr(target, "panel_overlap", 0),
     )  # fmt: skip
 
@@ -600,7 +643,12 @@ def to_schedule(plan: NightPlan, panels: dict | None = None) -> dict:
         grid = None
         panel_time = block.stack_s
         if target.mosaic:
-            grid = {"ra": target.panels_ra, "dec": target.panels_dec, "overlap": target.panel_overlap}
+            grid = {
+                "ra": target.panels_ra,
+                "dec": target.panels_dec,
+                "overlap": target.panel_overlap,
+                "camera": "wide" if target.camera == "wide" else "main",
+            }
             chosen = (panels or {}).get(target.id) or target.panel_names
             if len(chosen) < target.panels:
                 grid["selected"] = chosen
@@ -732,18 +780,22 @@ def config_from_settings(settings) -> PlanConfig:
         horizon_margin_deg=float(Config.horizon_margin or 0.0),
         typical_open_chance=settings.typical_open_chance,
         fov_deg=_scope_fov(settings),
+        wide_fov_deg=_scope_fov(settings, wide=True),
     )
 
 
-def _scope_fov(settings):
-    """The connected scope's field, or None when it hasn't said what model it is."""
+def _scope_fov(settings, wide=False):
+    """The connected scope's field (its wide angle camera's with ``wide``), or None
+    when it hasn't said what model it is, or that field isn't measured."""
     try:
         from device import telescope
         from device.seestar_util import Util
 
         device = telescope.seestar_dev.get(settings.device_num)
         model = getattr(device, "product_model", "") if device is not None else ""
-        return Util.model_fov_deg(model) if model else None
+        if not model:
+            return None
+        return Util.model_wide_fov_deg(model) if wide else Util.model_fov_deg(model)
     except Exception:
         return None
 
