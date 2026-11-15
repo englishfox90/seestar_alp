@@ -1055,6 +1055,32 @@ def test_async_get_device_state_reply_confirms_eq_mode(monkeypatch, seestar):
     assert seestar.is_EQ_mode is False
 
 
+def test_get_device_state_reply_caches_the_model(monkeypatch, seestar):
+    assert seestar.product_model == ""
+    _receive_device_replies(
+        monkeypatch,
+        seestar,
+        {"jsonrpc": "2.0", "method": "get_device_state", "result": {"device": {"product_model": "Seestar S30P"}}, "id": 901},
+    )
+    assert seestar.product_model == "Seestar S30P"
+
+
+def test_mosaic_panels_step_by_the_scopes_own_field(monkeypatch, seestar):
+    from device.seestar_util import Util
+
+    seen = []
+    real = Util.mosaic_next_center_spacing
+    seestar.product_model = "Seestar S30P"
+    _run_mosaic_panels(monkeypatch, seestar, 2, 1, check_horizon=False)  # sets the stubs up
+    monkeypatch.setattr(
+        "device.seestar_device.Util.mosaic_next_center_spacing",
+        lambda *args: seen.append(args[3]) or real(*args),
+    )
+    seestar.schedule["state"] = "working"
+    seestar.mosaic_thread_fn("M31", 0.7122, 41.269, False, 5, 2, 1, 10, 80, False, "", 1, 5)
+    assert seen and all(fov == pytest.approx((134.6 / 60, 239.2 / 60)) for fov in seen)
+
+
 def test_late_get_device_state_reply_after_sync_timeout_confirms_eq_mode(
     monkeypatch, seestar
 ):

@@ -160,10 +160,32 @@ def target_item(target: dict) -> dict:
         if "star_map_angle" in mosaic:
             params["mosaic_star_map_angle"] = float(mosaic["star_map_angle"])
         return {"action": "start_framed_mosaic", "params": params}
+    panels = target.get("panels")
+    if panels and int(panels.get("ra", 1)) * int(panels.get("dec", 1)) > 1:
+        # A traditional mosaic: panel_time_sec is then each panel's.
+        params.update(
+            ra_num=int(panels["ra"]),
+            dec_num=int(panels["dec"]),
+            panel_overlap_percent=int(panels.get("overlap", PANEL_OVERLAP)),
+        )
+        if panels.get("selected"):
+            params["selected_panels"] = ";".join(panels["selected"])
+        return {"action": "start_mosaic", "params": params}
     params.update(ra_num=1, dec_num=1, panel_overlap_percent=PANEL_OVERLAP)
     if target.get("camera") in ("wide", "both"):
         params["camera"] = target["camera"]
     return {"action": "start_mosaic", "params": params}
+
+
+def item_seconds(item: dict) -> float:
+    """How long an imaging item asks to run: a mosaic's panel time is per panel."""
+    params = item.get("params", {}) if isinstance(item, dict) else {}
+    seconds = params.get("panel_time_sec", 0) or 0
+    if item.get("action") == "start_mosaic":
+        selected = [p for p in str(params.get("selected_panels") or "").split(";") if p]
+        count = len(selected) or int(params.get("ra_num", 1) or 1) * int(params.get("dec_num", 1) or 1)
+        seconds *= max(1, count)
+    return seconds
 
 
 def loaded_plan(device) -> dict | None:

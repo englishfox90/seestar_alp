@@ -32,6 +32,12 @@ def base_name(view_target: str) -> str:
     return " ".join(_PANEL_SUFFIX.sub("", str(view_target)).lower().split())
 
 
+def panel_of(view_target: str) -> str | None:
+    """The two-digit panel a mosaic's stack name ends in, "21" for "M31_21"."""
+    match = _PANEL_SUFFIX.search(str(view_target or ""))
+    return match.group(0)[1:] if match and len(match.group(0)) == 3 else None
+
+
 def counts(target, row) -> bool:
     """Whether a run counts toward its target's goal. Single frames always do. A framed
     run does when its saved image came out covered, or with no image judged, once it ran
@@ -164,6 +170,16 @@ class SessionLog:
             if judged:
                 self._save()
         return judged
+
+    def panel_hours(self, target) -> dict:
+        """Counted hours per panel of a mosaic target, every panel listed."""
+        hours = {name: 0.0 for name in target.panel_names}
+        key = base_name(target.name)
+        for row in self.rows():
+            panel = panel_of(row.get("name"))
+            if row["target"] == key and panel in hours and counts(target, row):
+                hours[panel] += row["stacked"] * (row.get("exposure_s") or 0) / 3600
+        return hours
 
     def progress(self, target) -> Progress:
         """Totals for a target. A framed run counts when its image came out covered, or

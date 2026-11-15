@@ -291,6 +291,20 @@
     fields(camera).forEach((size) => frames.add(polygon(ra, dec, size, frameScale, frameAngle, color, lineWidth)));
   }
 
+  // A traditional mosaic: one telescope frame per panel, where the scope will point.
+  function addPanels(t, color, lineWidth) {
+    const size = { w: fovW, h: fovH };
+    window.FrameGeometry.panelCentres(t.ra, t.dec, t.panels_ra, t.panels_dec, t.overlap, fovW, fovH).forEach(
+      function ([ra, dec]) {
+        frames.add(polygon(ra, dec, size, 1, 0, color, lineWidth));
+      }
+    );
+  }
+
+  function isMosaic(t) {
+    return t && (t.panels_ra || 1) * (t.panels_dec || 1) > 1;
+  }
+
   function draw() {
     if (!aladin) return;
     aladin.selectObjects(); // a selected frame would outlive removeAll
@@ -298,10 +312,16 @@
     const palette = colors();
     targets.forEach(function (t) {
       if (current.target && t.id === current.target.id) return;
-      addFrames(t.ra, t.dec, t.camera, t.scale, t.angle, palette.other, 1);
+      if (isMosaic(t)) addPanels(t, palette.other, 1);
+      else addFrames(t.ra, t.dec, t.camera, t.scale, t.angle, palette.other, 1);
     });
     if (current.ra !== null) {
-      addFrames(current.ra, current.dec, current.camera, scale(), angle(), palette.selected, 3);
+      // A listed mosaic keeps its panels until framing makes it a framed target.
+      if (isMosaic(current.target) && scale() <= 1) {
+        addPanels(Object.assign({}, current.target, { ra: current.ra, dec: current.dec }), palette.selected, 3);
+      } else {
+        addFrames(current.ra, current.dec, current.camera, scale(), angle(), palette.selected, 3);
+      }
     }
   }
 
@@ -339,9 +359,14 @@
   function fit() {
     const rect = view.getBoundingClientRect();
     aladin.setProjection("SIN");
-    const size = fields(current.camera)[0];
+    let size = fields(current.camera)[0];
+    if (isMosaic(current.target) && scale() <= 1) {
+      const t = current.target;
+      const keep = (100 - t.overlap) / 100;
+      size = { w: fovW * (1 + (t.panels_ra - 1) * keep), h: fovH * (1 + (t.panels_dec - 1) * keep) };
+    }
     aladin.setFoV(
-      window.FrameGeometry.fitFov(size.w, size.h, scale(), angle(), rect.width, rect.height)
+      window.FrameGeometry.fitFov(size.w, size.h, isMosaic(current.target) ? 1 : scale(), angle(), rect.width, rect.height)
     );
   }
 

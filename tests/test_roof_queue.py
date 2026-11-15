@@ -1233,3 +1233,131 @@ def test_page_saves_a_targets_camera(page, monkeypatch):
     result = client.simulate_post("/targets/update", headers=FORM, body=base + "&camera=infrared")
     assert result.status_code == 400
     assert queue_web._queue().all()[0].camera == "both"
+
+
+# ---- traditional mosaics ---------------------------------------------------
+
+
+def mosaic(name="Sadr", ra=20.37, dec=40.26, across=2, up=2, **kw):
+    kw.setdefault("goal_hours", 4.0)
+    kw.setdefault("min_session_hours", 2.0)
+    return Target(id=name, name=name, ra=ra, dec=dec, panels_ra=across, panels_dec=up, **kw)
+
+
+def test_a_mosaic_names_its_panels_as_the_firmware_does():
+    target = mosaic(across=3, up=2)
+    assert target.mosaic and target.panels == 6
+    assert target.panel_names == ["11", "21", "31", "12", "22", "32"]
+    # Framing wins: a framed target is one stack, whatever its panel counts say.
+    assert not replace(target, mosaic_scale=1.5).mosaic
+    assert single().panel_names == []
+
+
+def test_panel_hours_come_from_each_panels_stack(tmp_path):
+    log = SessionLog(str(tmp_path / "s.json"))
+    log.observe(stacking("Sadr_11", stacked=360, lapse=3700, exposure=10), "n", 10_000)
+    log.observe(stacking("Sadr_21", stacked=180, lapse=1900, exposure=10), "n", 20_000)
+    hours = log.panel_hours(mosaic())
+    assert hours == {"11": pytest.approx(1.0), "21": pytest.approx(0.5), "12": 0.0, "22": 0.0}
+
+
+def test_a_mosaics_goal_is_per_panel(tmp_path):
+    log = SessionLog(str(tmp_path / "s.json"))
+    log.observe(stacking("Sadr_11", stacked=360, lapse=3700, exposure=10), "n", 10_000)
+    target = mosaic(goal_hours=4.0, prior_hours=0.5)
+    # Panel 11 is short 2.5 h, the other three 3.5 h each.
+    assert planner.remaining_hours([target], log)[target.id] == pytest.approx(2.5 + 3 * 3.5)
+    assert planner.goal_total(target) == 16.0
+
+
+def test_a_night_shoots_the_panels_furthest_behind(tmp_path):
+    log = SessionLog(str(tmp_path / "s.json"))
+    log.observe(stacking("Sadr_11", stacked=720, lapse=7300, exposure=10), "n", 10_000)
+    log.observe(stacking("Sadr_21", stacked=90, lapse=1000, exposure=10), "n", 20_000)
+    target = mosaic(goal_hours=4.0)
+    assert planner.panels_to_shoot(target, log) == ["21", "12", "22"]
+    done = mosaic(goal_hours=0.2)
+    log.observe(stacking("Sadr_12", stacked=90, lapse=1000, exposure=10), "n", 30_000)
+    log.observe(stacking("Sadr_22", stacked=90, lapse=1000, exposure=10), "n", 40_000)
+    assert planner.panels_to_shoot(done, log) == []
+
+
+def test_a_mosaic_pays_a_slew_solve_and_focus_per_panel():
+    target = mosaic()
+    plan = plan_night([target], remaining(target), NIGHT, CFG)
+    assert plan.blocks[0].overhead_s == 4 * CFG.switch_overhead_s
+
+
+def test_a_mosaics_centre_must_clear_the_horizon_by_its_spread():
+    wide = mosaic(across=3, up=3, panel_overlap=10)
+    alone = single("Sadr", ra=wide.ra, dec=wide.dec)
+    night = planner._Night(NIGHT, CFG)
+    assert sum(night.masks(wide)[0]) < sum(night.masks(alone)[0])
+    assert planner.panel_spread_deg(wide, CFG) > 4  # an S30 Pro 3x3 spreads far
+    assert planner.panel_spread_deg(alone, CFG) == 0
+
+
+def test_a_mosaic_block_becomes_a_start_mosaic_with_its_panels():
+    target = mosaic(panel_overlap=15)
+    plan = planner.NightPlan(key=NIGHT, dark_start=0, dark_end=9000)
+    plan.blocks.append(planner.Block(target, 0, 4 * 3600, 4 * 180, 1.0))
+    item = next(i for i in to_schedule(plan)["list"] if i["action"] == "start_mosaic")
+    params = item["params"]
+    assert (params["ra_num"], params["dec_num"], params["panel_overlap_percent"]) == (2, 2, 15)
+    assert "selected_panels" not in params and "camera" not in params
+    assert params["panel_time_sec"] == (4 * 3600 - 4 * 180) // 4
+    assert schedule_tools.item_seconds(item) == 4 * params["panel_time_sec"]
+
+    some = to_schedule(plan, {target.id: ["21", "22"]})["list"]
+    params = next(i for i in some if i["action"] == "start_mosaic")["params"]
+    assert params["selected_panels"] == "21;22"
+    assert params["panel_time_sec"] == (4 * 3600 - 2 * 180) // 2
+    assert schedule_tools.validate_items(some)[0] == []
+
+
+def test_a_stored_mosaic_imports_with_its_panels():
+    items = [
+        {
+            "action": "start_mosaic",
+            "params": {"target_name": "Sadr", "ra": 20.37, "dec": 40.26, "ra_num": 3, "dec_num": 2,
+                       "panel_overlap_percent": 25, "panel_time_sec": 600},
+        }
+    ]  # fmt: skip
+    (found,) = targets_from_schedule(items, "test")
+    assert (found["panels_ra"], found["panels_dec"], found["panel_overlap"]) == (3, 2, 25)
+    assert found["min_session_hours"] == 3.0
+
+
+def test_the_page_turns_a_target_into_a_mosaic_and_back(page, monkeypatch):
+    client, queue_web, _ = page
+    import roof.web
+
+    monkeypatch.setattr(queue_web, "_front", lambda: _NoPage(), raising=False)
+    monkeypatch.setattr(roof.web, "_front", lambda: _NoPage())
+    client.simulate_post("/targets/add", headers=FORM, body="name=Sadr&ra=20.37&dec=40.26&goal_hours=4")
+    target = queue_web._queue().all()[0]
+    base = f"id={target.id}&goal_hours=4&min_session_hours={target.min_session_hours}&prior_hours=0&priority=normal&enabled=on"
+    client.simulate_post("/targets/update", headers=FORM, body=base + "&camera=wide&panels_ra=2&panels_dec=3&panel_overlap=15")
+    target = queue_web._queue().all()[0]
+    assert (target.panels_ra, target.panels_dec, target.panel_overlap) == (2, 3, 15)
+    assert target.mosaic and target.camera == "main"
+    assert target.min_session_hours == pytest.approx(3.0)  # untouched, so a mosaic's default
+
+    framing = f"id={target.id}&ra=20.37&dec=40.26&mosaic_scale=1.5&mosaic_angle=0"
+    client.simulate_post("/targets/framing", headers=FORM, body=framing)
+    target = queue_web._queue().all()[0]
+    assert target.framed and not target.mosaic
+
+
+@pytest.mark.parametrize("panels", ["panels_ra=0&panels_dec=1", "panels_ra=6&panels_dec=1", "panels_ra=2&panels_dec=2&panel_overlap=80"])
+def test_impossible_panels_are_refused(page, monkeypatch, panels):
+    client, queue_web, _ = page
+    import roof.web
+
+    monkeypatch.setattr(queue_web, "_front", lambda: _NoPage(), raising=False)
+    monkeypatch.setattr(roof.web, "_front", lambda: _NoPage())
+    client.simulate_post("/targets/add", headers=FORM, body="name=Sadr&ra=20.37&dec=40.26&goal_hours=4")
+    target = queue_web._queue().all()[0]
+    body = f"id={target.id}&goal_hours=4&min_session_hours=1&prior_hours=0&priority=normal&enabled=on&{panels}"
+    assert client.simulate_post("/targets/update", headers=FORM, body=body).status_code == 400
+    assert not queue_web._queue().all()[0].mosaic

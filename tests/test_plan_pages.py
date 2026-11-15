@@ -304,6 +304,7 @@ def test_targets_keeps_every_form(rig):
     assert set(update["fields"]) == {
         "id", "enabled", "goal_hours", "min_session_hours", "prior_hours", "priority", "exposure_s", "lp_filter",
         "camera",  # single frames only; a framed target has no camera choice
+        "panels_ra", "panels_dec", "panel_overlap",  # anything not framed can be a mosaic
     }
     assert _form(html, "/1/targets/remove")["fields"]["id"]["value"] == target.id
     assert set(_form(html, "/1/targets/import")["fields"]) == {"source", "goal_hours"}

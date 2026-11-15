@@ -56,6 +56,9 @@ class PlanConfig:
     weight_season: float = 1.5
     # Chance a night is open, for judging how much of a season is really usable.
     typical_open_chance: float = 0.5
+    # The telescope's (RA, Dec) field in degrees, for how far a mosaic's panels spread.
+    # None: the widest model's, so a mosaic is never thought lower than it is.
+    fov_deg: tuple | None = None
     # Moon separation/width in deg/days at full moon. LP is Target Scheduler's
     # default; no filter is a stricter starting guess.
     moon_lp: tuple = (60.0, 7.0)
@@ -171,6 +174,7 @@ class _Night:
         separation = target.moon_sep_deg if target.moon_sep_deg is not None else default[0]
         width = target.moon_width_days if target.moon_width_days is not None else default[1]
         high, clear = [], []
+        spread = panel_spread_deg(target, cfg)
         for when, (moon_alt, moon_ra, moon_dec, age) in zip(self.times, self._moon):
             self._observer.date = self._ephem_date(when)
             body.compute(self._observer)
@@ -181,12 +185,39 @@ class _Night:
                     floor,
                     cfg.horizon.altitude_at(math.degrees(body.az)) + cfg.horizon_margin_deg,
                 )
-            above = altitude >= floor
+            above = altitude - spread >= floor
             distance = math.degrees(ephem.separation((body.ra, body.dec), (moon_ra, moon_dec)))
             moon_ok = moon_alt <= 0 or distance >= moon_required_separation(age, separation, width)
             high.append(above)
             clear.append(above and moon_ok)
         return high, clear
+
+
+# The widest field of any model (the S30 Pro's), in degrees (RA, Dec).
+WIDEST_FOV_DEG = (134.6 / 60, 239.2 / 60)
+
+
+def panel_spread_deg(target, cfg) -> float:
+    """How far a mosaic's outermost panel centre sits from its centre, in degrees: the
+    centre has to clear the horizon by this for every panel to. 0 for one panel."""
+    if not getattr(target, "mosaic", False):
+        return 0.0
+    ra_deg, dec_deg = cfg.fov_deg or WIDEST_FOV_DEG
+    step = 1 - target.panel_overlap / 100.0
+    return math.hypot(
+        (target.panels_ra - 1) / 2 * ra_deg * step,
+        (target.panels_dec - 1) / 2 * dec_deg * step,
+    )
+
+
+def switch_overhead(target, cfg) -> float:
+    """Seconds lost starting a target: a slew, plate solve and focus for each panel."""
+    return cfg.switch_overhead_s * getattr(target, "panels", 1)
+
+
+def goal_total(target) -> float:
+    """Integration wanted across the whole target; a mosaic's goal is per panel."""
+    return target.goal_hours * getattr(target, "panels", 1)
 
 
 def _run_steps(mask: list[bool], index: int) -> int:
@@ -224,7 +255,8 @@ def _season_key(target, cfg, key):
         key, cfg.lat, cfg.lon, cfg.sun_max_deg, cfg.min_alt_deg, horizon, cfg.horizon_margin_deg,
         cfg.moon_lp, cfg.moon_no_filter, cfg.switch_overhead_s,
         target.ra, target.dec, target.lp_filter, target.moon_sep_deg, target.moon_width_days,
-        target.framed, target.min_session_hours,
+        target.framed, target.min_session_hours, cfg.fov_deg,
+        getattr(target, "panels_ra", 1), getattr(target, "panels_dec", 1), getattr(target, "panel_overlap", 0),
     )  # fmt: skip
 
 
@@ -236,7 +268,7 @@ def _usable_s(night, target, cfg) -> float:
         if ok:
             run += 1
             continue
-        run_s = run * STEP_S - cfg.switch_overhead_s
+        run_s = run * STEP_S - switch_overhead(target, cfg)
         if run_s >= floor_s:
             usable_s += run_s
         run = 0
@@ -375,7 +407,7 @@ def plan_night(
             usable = masks[target.id][2]
             run_s = _run_steps(usable, index) * STEP_S
             continuing = previous is not None and previous.target is target
-            overhead = 0.0 if continuing else cfg.switch_overhead_s
+            overhead = 0.0 if continuing else switch_overhead(target, cfg)
             available = run_s - overhead
             minimum_s = target.min_session_hours * 3600
             # Book enough wall time to deliver what's left at the chance it opens.
@@ -424,7 +456,7 @@ def plan_night(
 
 def _score(target, remaining, cfg, night, index, run_s, continuing, available) -> float:
     priority = {"low": 0.0, "normal": 0.5, "high": 1.0}.get(target.priority, 0.5)
-    goal = max(target.goal_hours, 0.001)
+    goal = max(goal_total(target), 0.001)
     done = max(0.0, min(1.0, 1 - remaining[target.id] / goal))
     window_end = night.times[index] + run_s
     setting = 1 - (window_end - night.noon) / 86400
@@ -450,7 +482,7 @@ def _why_not(target, masks, cfg, first_index) -> str:
         return "too close to the moon whenever it's up"
     if not any(usable):
         return "roof likely closed while it's up"
-    longest = _longest_run(usable) * STEP_S - cfg.switch_overhead_s
+    longest = _longest_run(usable) * STEP_S - switch_overhead(target, cfg)
     if longest < target.min_session_hours * 3600:
         kind = "framed run" if target.framed else "session"
         return (
@@ -461,11 +493,32 @@ def _why_not(target, masks, cfg, first_index) -> str:
 
 
 def remaining_hours(targets, log) -> dict:
-    """Integration hours still wanted per target id."""
-    return {
-        t.id: max(0.0, t.goal_hours - t.prior_hours - log.progress(t).counted_hours)
-        for t in targets
-    }
+    """Integration hours still wanted per target id. A mosaic's is what its panels
+    are short of their goal, added up."""
+    out = {}
+    for t in targets:
+        if t.mosaic:
+            out[t.id] = sum(
+                max(0.0, t.goal_hours - t.prior_hours - have) for have in log.panel_hours(t).values()
+            )
+        else:
+            out[t.id] = max(0.0, t.goal_hours - t.prior_hours - log.progress(t).counted_hours)
+    return out
+
+
+# A mosaic's panels are kept within this of each other: a night shoots only the
+# panels this close to the one furthest behind.
+PANEL_CATCH_UP_H = 0.5
+
+
+def panels_to_shoot(target, log) -> list[str]:
+    """A mosaic's panels still short of their goal and furthest behind, in order."""
+    have = {p: target.prior_hours + h for p, h in log.panel_hours(target).items()}
+    short = {p: h for p, h in have.items() if h < target.goal_hours - 1e-6}
+    if not short:
+        return []
+    least = min(short.values())
+    return [p for p in target.panel_names if p in short and short[p] <= least + PANEL_CATCH_UP_H]
 
 
 def measured_rates(targets, log) -> dict:
@@ -516,8 +569,12 @@ def finish_nights(plans: list[NightPlan], targets, log) -> dict:
     return finished
 
 
-def to_schedule(plan: NightPlan) -> dict:
-    """A schedule the automation can run, up to the first gap worth parking for."""
+def to_schedule(plan: NightPlan, panels: dict | None = None) -> dict:
+    """A schedule the automation can run, up to the first gap worth parking for.
+
+    ``panels`` maps a mosaic's target id to the panels to shoot (panels_to_shoot);
+    without it every panel is. A mosaic's block is shared equally between them.
+    """
     items: list[dict] = []
     cursor = plan.blocks[0].start if plan.blocks else None
     exposure = None
@@ -540,16 +597,27 @@ def to_schedule(plan: NightPlan) -> dict:
             mosaic = {"scale": target.mosaic_scale, "angle": target.mosaic_angle}
             if target.mosaic_star_map_angle is not None:
                 mosaic["star_map_angle"] = target.mosaic_star_map_angle
+        grid = None
+        panel_time = block.stack_s
+        if target.mosaic:
+            grid = {"ra": target.panels_ra, "dec": target.panels_dec, "overlap": target.panel_overlap}
+            chosen = (panels or {}).get(target.id) or target.panel_names
+            if len(chosen) < target.panels:
+                grid["selected"] = chosen
+            # The block's overhead was one slew, solve and focus per panel.
+            per_panel = block.overhead_s / target.panels
+            panel_time = max(60, int((block.end - block.start - per_panel * len(chosen)) / len(chosen)))
         item = schedule_tools.target_item(
             {
                 "target_name": target.name,
                 "target_ra_dec": [target.ra, target.dec],
                 "lp_filter": target.lp_filter,
                 "mosaic": mosaic,
+                "panels": grid,
                 "camera": target.camera,
             }
         )
-        item["params"].update(panel_time_sec=block.stack_s, gain=target.gain)
+        item["params"].update(panel_time_sec=panel_time, gain=target.gain)
         items.append(item)
     return {"list": items}
 
@@ -568,8 +636,9 @@ def write_night_plan(settings, targets, log, now: float, directory: str) -> tupl
     if first.start > now + STEP_S:
         when = datetime.fromtimestamp(first.start).strftime("%H:%M")
         return False, f"next target is {first.target.name} at {when}"
+    panels = {b.target.id: panels_to_shoot(b.target, log) for b in plan.blocks if b.target.mosaic}
     schedule_tools.write_schedule(
-        schedule_tools.PLAN_FILE.removesuffix(".json"), to_schedule(plan), directory
+        schedule_tools.PLAN_FILE.removesuffix(".json"), to_schedule(plan, panels), directory
     )
     _write_plan_times(plan, targets, directory)
     return True, ""
@@ -584,7 +653,7 @@ def plan_summary(plan: NightPlan, targets) -> dict:
             {
                 "id": b.target.id,
                 "name": b.target.name,
-                "kind": "Framed" if b.target.framed else "Single",
+                "kind": "Framed" if b.target.framed else ("Mosaic" if b.target.mosaic else "Single"),
                 "ra": b.target.ra,
                 "dec": b.target.dec,
                 "start": b.start,
@@ -662,7 +731,21 @@ def config_from_settings(settings) -> PlanConfig:
         horizon=profile,
         horizon_margin_deg=float(Config.horizon_margin or 0.0),
         typical_open_chance=settings.typical_open_chance,
+        fov_deg=_scope_fov(settings),
     )
+
+
+def _scope_fov(settings):
+    """The connected scope's field, or None when it hasn't said what model it is."""
+    try:
+        from device import telescope
+        from device.seestar_util import Util
+
+        device = telescope.seestar_dev.get(settings.device_num)
+        model = getattr(device, "product_model", "") if device is not None else ""
+        return Util.model_fov_deg(model) if model else None
+    except Exception:
+        return None
 
 
 def main(argv=None):

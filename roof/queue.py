@@ -26,6 +26,12 @@ DEFAULT_FRAMED_SESSION_HOURS = 4.0
 KNOWN_FRAMING_HOURS = {"1.70": 1.375}
 DEFAULT_EXPOSURE_S = 30.0
 DEFAULT_GAIN = 200
+# A traditional mosaic: panels across (RA) and up (Dec), each its own stack. The
+# firmware names a panel by its two digits, so each side stays a single digit.
+MAX_PANELS_PER_SIDE = 5
+DEFAULT_PANEL_OVERLAP = 20  # percent
+# Shortest run for a new mosaic, per panel, so one night does every panel some good.
+DEFAULT_MOSAIC_PANEL_HOURS = 0.5
 
 
 @dataclass
@@ -45,7 +51,11 @@ class Target:
     mosaic_scale: float = 1.0
     mosaic_angle: float = 0.0
     mosaic_star_map_angle: float | None = None
-    camera: str = "main"  # a framed target always uses the telescope
+    camera: str = "main"  # a framed target or mosaic always uses the telescope
+    # Traditional mosaic: goal_hours and prior_hours are then per panel.
+    panels_ra: int = 1
+    panels_dec: int = 1
+    panel_overlap: int = DEFAULT_PANEL_OVERLAP
     moon_sep_deg: float | None = None  # None: the default for its filter
     moon_width_days: float | None = None
     source: str = ""
@@ -53,6 +63,22 @@ class Target:
     @property
     def framed(self) -> bool:
         return self.mosaic_scale > 1.0
+
+    @property
+    def panels(self) -> int:
+        """Panels it's imaged as: 1 unless it's a traditional mosaic."""
+        return 1 if self.framed else max(1, self.panels_ra) * max(1, self.panels_dec)
+
+    @property
+    def mosaic(self) -> bool:
+        return self.panels > 1
+
+    @property
+    def panel_names(self) -> list[str]:
+        """Panel labels in the firmware's order: RA digit then Dec digit, "11", "21"..."""
+        if not self.mosaic:
+            return []
+        return [f"{ra + 1}{dec + 1}" for dec in range(self.panels_dec) for ra in range(self.panels_ra)]
 
 
 def _key(name: str) -> str:
@@ -122,6 +148,14 @@ def targets_from_schedule(items: list, source: str) -> list[dict]:
         }
         if exposure_s:
             target["exposure_s"] = exposure_s
+        ra_num, dec_num = int(params.get("ra_num", 1) or 1), int(params.get("dec_num", 1) or 1)
+        if action == "start_mosaic" and ra_num * dec_num > 1:
+            target.update(
+                panels_ra=min(ra_num, MAX_PANELS_PER_SIDE),
+                panels_dec=min(dec_num, MAX_PANELS_PER_SIDE),
+                panel_overlap=int(params.get("panel_overlap_percent", DEFAULT_PANEL_OVERLAP)),
+                min_session_hours=DEFAULT_MOSAIC_PANEL_HOURS * ra_num * dec_num,
+            )
         framing = None
         if action == "start_framed_mosaic":
             framing = {
@@ -235,7 +269,10 @@ class TargetQueue:
                     by_name[_key(target.name)] = target
                     added += 1
                     continue
-                for field_ in ("ra", "dec", "mosaic_scale", "mosaic_angle", "mosaic_star_map_angle"):
+                for field_ in (
+                    "ra", "dec", "mosaic_scale", "mosaic_angle", "mosaic_star_map_angle",
+                    "panels_ra", "panels_dec", "panel_overlap",
+                ):  # fmt: skip
                     if field_ in fields_:
                         setattr(existing, field_, fields_[field_])
                 updated += 1

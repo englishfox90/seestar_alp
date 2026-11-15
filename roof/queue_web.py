@@ -54,6 +54,8 @@ def _night_label(key: str) -> str:
 def _framing(target) -> str:
     if target.framed:
         return f"Framed {target.mosaic_scale:g}x at {target.mosaic_angle:g}°"
+    if target.mosaic:
+        return f"Mosaic {target.panels_ra} across by {target.panels_dec} up, {target.panel_overlap}% overlap"
     return {"wide": "Single frame, wide angle", "both": "Single frame, both cameras"}.get(
         target.camera, "Single frame"
     )
@@ -132,6 +134,14 @@ def _context() -> dict:
         progress = log.progress(target)
         estimate = estimates.hours(target.mosaic_scale) if target.framed else None
         have = target.prior_hours + progress.counted_hours
+        panels = None
+        if target.mosaic:
+            # Per panel: the bar shows the panel furthest behind.
+            panels = [
+                {"name": name, "have": round(target.prior_hours + hours, 1)}
+                for name, hours in log.panel_hours(target).items()
+            ]
+            have = min(p["have"] for p in panels)
         context["rows"].append(
             {
                 "target": target,
@@ -145,6 +155,7 @@ def _context() -> dict:
                 "rate": round(progress.measured_rate * 100) if progress.measured_rate else None,
                 "finish": _night_label(finished[target.id]) if target.id in finished else None,
                 "season_end": _season_end(target, seasons.get(target.id), first_key, plan_cfg),
+                "panels": panels,
             }
         )
     rows = [_plan_row(plan, names) for plan in plans[:SHOWN_NIGHTS]]
@@ -163,7 +174,10 @@ def _sky_targets() -> list[dict]:
             "dec": t.dec,
             "scale": t.mosaic_scale,
             "angle": t.mosaic_angle,
-            "camera": "main" if t.framed else t.camera,
+            "camera": "main" if t.framed or t.mosaic else t.camera,
+            "panels_ra": t.panels_ra if t.mosaic else 1,
+            "panels_dec": t.panels_dec if t.mosaic else 1,
+            "overlap": t.panel_overlap,
         }
         for t in _queue().all()
     ]
@@ -187,6 +201,7 @@ class QueuePage:
             resp,
             "target_list.html",
             priorities=target_queue.PRIORITIES,
+            max_panels=target_queue.MAX_PANELS_PER_SIDE,
             import_schedules=[
                 name
                 for name in schedule_tools.list_schedules()
@@ -268,6 +283,28 @@ def _coordinate(text, unit, low, high) -> float:
     if not low <= value <= high:
         raise falcon.HTTPBadRequest(description=f"coordinate {text!r} is out of range")
     return round(float(value), 4)
+
+
+def _form_panels(form, target) -> dict:
+    """Panels across, up and overlap from a form; a field it didn't send stays as it is.
+    More than one panel makes it a traditional mosaic, so it stops being framed."""
+    if not any(k in form for k in ("panels_ra", "panels_dec", "panel_overlap")):
+        return {}
+    try:
+        across = int(form.get("panels_ra", target.panels_ra) or 1)
+        up = int(form.get("panels_dec", target.panels_dec) or 1)
+        overlap = int(form.get("panel_overlap", target.panel_overlap) or 0)
+    except (TypeError, ValueError):
+        raise falcon.HTTPBadRequest(description="panels and overlap must be whole numbers") from None
+    top = target_queue.MAX_PANELS_PER_SIDE
+    if not (1 <= across <= top and 1 <= up <= top and 0 <= overlap <= 50):
+        raise falcon.HTTPBadRequest(description="panels or overlap is out of range")
+    changes = {"panels_ra": across, "panels_dec": up, "panel_overlap": overlap}
+    if across * up > 1:
+        changes.update(mosaic_scale=1.0, camera="main")
+        if not target.mosaic:
+            changes["min_session_hours"] = target_queue.DEFAULT_MOSAIC_PANEL_HOURS * across * up
+    return changes
 
 
 def _form_camera(form, scale: float) -> str:
@@ -365,6 +402,16 @@ class QueueUpdate(_QueueAction):
         if prior < 0:
             raise falcon.HTTPBadRequest(description="prior_hours is out of range")
         minimum = _positive(form, "min_session_hours", maximum=14)
+        listed = next((t for t in _queue().all() if t.id == form.get("id")), None)
+        if listed is None:
+            return "That target is no longer listed."
+        panel_changes = _form_panels(form, listed)
+        if "min_session_hours" in panel_changes and minimum == listed.min_session_hours:
+            minimum = panel_changes.pop("min_session_hours")
+        panel_changes.pop("min_session_hours", None)
+        capture = _form_capture(form)
+        if panel_changes.get("camera"):
+            capture.pop("camera", None)
         changed = _queue().update(
             form.get("id", ""),
             goal_hours=_positive(form, "goal_hours"),
@@ -372,7 +419,8 @@ class QueueUpdate(_QueueAction):
             prior_hours=prior,
             priority=priority,
             enabled=form.get("enabled") == "on",
-            **_form_capture(form),
+            **capture,
+            **panel_changes,
         )
         if not changed:
             return "That target is no longer listed."
@@ -400,13 +448,15 @@ class QueueFraming(_QueueAction):
             "mosaic_angle": angle,
         }
         if "camera" in form or scale > 1.0:
-            changes["camera"] = _form_camera(form, scale)
+            changes["camera"] = "main" if target.mosaic and scale <= 1.0 else _form_camera(form, scale)
         if target.mosaic_star_map_angle is not None:
             # The app's star map angle tracks the framing angle at a fixed offset.
             changes["mosaic_star_map_angle"] = target.mosaic_star_map_angle + angle - target.mosaic_angle
         estimate = _estimates().hours(scale) if scale > 1.0 else None
         if scale > 1.0 and not target.framed:
             changes["min_session_hours"] = estimate or target_queue.DEFAULT_FRAMED_SESSION_HOURS
+        if scale > 1.0 and target.mosaic:
+            changes.update(panels_ra=1, panels_dec=1)  # framing replaces the panels
         _queue().update(target.id, **changes)
         minimum = changes.get("min_session_hours", target.min_session_hours)
         if _short_of_estimate(minimum, estimate):

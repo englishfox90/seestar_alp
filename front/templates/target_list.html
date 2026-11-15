@@ -40,7 +40,7 @@
             <span class="ssc-row__sub plan-target__facts">{{ row.framing|e }}, {{ "LP filter" if t.lp_filter else "No filter" }}, {{ t.exposure_s|round(1) }} s, gain {{ t.gain|e }}{% if row.season_end %}, out of reach after about {{ row.season_end|e }}{% endif %}</span>
           </span>
           <span class="plan-target__bar">{{ ui.bar(row.percent) }}</span>
-          <span class="plan-target__have">{{ row.have }} of {{ "%g"|format(t.goal_hours) }} h</span>
+          <span class="plan-target__have">{{ row.have }} of {{ "%g"|format(t.goal_hours) }} h{% if row.panels %} a panel{% endif %}</span>
           <span class="plan-target__priority">{{ t.priority|capitalize|e }}</span>
           <span class="plan-target__forecast">{% if row.finish %}<span class="plan-target__forecast-word">Done </span>{{ row.finish|e }}{% else %}Not within 4 weeks{% endif %}</span>
           <span class="plan-target__chevron">{{ ui.icon("down", 16) }}</span>
@@ -49,7 +49,7 @@
           <input type="hidden" name="id" value="{{ t.id }}">
           <div class="plan-target__notes">
             <p class="ssc-footnote plan-target__facts-detail">{{ row.framing|e }}, {{ "LP filter" if t.lp_filter else "No filter" }}, {{ t.exposure_s|round(1) }} s, gain {{ t.gain|e }}{% if row.season_end %}, out of reach after about {{ row.season_end|e }}{% endif %}</p>
-            <p class="ssc-footnote">{{ row.have }} of {{ "%g"|format(t.goal_hours) }} h in {{ row.sessions }} {{ "run" if row.sessions == 1 else "runs" }}{% if row.rate %}, {{ row.rate }}% of time stacked{% endif %}</p>
+            <p class="ssc-footnote">{% if row.panels %}Each panel wants {{ "%g"|format(t.goal_hours) }} h. {% for p in row.panels %}Panel {{ p.name }}: {{ p.have }} h{% if not loop.last %}, {% endif %}{% endfor %}. {{ row.sessions }} {{ "run" if row.sessions == 1 else "runs" }}{% else %}{{ row.have }} of {{ "%g"|format(t.goal_hours) }} h in {{ row.sessions }} {{ "run" if row.sessions == 1 else "runs" }}{% endif %}{% if row.rate %}, {{ row.rate }}% of time stacked{% endif %}</p>
             {% if row.partial %}{{ warning(row.partial ~ " h more from framed runs too short to count") }}{% endif %}
           </div>
           {{ form.toggle("Include in the plan", "target-on-" ~ t.id, "enabled", checked=t.enabled) }}
@@ -57,12 +57,17 @@
             {{ form.field("Goal (h)", "target-goal-" ~ t.id, "goal_hours", value=t.goal_hours, attrs='inputmode="decimal"') }}
             {{ form.field("Earlier data (h)", "target-prior-" ~ t.id, "prior_hours", value=t.prior_hours, attrs='inputmode="decimal"') }}
             <div class="plan-stack plan-stack--tight plan-target__min">
-              {{ form.field("Shortest run (h)", "target-min-" ~ t.id, "min_session_hours", value=t.min_session_hours, attrs='inputmode="decimal"', help=("Scope estimate " ~ row.estimate ~ " h" if row.estimate and not row.short else ("No scope estimate until this size has run" if t.framed and not row.short else ""))) }}
+              {{ form.field("Shortest run (h)", "target-min-" ~ t.id, "min_session_hours", value=t.min_session_hours, attrs='inputmode="decimal"', help=("All panels together" if t.mosaic else ("Scope estimate " ~ row.estimate ~ " h" if row.estimate and not row.short else ("No scope estimate until this size has run" if t.framed and not row.short else "")))) }}
               {% if row.short %}{{ warning("Under the scope's " ~ row.estimate ~ " h estimate") }}{% endif %}
             </div>
             {{ form.field("Exposure (s)", "target-exposure-" ~ t.id, "exposure_s", value=t.exposure_s, type="number", attrs='min="1" max="90" step="any" required') }}
             {{ form.segmented("Filter", "lp_filter", filter_options, selected="on" if t.lp_filter else "off") }}
-            {% if not t.framed %}{{ form.segmented("Camera", "camera", camera_options, selected=t.camera) }}{% endif %}
+            {% if not t.framed and not t.mosaic %}{{ form.segmented("Camera", "camera", camera_options, selected=t.camera) }}{% endif %}
+            {% if not t.framed %}
+            {{ form.field("Panels across", "target-panels-ra-" ~ t.id, "panels_ra", value=t.panels_ra, type="number", attrs='min="1" max="' ~ max_panels ~ '" step="1" required', help="RA. 1 across and 1 up is a single frame") }}
+            {{ form.field("Panels up", "target-panels-dec-" ~ t.id, "panels_dec", value=t.panels_dec, type="number", attrs='min="1" max="' ~ max_panels ~ '" step="1" required', help="Dec") }}
+            {{ form.field("Panel overlap (%)", "target-overlap-" ~ t.id, "panel_overlap", value=t.panel_overlap, type="number", attrs='min="0" max="50" step="1" required') }}
+            {% endif %}
             {{ form.segmented("Priority", "priority", priority_options, selected=t.priority) }}
           </div>
           <div class="plan-actions plan-actions--row">

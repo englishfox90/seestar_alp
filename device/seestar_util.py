@@ -1,3 +1,4 @@
+import re
 import geocoder
 from datetime import datetime, timezone
 from astropy.coordinates import FK5, SkyCoord, AltAz
@@ -49,14 +50,36 @@ class Util:
             result = result.transform_to(_fk5)
         return result
 
+    # Each model's telescope field in arcminutes, short axis then long, as in
+    # front/public/seestar_models.js. Panels step the short axis in RA and the long
+    # axis in Dec, the way the sky views draw the frame.
+    MODEL_FOV_ARCMIN = {
+        "S50": (43.8, 77.4),
+        "S50 Pro": (82.8, 147.2),
+        "S30": (73.2, 130.2),
+        "S30 Pro": (134.6, 239.2),
+    }
+
+    @staticmethod
+    def model_fov_deg(product_model):
+        """(RA, Dec) extent in degrees of a model's telescope field, the S50's when the
+        model is unknown. Accepts the firmware's names: "Seestar S30P", "S30 Pro", ..."""
+        compact = re.sub(r"[\s_-]+", "", str(product_model or "")).lower()
+        m = re.search(r"s(30|50)(pro|p(?!lus))?", compact)
+        key = "S50" if not m else f"S{m.group(1)}" + (" Pro" if m.group(2) else "")
+        short, long_ = Util.MODEL_FOV_ARCMIN[key]
+        return short / 60.0, long_ / 60.0
+
     # take into account ra spacing factor changes depends on dec position as 1/cos(dec)
     @staticmethod
-    def mosaic_next_center_spacing(in_ra, in_dec, overlap_percent):
-        # seestar fov at dec = 0
-        dec_length = 1.29  # degrees
-        ra_length = (
-            3 / 60.0
-        )  # 3 minutes when dec is at 0 degress, changes by factor of 1/cos(dec)
+    def mosaic_next_center_spacing(in_ra, in_dec, overlap_percent, fov_deg=None):
+        """[RA step in hours, Dec step in degrees] between panel centres.
+
+        fov_deg is the (RA, Dec) field extent in degrees, from model_fov_deg; None
+        keeps the S50's 0.75 x 1.29 deg this always used.
+        """
+        ra_deg, dec_length = fov_deg if fov_deg else (0.75, 1.29)
+        ra_length = ra_deg / 15.0  # hours at dec 0, growing as 1/cos(dec)
 
         delta_Dec = dec_length * (100.0 - overlap_percent) / 100.0
         delta_RA = ra_length * (100.0 - overlap_percent) / 100.0
@@ -66,9 +89,7 @@ class Util:
             return [1.0, delta_Dec]
 
         factor_RA = math.cos(in_dec * math.pi / 180.0)
-        # print("delta_RA at dec = 0: ", delta_RA)
         delta_RA /= factor_RA
-        # print("factor: ", factor_RA, ", result: ", delta_RA)
         return [delta_RA, delta_Dec]
 
     # trim out the seconds to 1 decimal precision

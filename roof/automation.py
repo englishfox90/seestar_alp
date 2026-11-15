@@ -795,7 +795,7 @@ class RoofAutomation:
         if self._active_schedule != schedule_tools.TARGET_LIST:
             return False
         planned = sum(
-            item.get("params", {}).get("panel_time_sec", 0)
+            schedule_tools.item_seconds(item)
             for item in self._active_items
             if item.get("action") in schedule_tools.IMAGING_ACTIONS
         )

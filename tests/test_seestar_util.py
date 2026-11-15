@@ -1,3 +1,4 @@
+import pytest
 import math
 
 from device.seestar_util import Util
@@ -192,3 +193,34 @@ def test_trim_seconds_already_one_decimal():
 
 def test_trim_seconds_empty_string_passthrough():
     assert Util.trim_seconds("") == ""
+
+
+# ---------------------------------------------------------------------------
+# panel spacing by model
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "model, fov",
+    [
+        ("Seestar S50", (43.8 / 60, 77.4 / 60)),
+        ("Seestar S30P", (134.6 / 60, 239.2 / 60)),
+        ("S30 Pro", (134.6 / 60, 239.2 / 60)),
+        ("Seestar S30", (73.2 / 60, 130.2 / 60)),
+        ("S50 Pro", (82.8 / 60, 147.2 / 60)),
+        ("S30 Plus", (73.2 / 60, 130.2 / 60)),  # not the S30 Pro; read as front/app.py does
+        ("", (43.8 / 60, 77.4 / 60)),
+        (None, (43.8 / 60, 77.4 / 60)),
+    ],
+)
+def test_model_fov(model, fov):
+    assert Util.model_fov_deg(model) == pytest.approx(fov)
+
+
+def test_s30_pro_panels_step_by_its_own_field():
+    fov = Util.model_fov_deg("Seestar S30P")
+    ra_step, dec_step = Util.mosaic_next_center_spacing(0.0, 0.0, 20, fov)
+    assert dec_step == pytest.approx(239.2 / 60 * 0.8)
+    assert ra_step == pytest.approx(134.6 / 60 / 15 * 0.8)  # hours
+    # About three times the S50's spacing this always used.
+    assert dec_step / Util.mosaic_next_center_spacing(0.0, 0.0, 20)[1] == pytest.approx(3.09, rel=0.01)

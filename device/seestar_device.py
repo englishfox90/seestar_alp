@@ -190,6 +190,9 @@ class Seestar:
         self.target_ra: float = 0
         self.utcdate = time.time()
         self.firmware_ver_int: int = 0
+        # device.product_model from get_device_state, for the telescope's field of
+        # view when spacing mosaic panels. "" until a reply has carried it.
+        self.product_model: str = ""
 
         self.event_callbacks: list[EventCallback] = []
 
@@ -949,6 +952,7 @@ class Seestar:
                         # that wakes on response_dict already sees the update.
                         if parsed_data["method"] == "get_device_state":
                             self._update_eq_mode_from_device_state(parsed_data)
+                            self._update_model_from_device_state(parsed_data)
                         # keep a running queue of last 100 responses for sync call results
                         with self._response_cond:
                             self.response_dict[parsed_data["id"]] = parsed_data
@@ -1154,6 +1158,14 @@ class Seestar:
         self.logger.debug(f"response is {self.response_dict[cur_cmdid]}")
         self._note_sync_reply()
         return self.response_dict[cur_cmdid]
+
+    def _update_model_from_device_state(self, response) -> None:
+        """Cache device.product_model when a get_device_state reply carries it."""
+        result = response.get("result") if isinstance(response, dict) else None
+        device = result.get("device") if isinstance(result, dict) else None
+        model = device.get("product_model") if isinstance(device, dict) else None
+        if isinstance(model, str) and model.strip():
+            self.product_model = model.strip()
 
     def _update_eq_mode_from_device_state(self, response) -> bool:
         """Cache mount mode from a get_device_state reply.
@@ -2548,9 +2560,18 @@ class Seestar:
         # Set while the wide angle camera is stacking, so every way out of
         # this function also stops it.
         wide_active = False
+        # Panels step by this scope's own field; the S50's when the model isn't known.
+        panel_fov = Util.model_fov_deg(getattr(self, "product_model", ""))
+        if nRA * nDec > 1:
+            self.logger.info(
+                "  panel field   : %.2f x %.2f deg (%s)",
+                panel_fov[0],
+                panel_fov[1],
+                getattr(self, "product_model", "") or "model unknown, S50",
+            )
         try:
             spacing_result = Util.mosaic_next_center_spacing(
-                center_RA, center_Dec, overlap_percent
+                center_RA, center_Dec, overlap_percent, panel_fov
             )
             delta_RA = spacing_result[0]
             delta_Dec = spacing_result[1]
@@ -2585,7 +2606,7 @@ class Seestar:
             cur_dec = center_Dec - int(nDec / 2) * delta_Dec
             for index_dec in range(nDec):
                 spacing_result = Util.mosaic_next_center_spacing(
-                    center_RA, cur_dec, overlap_percent
+                    center_RA, cur_dec, overlap_percent, panel_fov
                 )
                 delta_RA = spacing_result[0]
                 cur_ra = center_RA - int(nRA / 2) * spacing_result[0]
