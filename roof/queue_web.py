@@ -335,6 +335,7 @@ class QueueAdd(_QueueAction):
         if not name:
             raise falcon.HTTPBadRequest(description="a target needs a name")
         scale, angle = _form_framing(form)
+        panels = _form_panels(form, target_queue.Target(id="", name=name, ra=0.0, dec=0.0))
         fields = target_queue.with_framing(
             {
                 "name": name,
@@ -346,6 +347,10 @@ class QueueAdd(_QueueAction):
             },
             {"scale": scale, "angle": angle},
         )
+        if panels.get("panels_ra", 1) * panels.get("panels_dec", 1) > 1:
+            fields.update(panels)  # a mosaic replaces any framing
+            fields.pop("mosaic_star_map_angle", None)
+            fields["mosaic_angle"] = 0.0
         added, _ = _queue().merge(
             target_queue.apply_estimates([fields], _estimates()),
             goal_hours=_positive(form, "goal_hours", target_queue.DEFAULT_GOAL_HOURS),
@@ -447,8 +452,11 @@ class QueueFraming(_QueueAction):
             "mosaic_scale": scale,
             "mosaic_angle": angle,
         }
+        panels = _form_panels(form, target)
         if "camera" in form or scale > 1.0:
-            changes["camera"] = "main" if target.mosaic and scale <= 1.0 else _form_camera(form, scale)
+            changes["camera"] = _form_camera(form, scale)
+            if not panels and target.mosaic and scale <= 1.0:
+                changes["camera"] = "main"  # a form without panels leaves a mosaic one
         if target.mosaic_star_map_angle is not None:
             # The app's star map angle tracks the framing angle at a fixed offset.
             changes["mosaic_star_map_angle"] = target.mosaic_star_map_angle + angle - target.mosaic_angle
@@ -457,12 +465,24 @@ class QueueFraming(_QueueAction):
             changes["min_session_hours"] = estimate or target_queue.DEFAULT_FRAMED_SESSION_HOURS
         if scale > 1.0 and target.mosaic:
             changes.update(panels_ra=1, panels_dec=1)  # framing replaces the panels
+        becomes_mosaic = panels.get("panels_ra", 1) * panels.get("panels_dec", 1) > 1
+        if panels and not (scale > 1.0 and not becomes_mosaic):
+            changes.update(panels)
+        if becomes_mosaic:
+            changes["mosaic_angle"] = 0.0
+            changes.pop("mosaic_star_map_angle", None)
+            estimate = None
         _queue().update(target.id, **changes)
         minimum = changes.get("min_session_hours", target.min_session_hours)
         if _short_of_estimate(minimum, estimate):
             return (
                 f"Saved {target.name}, but its {minimum:g} h shortest run is under "
                 f"the scope's {estimate:g} h estimate for this framing."
+            )
+        if becomes_mosaic:
+            return (
+                f"Saved {target.name} as a {changes['panels_ra']} across by {changes['panels_dec']} up "
+                f"mosaic. Its goal is now per panel. It applies from the next start."
             )
         return f"Saved {target.name}'s framing. It applies from the next start."
 

@@ -311,8 +311,9 @@ def test_targets_keeps_every_form(rig):
     added = [f for f in _parse(html).forms if f["action"] == "/1/targets/add"]
     assert [set(f["fields"]) for f in added if f["id"] is None] == [{"name", "ra", "dec", "goal_hours", "lp_filter"}]
     sky = next(f for f in added if f["id"] == "target-sky-add")
-    assert set(sky["fields"]) == {"ra", "dec", "mosaic_scale", "mosaic_angle", "camera", "name", "goal_hours", "lp_filter"}
-    assert set(_form(html, "/1/targets/framing")["fields"]) == {"id", "ra", "dec", "mosaic_scale", "mosaic_angle", "camera"}
+    panels = {"panels_ra", "panels_dec", "panel_overlap"}
+    assert set(sky["fields"]) == {"ra", "dec", "mosaic_scale", "mosaic_angle", "camera", "name", "goal_hours", "lp_filter"} | panels
+    assert set(_form(html, "/1/targets/framing")["fields"]) == {"id", "ra", "dec", "mosaic_scale", "mosaic_angle", "camera"} | panels
 
 
 def test_saving_a_row_untouched_changes_nothing(rig):

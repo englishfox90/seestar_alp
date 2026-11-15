@@ -1361,3 +1361,49 @@ def test_impossible_panels_are_refused(page, monkeypatch, panels):
     body = f"id={target.id}&goal_hours=4&min_session_hours=1&prior_hours=0&priority=normal&enabled=on&{panels}"
     assert client.simulate_post("/targets/update", headers=FORM, body=body).status_code == 400
     assert not queue_web._queue().all()[0].mosaic
+
+
+def _sky_page(page, monkeypatch):
+    client, queue_web, _ = page
+    import roof.web
+
+    monkeypatch.setattr(queue_web, "_front", lambda: _NoPage(), raising=False)
+    monkeypatch.setattr(roof.web, "_front", lambda: _NoPage())
+    return client, queue_web
+
+
+def test_the_sky_view_frames_a_listed_target_as_a_mosaic_and_back(page, monkeypatch):
+    client, queue_web = _sky_page(page, monkeypatch)
+    client.simulate_post("/targets/add", headers=FORM, body="name=Sadr&ra=20.37&dec=40.26&goal_hours=4&mosaic_scale=2&mosaic_angle=30")
+    target = queue_web._queue().all()[0]
+    assert target.framed
+    sky = f"id={target.id}&ra=20.37&dec=40.26&mosaic_scale=1.0&mosaic_angle=0&camera=main"
+    reply = client.simulate_post("/targets/framing", headers=FORM, body=sky + "&panels_ra=3&panels_dec=2&panel_overlap=25")
+    assert reply.status_code == 302
+    target = queue_web._queue().all()[0]
+    assert target.mosaic and not target.framed
+    assert (target.panels_ra, target.panels_dec, target.panel_overlap, target.mosaic_angle) == (3, 2, 25, 0.0)
+    assert target.min_session_hours == pytest.approx(3.0)  # the framed 4 h no longer fits
+
+    # Framed again, as the sky view sends it: one panel and a scale.
+    framed_again = f"id={target.id}&ra=20.37&dec=40.26&mosaic_scale=1.5&mosaic_angle=10&camera=main"
+    client.simulate_post("/targets/framing", headers=FORM, body=framed_again + "&panels_ra=1&panels_dec=1&panel_overlap=25")
+    target = queue_web._queue().all()[0]
+    assert target.framed and not target.mosaic and target.mosaic_angle == 10.0
+
+
+def test_the_sky_view_adds_a_new_mosaic(page, monkeypatch):
+    client, queue_web = _sky_page(page, monkeypatch)
+    body = "name=Veil&ra=20.8&dec=31&goal_hours=3&mosaic_scale=1.0&mosaic_angle=0&camera=main&panels_ra=2&panels_dec=3&panel_overlap=20"
+    assert client.simulate_post("/targets/add", headers=FORM, body=body).status_code == 302
+    target = queue_web._queue().all()[0]
+    assert target.mosaic and (target.panels_ra, target.panels_dec) == (2, 3)
+    assert target.goal_hours == 3.0 and target.min_session_hours == pytest.approx(3.0)
+
+
+def test_a_single_frame_from_the_sky_view_stays_one(page, monkeypatch):
+    client, queue_web = _sky_page(page, monkeypatch)
+    body = "name=M42&ra=5.59&dec=-5.39&goal_hours=3&mosaic_scale=1.0&mosaic_angle=0&camera=wide&panels_ra=1&panels_dec=1&panel_overlap=20"
+    client.simulate_post("/targets/add", headers=FORM, body=body)
+    target = queue_web._queue().all()[0]
+    assert not target.mosaic and not target.framed and target.camera == "wide"

@@ -29,7 +29,8 @@
   let skyObjects = null;
   let press = null;
   // The frame being adjusted. target is null while it's a new one from a search.
-  const current = { target: null, ra: null, dec: null, camera: "main" };
+  // kind: "framed" (one stack, scaled and turned) or "mosaic" (panels along RA and Dec).
+  const current = { target: null, ra: null, dec: null, camera: "main", kind: "framed" };
 
   // A camera this view can draw. Without a measured wide field, everything is the telescope.
   function knownCamera(camera) {
@@ -302,7 +303,34 @@
   }
 
   function isMosaic(t) {
-    return t && (t.panels_ra || 1) * (t.panels_dec || 1) > 1;
+    return Boolean(t) && (t.panels_ra || 1) * (t.panels_dec || 1) > 1;
+  }
+
+  function mosaicMode() {
+    return current.kind === "mosaic";
+  }
+
+  // The panels the controls show, for the frame being adjusted.
+  function panelsNow() {
+    return {
+      ra: current.ra,
+      dec: current.dec,
+      panels_ra: parseInt(field("target-sky-panels-ra").value, 10),
+      panels_dec: parseInt(field("target-sky-panels-dec").value, 10),
+      overlap: parseInt(field("target-sky-overlap").value, 10),
+    };
+  }
+
+  // Mosaic controls for a target: its own panels, or 2 across to start one.
+  function setPanels(t) {
+    const mosaic = isMosaic(t);
+    current.kind = mosaic ? "mosaic" : "framed";
+    field("target-sky-panels-ra").value = mosaic ? t.panels_ra : 2;
+    field("target-sky-panels-dec").value = mosaic ? t.panels_dec : 1;
+    field("target-sky-overlap").value = t && t.overlap !== undefined ? t.overlap : 20;
+    document.querySelectorAll('input[name="target-sky-kind"]').forEach(function (radio) {
+      radio.checked = radio.value === current.kind;
+    });
   }
 
   function draw() {
@@ -316,9 +344,8 @@
       else addFrames(t.ra, t.dec, t.camera, t.scale, t.angle, palette.other, 1);
     });
     if (current.ra !== null) {
-      // A listed mosaic keeps its panels until framing makes it a framed target.
-      if (isMosaic(current.target) && scale() <= 1) {
-        addPanels(Object.assign({}, current.target, { ra: current.ra, dec: current.dec }), palette.selected, 3);
+      if (mosaicMode()) {
+        addPanels(panelsNow(), palette.selected, 3);
       } else {
         addFrames(current.ra, current.dec, current.camera, scale(), angle(), palette.selected, 3);
       }
@@ -331,7 +358,17 @@
     field("target-sky-scale-value").textContent = `${scale().toFixed(1)}x`;
     field("target-sky-angle-value").textContent = `${angle()}°`;
     field("target-sky-frame-controls").hidden = !hasFrame;
-    field("target-sky-camera").hidden = !wide;
+    const mosaic = mosaicMode();
+    const panels = panelsNow();
+    field("target-sky-panels").hidden = !mosaic;
+    field("target-sky-scale-field").hidden = mosaic;
+    field("target-sky-angle-field").hidden = mosaic;
+    field("target-sky-panels-ra-value").textContent = panels.panels_ra;
+    field("target-sky-panels-dec-value").textContent = panels.panels_dec;
+    field("target-sky-overlap-value").textContent = `${panels.overlap}%`;
+    // A mosaic is imaged by the telescope.
+    field("target-sky-camera").hidden = !wide || mosaic;
+    if (mosaic) current.camera = "main";
     const single = current.camera !== "main";
     field("target-sky-scale").disabled = single;
     document.querySelectorAll('input[name="target-sky-camera"]').forEach(function (radio) {
@@ -348,9 +385,13 @@
       for (const prefix of ["target-sky-add", "target-sky-save"]) {
         field(`${prefix}-ra`).value = (current.ra / 15.0).toFixed(4);
         field(`${prefix}-dec`).value = current.dec.toFixed(4);
-        field(`${prefix}-scale`).value = scale().toFixed(1);
-        field(`${prefix}-angle`).value = angle();
+        field(`${prefix}-scale`).value = mosaic ? "1.0" : scale().toFixed(1);
+        field(`${prefix}-angle`).value = mosaic ? 0 : angle();
         field(`${prefix}-camera`).value = current.camera;
+        // Framed sends one panel, so saving a mosaic as framed turns it back.
+        field(`${prefix}-panels-ra`).value = mosaic ? panels.panels_ra : 1;
+        field(`${prefix}-panels-dec`).value = mosaic ? panels.panels_dec : 1;
+        field(`${prefix}-overlap`).value = panels.overlap;
       }
     }
     if (editing) field("target-sky-save-id").value = current.target.id;
@@ -360,13 +401,13 @@
     const rect = view.getBoundingClientRect();
     aladin.setProjection("SIN");
     let size = fields(current.camera)[0];
-    if (isMosaic(current.target) && scale() <= 1) {
-      const t = current.target;
+    if (mosaicMode()) {
+      const t = panelsNow();
       const keep = (100 - t.overlap) / 100;
       size = { w: fovW * (1 + (t.panels_ra - 1) * keep), h: fovH * (1 + (t.panels_dec - 1) * keep) };
     }
     aladin.setFoV(
-      window.FrameGeometry.fitFov(size.w, size.h, isMosaic(current.target) ? 1 : scale(), angle(), rect.width, rect.height)
+      window.FrameGeometry.fitFov(size.w, size.h, mosaicMode() ? 1 : scale(), mosaicMode() ? 0 : angle(), rect.width, rect.height)
     );
   }
 
@@ -386,6 +427,7 @@
     current.target = target;
     if (skyObjects) skyObjects.clear();
     current.camera = target.scale > 1 ? "main" : knownCamera(target.camera);
+    setPanels(target);
     field("target-sky-scale").value = target.scale;
     field("target-sky-angle").value = target.angle;
     setStatus("");
@@ -426,6 +468,7 @@
     current.ra = null;
     current.dec = null;
     current.camera = "main";
+    setPanels(null);
     if (skyObjects) skyObjects.clear();
     field("target-sky-scale").value = 1;
     field("target-sky-angle").value = 0;
@@ -467,6 +510,7 @@
   function startNew(ra, dec, name) {
     current.target = null;
     current.camera = "main";
+    setPanels(null);
     field("target-sky-scale").value = 1;
     if (skyObjects) skyObjects.clear();
     field("target-sky-add-name").value = name;
@@ -704,6 +748,15 @@
     });
   });
   field("target-sky-angle").addEventListener("input", refit);
+  document.querySelectorAll('input[name="target-sky-kind"]').forEach(function (radio) {
+    radio.addEventListener("change", function () {
+      current.kind = radio.value === "mosaic" ? "mosaic" : "framed";
+      refit();
+    });
+  });
+  ["target-sky-panels-ra", "target-sky-panels-dec", "target-sky-overlap"].forEach(function (id) {
+    field(id).addEventListener("input", refit);
+  });
   document.querySelectorAll("[data-sky-show]").forEach(function (button) {
     button.addEventListener("click", function () {
       const target = targets.find((t) => t.id === button.dataset.skyShow);

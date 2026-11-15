@@ -26,12 +26,31 @@
     </div>
 
     <div id="target-sky-frame-controls" class="plan-stack" hidden>
+      {{ form.segmented("Framing", "target-sky-kind", [{"value": "framed", "label": "Framed"}, {"value": "mosaic", "label": "Mosaic"}], selected="framed") }}
+      {# A traditional mosaic: panels along RA and Dec, each its own stack. #}
+      <div id="target-sky-panels" class="plan-stack" hidden>
+        <div class="plan-sky__sliders">
+          <div class="ssc-field">
+            <label class="ssc-field__label" for="target-sky-panels-ra">Panels across <span id="target-sky-panels-ra-value"></span></label>
+            <input id="target-sky-panels-ra" class="plan-range" type="range" min="1" max="{{ max_panels }}" step="1" value="2">
+          </div>
+          <div class="ssc-field">
+            <label class="ssc-field__label" for="target-sky-panels-dec">Panels up <span id="target-sky-panels-dec-value"></span></label>
+            <input id="target-sky-panels-dec" class="plan-range" type="range" min="1" max="{{ max_panels }}" step="1" value="1">
+          </div>
+          <div class="ssc-field">
+            <label class="ssc-field__label" for="target-sky-overlap">Overlap <span id="target-sky-overlap-value"></span></label>
+            <input id="target-sky-overlap" class="plan-range" type="range" min="0" max="50" step="5" value="20">
+          </div>
+        </div>
+        <p class="ssc-footnote">Each panel is its own stack, laid along RA and Dec, so a mosaic has no angle. Its goal is per panel.</p>
+      </div>
       <div class="plan-sky__sliders">
-        <div class="ssc-field">
+        <div id="target-sky-scale-field" class="ssc-field">
           <label class="ssc-field__label" for="target-sky-scale">Scale <span id="target-sky-scale-value"></span></label>
           <input id="target-sky-scale" class="plan-range" type="range" min="1" max="4" step="0.1" value="1">
         </div>
-        <div class="ssc-field">
+        <div id="target-sky-angle-field" class="ssc-field">
           <label class="ssc-field__label" for="target-sky-angle">Angle <span id="target-sky-angle-value"></span></label>
           <input id="target-sky-angle" class="plan-range" type="range" min="-90" max="90" step="1" value="0">
         </div>
@@ -49,6 +68,9 @@
         <input type="hidden" id="target-sky-add-scale" name="mosaic_scale">
         <input type="hidden" id="target-sky-add-angle" name="mosaic_angle">
         <input type="hidden" id="target-sky-add-camera" name="camera" value="main">
+        <input type="hidden" id="target-sky-add-panels-ra" name="panels_ra" value="1">
+        <input type="hidden" id="target-sky-add-panels-dec" name="panels_dec" value="1">
+        <input type="hidden" id="target-sky-add-overlap" name="panel_overlap" value="20">
         <div class="plan-fields">
           {{ form.field("Name", "target-sky-add-name", "name", attrs="required") }}
           {{ form.field("Hours wanted", "target-sky-add-goal", "goal_hours", value="10", attrs='inputmode="decimal"') }}
@@ -64,6 +86,9 @@
         <input type="hidden" id="target-sky-save-scale" name="mosaic_scale">
         <input type="hidden" id="target-sky-save-angle" name="mosaic_angle">
         <input type="hidden" id="target-sky-save-camera" name="camera" value="main">
+        <input type="hidden" id="target-sky-save-panels-ra" name="panels_ra" value="1">
+        <input type="hidden" id="target-sky-save-panels-dec" name="panels_dec" value="1">
+        <input type="hidden" id="target-sky-save-overlap" name="panel_overlap" value="20">
         <div class="plan-actions">{{ ui.button("Save framing", "primary", "submit") }}</div>
       </form>
     </div>
