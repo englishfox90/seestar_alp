@@ -39,6 +39,8 @@ REFRESH_S = 30 * 60
 RETRY_S = 5 * 60
 TIMEOUT_S = 10
 NIGHTS = 3
+# Open-Meteo's longest forecast, for the Plan page's two weeks.
+METEO_DAYS = 16
 # The roof's expected window, weather permitting: from 30 min before sunset to 30 min
 # after sunrise. (site_status still shows Starfront's published 15 min / 5 min.)
 ROOF_OPEN_OFFSET_S = -30 * 60
@@ -54,6 +56,14 @@ HUMIDITY_CLOSED_PCT = 97  # at this the site is in or near fog
 HUMIDITY_MAYBE_PCT = 95  # dew and fog likely
 FOG_SPREAD_C = 0.5  # temperature minus dew point
 FOG_VISIBILITY_M = 2000
+
+# --- Chance the roof is open, for the Plan page's forecast (tune here) ---------------
+OPEN_CHANCE = {OPEN: 0.95, MAYBE: 0.5, CLOSED: 0.05}
+# Hourly forecasts are taken at their word this far ahead, then trusted less and less
+# until, at TRUST_NONE_S, only the site's typical chance (Settings.typical_open_chance)
+# is left. Cloud forecasts lose most of their skill after about a week.
+TRUST_FULL_S = 2 * 86400
+TRUST_NONE_S = 10 * 86400
 
 # --- Clear Sky Chart layout (1284x408, probed by hermes cleardarksky_tools) --------
 _LEFT, _COL_W, _COL_OFF = 134, 14, 6
@@ -313,7 +323,7 @@ def fetch_open_meteo(lat, lon, get=requests.get) -> dict:
             "longitude": lon,
             "hourly": "cloud_cover,relative_humidity_2m,temperature_2m,dew_point_2m,visibility",
             "timeformat": "unixtime",
-            "forecast_days": NIGHTS + 2,
+            "forecast_days": METEO_DAYS,
         },
         timeout=TIMEOUT_S,
     )
@@ -413,6 +423,38 @@ def outlook(settings, clock, tz, now=None, csc_rows=None, meteo_rows=None) -> di
             entry["dew"] = dew_note(meteo_rows, max(start, now), end, clock)
         nights.append(entry)
     return {"pending": False, "nights": nights, "sources": _source_notes()}
+
+
+def open_chance(settings, tz, now=None, csc_rows=None, meteo_rows=None):
+    """A function of time giving the chance the roof is open then, for the planner.
+
+    Rows are taken from the background sources unless given; it never waits on a
+    fetch. Hours no model covers, and hours far ahead, get the typical chance.
+    """
+    now = time.time() if now is None else now
+    typical = max(0.0, min(1.0, settings.typical_open_chance))
+    if csc_rows is None and meteo_rows is None:
+        for source in (_csc, _meteo):
+            source.refresh(tz, settings.lat, settings.lon)
+        csc_rows, meteo_rows = _csc.rows, _meteo.rows
+    rows = list(csc_rows or ()) + list(meteo_rows or ())
+    rated = {}
+    if rows:
+        first = min(r["at"] for r in rows)
+        last = max(r["at"] for r in rows) + 3600
+        for h in rate_hours(first, last, csc_rows, meteo_rows):
+            rated[int(h["start"] // 3600)] = OPEN_CHANCE[h["state"]]
+
+    def chance(when: float) -> float:
+        forecast = rated.get(int(when // 3600))
+        if forecast is None:
+            return typical
+        lead = when - now
+        trust = 1.0 if lead <= TRUST_FULL_S else max(0.0, 1 - (lead - TRUST_FULL_S) / (TRUST_NONE_S - TRUST_FULL_S))
+        return trust * forecast + (1 - trust) * typical
+
+    chance.forecast_until = max(rated) * 3600 + 3600 if rated else None
+    return chance
 
 
 def _source_notes() -> list[str]:

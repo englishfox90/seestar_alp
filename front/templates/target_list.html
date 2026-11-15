@@ -37,18 +37,18 @@
       <details class="plan-target" id="target-row-{{ t.id }}"{% if not t.enabled %} data-off="1"{% endif %}>
         <summary class="plan-target__summary">
           <span class="plan-target__name"><span class="plan-target__title">{{ t.name|e }}</span>{% if not t.enabled %} <span class="ssc-row__tag">Off</span>{% endif %}
-            <span class="ssc-row__sub plan-target__facts">{{ row.framing|e }}, {{ "LP filter" if t.lp_filter else "No filter" }}, {{ t.exposure_s|round(1) }} s, gain {{ t.gain|e }}</span>
+            <span class="ssc-row__sub plan-target__facts">{{ row.framing|e }}, {{ "LP filter" if t.lp_filter else "No filter" }}, {{ t.exposure_s|round(1) }} s, gain {{ t.gain|e }}{% if row.season_end %}, out of reach after about {{ row.season_end|e }}{% endif %}</span>
           </span>
           <span class="plan-target__bar">{{ ui.bar(row.percent) }}</span>
           <span class="plan-target__have">{{ row.have }} of {{ "%g"|format(t.goal_hours) }} h</span>
           <span class="plan-target__priority">{{ t.priority|capitalize|e }}</span>
-          <span class="plan-target__forecast">{% if row.finish %}<span class="plan-target__forecast-word">Done </span>{{ row.finish|e }}{% else %}Not within 2 weeks{% endif %}</span>
+          <span class="plan-target__forecast">{% if row.finish %}<span class="plan-target__forecast-word">Done </span>{{ row.finish|e }}{% else %}Not within 4 weeks{% endif %}</span>
           <span class="plan-target__chevron">{{ ui.icon("down", 16) }}</span>
         </summary>
         <form id="target-{{ t.id }}" class="plan-target__detail" method="post" action="{{ root_path }}{{ page_root }}/update">
           <input type="hidden" name="id" value="{{ t.id }}">
           <div class="plan-target__notes">
-            <p class="ssc-footnote plan-target__facts-detail">{{ row.framing|e }}, {{ "LP filter" if t.lp_filter else "No filter" }}, {{ t.exposure_s|round(1) }} s, gain {{ t.gain|e }}</p>
+            <p class="ssc-footnote plan-target__facts-detail">{{ row.framing|e }}, {{ "LP filter" if t.lp_filter else "No filter" }}, {{ t.exposure_s|round(1) }} s, gain {{ t.gain|e }}{% if row.season_end %}, out of reach after about {{ row.season_end|e }}{% endif %}</p>
             <p class="ssc-footnote">{{ row.have }} of {{ "%g"|format(t.goal_hours) }} h in {{ row.sessions }} {{ "run" if row.sessions == 1 else "runs" }}{% if row.rate %}, {{ row.rate }}% of time stacked{% endif %}</p>
             {% if row.partial %}{{ warning(row.partial ~ " h more from framed runs too short to count") }}{% endif %}
           </div>
@@ -115,7 +115,7 @@
     <section class="plan-section">
       <h2 class="ssc-section">{{ tonight.label|e }}, if it started now</h2>
       <div class="plan-panel">
-        <p class="ssc-footnote">{% if tonight.dark %}Dark {{ tonight.dark|e }}, moon {{ tonight.moon }}%.{% else %}No astronomical darkness.{% endif %}
+        <p class="ssc-footnote">{% if tonight.dark %}Dark {{ tonight.dark|e }}, moon {{ tonight.moon }}%, roof {{ tonight.roof }}% likely open.{% else %}No astronomical darkness.{% endif %}
           {% if uses_list %}Roof automation is using this list, and plans afresh at each start.{% else %}This is only a preview. Roof automation is set to {{ (roof_source or "nothing")|e }}; choose Target list on the <a href="{{ root_path }}{{ roof_url }}">Automation page</a> to run from here.{% endif %}</p>
         {% if tonight.blocks %}
         <div class="plan-subrows">
@@ -133,12 +133,13 @@
     {% endif %}
     {% if nights %}
     <section class="plan-section">
-      <h2 class="ssc-section">Next two weeks, if every night is clear</h2>
+      <h2 class="ssc-section">Next two weeks, with the roof forecast</h2>
+      <p class="ssc-footnote">Hours are what each night is expected to stack, scaled by the chance the roof is open. {% if weather_until %}The roof forecast runs to {{ weather_until|e }} and counts for less the further out it is; after that a night gets a typical {{ typical_open }}% chance.{% else %}No roof forecast yet, so every night gets a typical {{ typical_open }}% chance.{% endif %}</p>
       <div class="plan-rows">
         {% for n in nights %}
         <div class="ssc-row">
-          <span class="ssc-row__label">{{ n.label|e }}<span class="ssc-row__sub">{% for b in n.blocks %}{{ b.name|e }} ({{ b.wall }} h){% if not loop.last %}, {% endif %}{% else %}Nothing to image{% endfor %}</span></span>
-          <span class="ssc-row__value">Moon {{ n.moon }}%</span>
+          <span class="ssc-row__label">{{ n.label|e }}<span class="ssc-row__sub">{% for b in n.blocks %}{{ b.name|e }} ({{ b.expected }} of {{ b.wall }} h){% if not loop.last %}, {% endif %}{% else %}Nothing to image{% endfor %}</span></span>
+          <span class="ssc-row__value">Roof {{ n.roof }}%, moon {{ n.moon }}%</span>
         </div>
         {% endfor %}
       </div>

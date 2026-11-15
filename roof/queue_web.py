@@ -13,13 +13,16 @@ import falcon
 from astropy.coordinates import Angle
 
 from roof import config as roof_config
+from roof import forecast as roof_forecast
 from roof import planner, schedule_tools
 from roof import queue as target_queue
 from roof import sky_window
 from roof.automation import session_log
 from roof.web import _Action, _form, _front, shell_context
 
-FORECAST_NIGHTS = 14
+# Nights planned ahead for the finish dates; only the first SHOWN_NIGHTS are listed.
+FORECAST_NIGHTS = 28
+SHOWN_NIGHTS = 14
 
 
 def _base() -> str:
@@ -61,6 +64,8 @@ def _plan_row(plan, names) -> dict:
         "label": _night_label(plan.key),
         "dark": f"{_clock(plan.dark_start)} to {_clock(plan.dark_end)}" if plan.dark_start else None,
         "moon": round(plan.moon_percent),
+        "roof": round(plan.open_chance * 100),
+        "expected": round(sum(b.expected_hours for b in plan.blocks), 1),
         "blocks": [
             {
                 "start": _clock(b.start),
@@ -80,6 +85,18 @@ def _plan_row(plan, names) -> dict:
     }
 
 
+def _season_end(profile, key) -> str | None:
+    """The last night a target is usable this season, if that's within about two
+    months: soon enough for the planner to be pushing it."""
+    season = planner.season_left(profile, key) if profile else None
+    if not season or not season[0]:
+        return None
+    last = datetime.fromisoformat(season[1])
+    if (last - datetime.fromisoformat(key)).days > 2 * planner.SEASON_URGENT_DAYS:
+        return None
+    return last.strftime("%b %-d")
+
+
 def _context() -> dict:
     settings = roof_config.load()
     targets = _queue().all()
@@ -92,14 +109,23 @@ def _context() -> dict:
         "tonight": None,
         "nights": [],
         "site_known": True,
+        "weather_until": None,
+        "typical_open": round(settings.typical_open_chance * 100),
     }
     if not (settings.lat or settings.lon):
         context["site_known"] = False
         return context
+    now = time.time()
+    chance = roof_forecast.open_chance(settings, _front().site_timezone(), now)
+    if chance.forecast_until:
+        context["weather_until"] = _night_label(datetime.fromtimestamp(chance.forecast_until).date().isoformat())
     plans = planner.forecast(
-        targets, log, planner.config_from_settings(settings), time.time(), FORECAST_NIGHTS
+        targets, log, planner.config_from_settings(settings), now, FORECAST_NIGHTS, open_chance=chance
     )
     finished = planner.finish_nights(plans, targets, log)
+    plan_cfg = planner.config_from_settings(settings)
+    first_key = plans[0].key if plans else None
+    seasons = planner.season_profile(targets, plan_cfg, first_key) if first_key else {}
     names = {t.id: t.name for t in targets}
     estimates = _estimates()
     for target in targets:
@@ -118,9 +144,10 @@ def _context() -> dict:
                 "sessions": progress.sessions,
                 "rate": round(progress.measured_rate * 100) if progress.measured_rate else None,
                 "finish": _night_label(finished[target.id]) if target.id in finished else None,
+                "season_end": _season_end(seasons.get(target.id), first_key),
             }
         )
-    rows = [_plan_row(plan, names) for plan in plans]
+    rows = [_plan_row(plan, names) for plan in plans[:SHOWN_NIGHTS]]
     if rows:
         context["tonight"] = rows[0]
         context["nights"] = rows[1:]

@@ -12,7 +12,7 @@ from roof import forecast as f
 from roof.planner import night_times
 
 TZ = ZoneInfo("America/Chicago")
-SITE = SimpleNamespace(lat=31.501, lon=-99.3734, sun_max_deg=-18.0)
+SITE = SimpleNamespace(lat=31.501, lon=-99.3734, sun_max_deg=-18.0, typical_open_chance=0.5)
 
 
 def at(text):
@@ -143,3 +143,21 @@ def test_dew_note_says_when_the_optics_want_heat():
 def test_offline_gives_pending_not_an_error():
     out = f.latest(SITE, clock, TZ, now=at("2026-11-14T20:00"))
     assert out["pending"] is True
+
+
+def test_open_chance_trusts_the_forecast_near_and_the_typical_night_far():
+    now = at("2026-11-14T12:00")
+    hours = range(int(now // 3600), int(now // 3600) + 16 * 24)
+    closed = [{"at": float(h * 3600), **meteo(cloud=100)} for h in hours]
+    chance = f.open_chance(SITE, TZ, now, csc_rows=[], meteo_rows=closed)
+    assert chance(now + 86400) == pytest.approx(f.OPEN_CHANCE[f.CLOSED])
+    assert f.OPEN_CHANCE[f.CLOSED] < chance(now + 6 * 86400) < SITE.typical_open_chance
+    assert chance(now + 12 * 86400) == pytest.approx(SITE.typical_open_chance)
+    assert chance(now + 20 * 86400) == SITE.typical_open_chance  # past the forecast
+    assert chance.forecast_until == (hours[-1] + 1) * 3600
+
+
+def test_open_chance_without_a_forecast_is_the_typical_night():
+    chance = f.open_chance(SITE, TZ, at("2026-11-14T20:00"))
+    assert chance(at("2026-11-14T22:00")) == SITE.typical_open_chance
+    assert chance.forecast_until is None

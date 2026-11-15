@@ -42,6 +42,9 @@ class Settings:
     site_building: int = 19
     # Where the scope's share keeps its stacks, for the Stacked image alert.
     discord_image_dir: str = "~/Library/Application Support/NINA Data Sync/seestar-share/MyWorks"
+    # Chance the roof is open on a night no forecast covers, for the Plan page.
+    # A starting guess; tune it once the roof record covers a season.
+    typical_open_chance: float = 0.5
     lat: float = 0.0
     lon: float = 0.0
 
@@ -85,6 +88,7 @@ def load() -> Settings:
         discord_enabled=get("discord_enabled", False) is True,
         discord_muted=_string_list(get("discord_muted", [])),
         site_building=_number("site_building", Settings.site_building, int),
+        typical_open_chance=min(1.0, max(0.0, _number("typical_open_chance", Settings.typical_open_chance))),
         discord_image_dir=os.path.expanduser(str(get("discord_image_dir", Settings.discord_image_dir))),
         lat=float(_unwrap(Config.get_toml("seestar_initialization", "lat", 0)) or 0),
         lon=float(_unwrap(Config.get_toml("seestar_initialization", "long", 0)) or 0),

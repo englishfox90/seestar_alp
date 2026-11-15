@@ -182,6 +182,79 @@ def test_forecast_carries_progress_between_nights(tmp_path):
     assert not plans[-1].blocks
 
 
+def test_hours_the_roof_is_likely_closed_are_not_planned():
+    target = single()
+    clear = plan_night([target], remaining(target), NIGHT, CFG)
+    cut = clear.blocks[0].start + 3 * 3600
+    plan = plan_night([target], remaining(target), NIGHT, CFG, open_chance=lambda t: 1.0 if t < cut else 0.0)
+    assert plan.blocks and all(b.end <= cut for b in plan.blocks)
+    assert plan.open_chance < 1.0
+
+
+def test_a_maybe_night_is_expected_to_stack_less():
+    target = single()
+    clear = plan_night([target], remaining(target), NIGHT, CFG)
+    maybe = plan_night([target], remaining(target), NIGHT, CFG, open_chance=lambda t: 0.5)
+    assert sum(b.expected_hours for b in maybe.blocks) == pytest.approx(
+        0.5 * sum(b.expected_hours for b in clear.blocks), rel=0.05
+    )
+
+
+def test_a_closed_roof_is_the_reason_given():
+    target = single()
+    plan = plan_night([target], remaining(target), NIGHT, CFG, open_chance=lambda t: 0.0)
+    assert not plan.blocks
+    assert plan.skipped[target.id] == "roof likely closed while it's up"
+
+
+def test_roof_chance_pushes_the_finish_later_and_targets_still_share(tmp_path):
+    first = single("First", goal_hours=12.0)
+    second = single("Second", ra=4.2, goal_hours=12.0)
+    log = SessionLog(str(tmp_path / "s.json"))
+    now = datetime(2026, 11, 5, 18, tzinfo=timezone.utc).timestamp()
+    clear = planner.finish_nights(planner.forecast([first, second], log, CFG, now, nights=14), [first, second], log)
+    cloudy = planner.finish_nights(
+        planner.forecast([first, second], log, CFG, now, nights=14, open_chance=lambda t: 0.5), [first, second], log
+    )
+    assert set(clear) == {"First", "Second"}
+    # Sharing the nights, the second waits on the first even when every night is clear.
+    assert clear["Second"] > clear["First"]
+    assert cloudy.get("First", "9999") > clear["First"]
+
+
+def test_a_setting_season_presses_harder_than_one_with_room():
+    # Nov 14: NGC 6960 (Cygnus) leaves the evening sky in December; M 42 is just rising.
+    cygnus, orion = framed(goal_hours=40.0, min_session_hours=1.0), single("M 42", ra=5.59, dec=-5.39, goal_hours=40.0)
+    key = "2026-11-14"
+    seasons = planner.season_profile([cygnus, orion], CFG, key)
+    setting = planner.season_left(seasons[cygnus.id], key)
+    assert setting is not None and setting[1] < "2027-01-01"
+    assert planner.season_pressure(40.0, setting, key, CFG) > 0.25
+    assert planner.season_pressure(40.0, planner.season_left(seasons[orion.id], key), key, CFG) < 0.1
+
+
+def test_pressure_fades_when_the_season_ends_far_off():
+    cfg = replace(CFG, typical_open_chance=1.0)
+    key = "2026-11-14"
+    soon = planner.season_pressure(10.0, (20.0, "2026-11-30"), key, cfg)
+    later = planner.season_pressure(10.0, (20.0, "2027-01-29"), key, cfg)
+    assert soon == pytest.approx(0.5)
+    assert later == pytest.approx(soon * planner.SEASON_URGENT_DAYS / 81)
+    assert planner.season_pressure(10.0, None, key, cfg) == 0.0
+    assert planner.season_pressure(0.0, (20.0, "2026-11-30"), key, cfg) == 0.0
+
+
+def test_season_pressure_wins_the_shared_evening(tmp_path):
+    key = "2026-11-14"
+    cygnus = framed(goal_hours=40.0, min_session_hours=1.0)
+    andromeda = single("M 31", ra=0.71, dec=41.27, goal_hours=40.0, priority="high")
+    seasons = planner.season_profile([cygnus, andromeda], CFG, key)
+    calm = plan_night([cygnus, andromeda], remaining(cygnus, andromeda), key, CFG)
+    pushed = plan_night([cygnus, andromeda], remaining(cygnus, andromeda), key, CFG, season=seasons)
+    hours = lambda plan, t: sum(b.expected_hours for b in plan.blocks if b.target is t)  # noqa: E731
+    assert hours(pushed, cygnus) > hours(calm, cygnus)
+
+
 # ---- schedules -------------------------------------------------------------
 
 
@@ -578,7 +651,7 @@ def test_context_reports_progress_and_tonight(page, monkeypatch):
     context = queue_web._context()
     assert {r["target"].name for r in context["rows"]} == {"NGC 6960", "M 42"}
     assert context["tonight"]["blocks"]
-    assert len(context["nights"]) == queue_web.FORECAST_NIGHTS - 1
+    assert len(context["nights"]) == queue_web.SHOWN_NIGHTS - 1
 
 
 class _NoPage:

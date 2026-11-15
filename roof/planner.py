@@ -24,6 +24,11 @@ STEP_S = 300
 PARK_GAP_S = 1800
 # Sun's centre at apparent sunset: refraction plus its radius.
 SUN_HORIZON_DEG = -0.833
+# Below this chance of the roof being open, a step isn't planned at all.
+MIN_OPEN_CHANCE = 0.15
+# How far ahead a target's season is looked at, sampling one night in SEASON_STRIDE.
+SEASON_DAYS = 150
+SEASON_STRIDE = 5
 
 
 @dataclass(frozen=True)
@@ -46,6 +51,11 @@ class PlanConfig:
     weight_setting_soonest: float = 0.5
     weight_stay_on_target: float = 0.67
     weight_last_chance: float = 1.0
+    # Season pressure: the wall time a target still needs against what's left of its
+    # season. A target about to drop out of reach for the year scores up to this.
+    weight_season: float = 1.5
+    # Chance a night is open, for judging how much of a season is really usable.
+    typical_open_chance: float = 0.5
     # Moon separation/width in deg/days at full moon. LP is Target Scheduler's
     # default; no filter is a stricter starting guess.
     moon_lp: tuple = (60.0, 7.0)
@@ -71,6 +81,7 @@ class NightPlan:
     dark_start: float | None
     dark_end: float | None
     moon_percent: float = 0.0
+    open_chance: float = 1.0  # mean chance the roof is open over the dark steps
     blocks: list[Block] = field(default_factory=list)
     skipped: dict = field(default_factory=dict)  # target id -> reason
 
@@ -204,15 +215,118 @@ def _rate(target, cfg, rates) -> float:
     return cfg.rate_framed if target.framed else cfg.rate_single
 
 
-def plan_night(targets, remaining: dict, key: str, cfg: PlanConfig, start=None, rates=None) -> NightPlan:
+_season_cache: dict = {}
+
+
+def _season_key(target, cfg, key):
+    horizon = tuple(cfg.horizon.points) if cfg.horizon is not None else None
+    return (
+        key, cfg.lat, cfg.lon, cfg.sun_max_deg, cfg.min_alt_deg, horizon, cfg.horizon_margin_deg,
+        cfg.moon_lp, cfg.moon_no_filter, cfg.switch_overhead_s,
+        target.ra, target.dec, target.lp_filter, target.moon_sep_deg, target.moon_width_days,
+        target.framed, target.min_session_hours,
+    )  # fmt: skip
+
+
+def season_profile(targets, cfg: PlanConfig, key: str) -> dict:
+    """Target id -> [(night key, usable hours)], one sample every SEASON_STRIDE nights
+    from ``key`` for SEASON_DAYS, each standing for SEASON_STRIDE nights.
+
+    Usable hours are dark, above the floor and clear of the moon, in runs long enough
+    for the target's minimum session. Worked out once a day per target.
+    """
+    out, missing = {}, []
+    for target in targets:
+        cached = _season_cache.get(_season_key(target, cfg, key))
+        if cached is None:
+            missing.append(target)
+        else:
+            out[target.id] = cached
+    if missing:
+        if len(_season_cache) > 500:
+            _season_cache.clear()
+        day = datetime.fromisoformat(key)
+        profiles = {t.id: [] for t in missing}
+        for offset in range(0, SEASON_DAYS, SEASON_STRIDE):
+            night_key_ = (day + timedelta(days=offset)).date().isoformat()
+            night = _Night(night_key_, cfg)
+            for target in missing:
+                clear = night.masks(target)[1]
+                floor_s = max(target.min_session_hours * 3600, STEP_S)
+                usable_s, run = 0.0, 0
+                for ok in clear + [False]:
+                    if ok:
+                        run += 1
+                        continue
+                    run_s = run * STEP_S - cfg.switch_overhead_s
+                    if run_s >= floor_s:
+                        usable_s += run_s
+                    run = 0
+                profiles[target.id].append((night_key_, usable_s * SEASON_STRIDE / 3600))
+        for target in missing:
+            _season_cache[_season_key(target, cfg, key)] = profiles[target.id]
+            out[target.id] = profiles[target.id]
+    return out
+
+
+# A month with no usable time ends a season; what comes after is next year's.
+SEASON_GAP_DAYS = 30
+# A season ending within this many days gets full pressure; one ending later, less in
+# proportion (twice as far off, half as much).
+SEASON_URGENT_DAYS = 30
+
+
+def season_left(profile, key: str) -> tuple[float, str] | None:
+    """(usable hours, last usable night) left in the target's current or next season
+    from the night ``key`` on, up to the first gap of SEASON_GAP_DAYS with none. None
+    when the season runs past what's sampled: it isn't ending, so no pressure."""
+    total, gap, last = 0.0, 0, None
+    for night, hours in profile:
+        if night < key:
+            continue
+        if hours > 0:
+            total, gap, last = total + hours, 0, night
+        elif last is not None:
+            gap += SEASON_STRIDE
+            if gap >= SEASON_GAP_DAYS:
+                return total, last
+    return (0.0, key) if last is None else None
+
+
+def season_pressure(needed_wall_h: float, season, key: str, cfg: PlanConfig) -> float:
+    """How hard a target's season is pushing, 0 to 1: what it still needs against what's
+    left (at the typical open chance), scaled down when the season ends far off."""
+    if needed_wall_h <= 0 or season is None:
+        return 0.0
+    hours, last = season
+    usable = hours * max(cfg.typical_open_chance, 0.05)
+    share = 1.0 if usable <= 0 else min(1.0, needed_wall_h / usable)
+    days = (datetime.fromisoformat(last) - datetime.fromisoformat(key)).days + SEASON_STRIDE
+    return share * min(1.0, SEASON_URGENT_DAYS / max(days, 1))
+
+
+def plan_night(
+    targets, remaining: dict, key: str, cfg: PlanConfig, start=None, rates=None, open_chance=None, season=None
+) -> NightPlan:
     """Plan one night. ``remaining`` maps target id to integration hours still
-    wanted, and is updated with what the plan expects to deliver."""
+    wanted, and is updated with what the plan expects to deliver.
+
+    ``open_chance(when)`` is the chance the roof is open at a time, 0 to 1; None means
+    a clear night. Steps under MIN_OPEN_CHANCE aren't planned, and each block is
+    expected to deliver its stacked time scaled by the chance over its steps.
+
+    ``season`` maps target id to its season_profile; without it there's no season
+    pressure in the score.
+    """
     night = _Night(key, cfg)
+    chance = [1.0 if open_chance is None else max(0.0, min(1.0, open_chance(t))) for t in night.times]
+    roof_ok = [c >= MIN_OPEN_CHANCE for c in chance]
     plan = NightPlan(
         key=key,
         dark_start=night.times[0] if night.times else None,
         dark_end=night.times[-1] + STEP_S if night.times else None,
         moon_percent=night.moon_percent,
+        open_chance=sum(chance) / len(chance) if chance else 0.0,
     )
     masks, active = {}, []
     for target in targets:
@@ -222,8 +336,15 @@ def plan_night(targets, remaining: dict, key: str, cfg: PlanConfig, start=None, 
             plan.skipped[target.id] = "goal reached"
         else:
             high, clear = night.masks(target)
-            masks[target.id] = (high, clear)
+            usable = [c and ok for c, ok in zip(clear, roof_ok)]
+            masks[target.id] = (high, clear, usable)
             active.append(target)
+
+    pressure = {}
+    for target in active:
+        if season and target.id in season:
+            needed_wall_h = remaining[target.id] / _rate(target, cfg, rates)
+            pressure[target.id] = season_pressure(needed_wall_h, season_left(season[target.id], key), key, cfg)
 
     index = 0
     if start is not None:
@@ -236,13 +357,14 @@ def plan_night(targets, remaining: dict, key: str, cfg: PlanConfig, start=None, 
         for target in active:
             if remaining[target.id] <= 0:
                 continue
-            clear = masks[target.id][1]
-            run_s = _run_steps(clear, index) * STEP_S
+            usable = masks[target.id][2]
+            run_s = _run_steps(usable, index) * STEP_S
             continuing = previous is not None and previous.target is target
             overhead = 0.0 if continuing else cfg.switch_overhead_s
             available = run_s - overhead
             minimum_s = target.min_session_hours * 3600
-            needed_s = remaining[target.id] * 3600 / _rate(target, cfg, rates)
+            # Book enough wall time to deliver what's left at the chance it opens.
+            needed_s = remaining[target.id] * 3600 / (_rate(target, cfg, rates) * max(chance[index], MIN_OPEN_CHANCE))
             if continuing:
                 # Same stack keeps growing, so any useful tail will do.
                 length = min(minimum_s, needed_s, available)
@@ -255,6 +377,7 @@ def plan_night(targets, remaining: dict, key: str, cfg: PlanConfig, start=None, 
                 if available < length:
                     continue
             score = _score(target, remaining, cfg, night, index, run_s, continuing, available)
+            score += cfg.weight_season * pressure.get(target.id, 0.0)
             if score > best_score:
                 best, best_score, best_choice = target, score, (overhead, length)
         if best is None:
@@ -266,7 +389,8 @@ def plan_night(targets, remaining: dict, key: str, cfg: PlanConfig, start=None, 
         start_at = night.times[index]
         end_at = start_at + steps * STEP_S
         stack_s = end_at - start_at - overhead
-        delivered = stack_s * _rate(best, cfg, rates) / 3600
+        span = chance[index : index + steps] or [chance[index]]
+        delivered = stack_s * _rate(best, cfg, rates) * (sum(span) / len(span)) / 3600
         remaining[best.id] -= delivered
         if previous is not None and previous.target is best:
             previous.end = end_at
@@ -304,16 +428,18 @@ def _score(target, remaining, cfg, night, index, run_s, continuing, available) -
 
 def _why_not(target, masks, cfg, first_index) -> str:
     """Why a target got no time, judged on what's left of the night."""
-    high, clear = masks[0][first_index:], masks[1][first_index:]
+    high, clear, usable = (m[first_index:] for m in masks)
     if not any(high):
         return f"not above {cfg.min_alt_deg:g} deg in the dark for the rest of the night"
     if not any(clear):
         return "too close to the moon whenever it's up"
-    longest = _longest_run(clear) * STEP_S - cfg.switch_overhead_s
+    if not any(usable):
+        return "roof likely closed while it's up"
+    longest = _longest_run(usable) * STEP_S - cfg.switch_overhead_s
     if longest < target.min_session_hours * 3600:
         kind = "framed run" if target.framed else "session"
         return (
-            f"longest clear window {_hours(max(longest, 0))} is under its "
+            f"longest usable window {_hours(max(longest, 0))} is under its "
             f"{target.min_session_hours:g} h {kind}"
         )
     return "other targets scored higher"
@@ -336,16 +462,29 @@ def measured_rates(targets, log) -> dict:
     return rates
 
 
-def forecast(targets, log, cfg: PlanConfig, now: float, nights: int = 14) -> list[NightPlan]:
-    """Plans for this night and the next, assuming every one is clear."""
+def forecast(targets, log, cfg: PlanConfig, now: float, nights: int = 14, open_chance=None) -> list[NightPlan]:
+    """Plans for this night and the next, all targets sharing each night and carrying
+    progress forward. Every night is clear unless ``open_chance`` (see plan_night)
+    says how likely the roof is to be open."""
     remaining = remaining_hours(targets, log)
     rates = measured_rates(targets, log)
-    day = datetime.fromisoformat(night_key(now, cfg.lon))
+    first_key = night_key(now, cfg.lon)
+    day = datetime.fromisoformat(first_key)
+    season = season_profile([t for t in targets if t.enabled and remaining.get(t.id, 0) > 0], cfg, first_key)
     plans = []
     for offset in range(nights):
         key = (day + timedelta(days=offset)).date().isoformat()
         plans.append(
-            plan_night(targets, remaining, key, cfg, start=now if offset == 0 else None, rates=rates)
+            plan_night(
+                targets,
+                remaining,
+                key,
+                cfg,
+                start=now if offset == 0 else None,
+                rates=rates,
+                open_chance=open_chance,
+                season=season,
+            )
         )
     return plans
 
@@ -507,6 +646,7 @@ def config_from_settings(settings) -> PlanConfig:
         min_alt_deg=settings.min_target_alt_deg,
         horizon=profile,
         horizon_margin_deg=float(Config.horizon_margin or 0.0),
+        typical_open_chance=settings.typical_open_chance,
     )
 
 
