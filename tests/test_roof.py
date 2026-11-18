@@ -579,6 +579,58 @@ def test_disconnected_scope_alarms_when_it_should_park(rig):
     assert "not connected" in rig.auto.status()["alarm"]
 
 
+def test_not_connected_alarm_clears_once_the_scope_connects(rig):
+    """A cold power-up: the roof reads unsafe before the scope has booted."""
+    rig.sun = 25.0
+    rig.safety = UNSAFE
+    rig.set_scope(connected=False, parked=None, sched_state="unknown")
+    rig.tick()
+    rig.tick(31)
+    assert "not connected" in rig.auto.status()["alarm"]
+    rig.set_scope(connected=True, parked=True, sched_state="stopped")
+    rig.tick(10)
+    assert not rig.auto.status()["alarm"]
+    assert rig.stop_calls() == [], "already parked, so nothing to do"
+
+
+def test_not_connected_alarm_clears_then_parks_an_open_arm(rig):
+    rig.safety = UNSAFE
+    rig.set_scope(connected=False, parked=None, sched_state="unknown")
+    rig.tick()
+    rig.tick(31)
+    rig.set_scope(connected=True, parked=False, sched_state="stopped")
+    rig.tick(61)
+    assert rig.stop_calls()[-1] == "park"
+
+
+def test_stop_pressed_while_disconnected_parks_once_connected(rig):
+    rig.set_scope(connected=False, parked=None, sched_state="unknown")
+    rig.auto.request("stop")
+    rig.tick()
+    assert rig.stop_calls() == []
+    assert "not connected" in rig.auto.status()["alarm"]
+    rig.set_scope(connected=True, parked=False, sched_state="stopped")
+    rig.tick(5)
+    assert rig.stop_calls()[-1] == "park"
+    assert not rig.auto.status()["alarm"]
+
+
+def test_daytime_stop_of_an_idle_scope_does_not_hold_tonight(rig):
+    """Parking in the afternoon must not cancel the night's automatic start."""
+    rig.now = NIGHT_START - 6 * 3600  # same night key, sun still up
+    rig.sun = 5.0
+    rig.auto.request("stop")
+    rig.tick()
+    assert rig.stop_calls()[-1] == "park"
+    rig.tick(10)
+    assert rig.auto.status()["held"] is False
+    rig.scope.calls.clear()
+    rig.sun = -40.0
+    rig.tick(6 * 3600)
+    rig.tick(121)
+    assert rig.scope.calls[0][0] == "open_arm"
+
+
 def test_safety_read_exception_style_reading_is_unsafe_and_parks(rig):
     rig.settle_and_start()
     rig.safety = SafetyReading(False, None, None, "read failed")

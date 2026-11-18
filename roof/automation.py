@@ -69,6 +69,7 @@ HEARTBEAT_S = 1800
 COVERAGE_REVIEW_S = 300
 LOOP_STALE_S = 90
 IDLE_VIEW_STAGES = {"", "None", "ContinuousExposure"}
+NOT_CONNECTED = "the scope is not connected"
 
 
 class RoofAutomation:
@@ -161,6 +162,7 @@ class RoofAutomation:
         self._framing_estimates = framing_estimates
         self._list_note = ""
         self._alarm_after_park = ""
+        self._stop_when_connected = False  # Stop pressed while the scope was away
         self._list_runs = 0
         self._coverage_at = 0.0
         # This run's imaging items: item number -> what happened to it.
@@ -337,7 +339,7 @@ class RoofAutomation:
                 self._save_state()
                 self._log(f"schedule set to '{s.schedule}'; applies at the next start")
             elif command == "stop":
-                self._manual_stop(scope, state, night, now)
+                self._manual_stop(scope, state, night, dark, now)
                 acted = True
             elif command == "start":
                 self._manual_start(scope, s, state, safety, dark, night, now)
@@ -345,11 +347,20 @@ class RoofAutomation:
         return acted
 
     def _step(self, scope, s, state, safety, dark, night, now):
+        if state.connected and NOT_CONNECTED in self._alarm:
+            # Raised while the scope was away (often just a cold power-up). Each tick
+            # re-asks whether it should park, so the alarm has nothing left to say.
+            self._log("scope connected; clearing the not-connected alarm")
+            self._alarm = ""
+            if self._stop_when_connected:
+                self._stop_when_connected = False
+                self._begin_stop(scope, "manual", state, night, now)
+                return state
         reason = self._stop_reason(s, state, safety, dark, now) if s.enabled else None
         if reason and state.connected:
             self._begin_stop(scope, reason, state, night, now)
         elif reason:
-            message = f"should stop + park ({reason}) but the scope is not connected"
+            message = f"should stop + park ({reason}) but {NOT_CONNECTED}"
             if self._alarm != message:
                 self._raise_alarm(message)
         elif self.phase == PARKING:
@@ -461,14 +472,22 @@ class RoofAutomation:
         self._start_after_park = False
         self._raise_alarm(f"PARK NOT CONFIRMED after {PARK_ATTEMPTS} attempts (mount.close={state.parked})")
 
-    def _manual_stop(self, scope, state, night, now):
-        self._hold_night = night
-        self._save_state()
-        self._log("Stop + Park pressed; holding until Start or the next night")
+    def _manual_stop(self, scope, state, night, dark, now):
+        session = self.phase in (OPENING, IMAGING) or state.sched_state == "working" or self._foreign(state)
+        if dark or session:
+            self._hold_night = night
+            self._save_state()
+            self._log("Stop + Park pressed; holding until Start or the next night")
+        else:
+            # Parking an idle scope in daylight is tidying up, not calling off the
+            # night. Disable automation for that.
+            self._log("Stop + Park pressed in daylight with nothing running; tonight still starts on its own")
         if state.connected:
+            self._stop_when_connected = False
             self._begin_stop(scope, "manual", state, night, now)
         else:
-            self._raise_alarm("Stop + Park pressed but the scope is not connected")
+            self._stop_when_connected = True
+            self._raise_alarm(f"Stop + Park pressed but {NOT_CONNECTED}; parking once it connects")
 
     # ---- starting ---------------------------------------------------------------
 
