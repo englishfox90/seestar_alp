@@ -928,13 +928,18 @@ class RoofAutomation:
             watch["frames"] = frames
             watch["since"] = now
         stacking = state.view_stage == "Stack" or frames > 0
+        if stacking:
+            # Once a target has stacked, the scope winding it down (stack saved, counts
+            # cleared, the scheduler not yet on the next item) is its end, not a target
+            # that never started.
+            watch["stacked"] = True
         why = None
         if state.stacked == 0 and (state.dropped or 0) >= NOTHING_KEPT_FRAMES:
             reason = f" ({state.drop_reason})" if state.drop_reason else ""
             why = f"the scope kept none of its first {state.dropped} frames{reason}"
         elif stacking and now - watch["since"] >= STALL_S:
             why = f"no frame finished in {STALL_S // 60} minutes"
-        elif not stacking and now - watch["began"] >= NEVER_STARTED_S:
+        elif not stacking and not watch.get("stacked") and now - watch["began"] >= NEVER_STARTED_S:
             why = f"it hadn't started stacking after {NEVER_STARTED_S // 60} minutes"
         if why is None:
             return False

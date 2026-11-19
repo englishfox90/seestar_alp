@@ -1566,6 +1566,24 @@ def test_a_target_that_never_starts_stacking_is_skipped(rig):
     assert "skip_item" in rig.scope.calls
 
 
+def test_a_target_that_finishes_after_stacking_is_not_called_never_started(rig):
+    # 2026-11-18: Sh2-171 stacked 169 frames over two hours. In the seconds between its
+    # stack being saved and the scheduler moving on, the counts read 0 and the stage left
+    # Stack; that was taken as "hadn't started stacking", and the skip hit IC 1805.
+    from roof.automation import NEVER_STARTED_S
+
+    rig.settle_and_start()
+    _stacking(rig, stacked=1)
+    rig.tick(10)
+    for n in range(2, 8):
+        _stacking(rig, stacked=n)
+        rig.tick(NEVER_STARTED_S // 4)
+    rig.set_scope(sched_state="working", item_number=2, stacked=0, dropped=0, view_stage="ContinuousExposure")
+    rig.tick(3)
+    assert "skip_item" not in rig.scope.calls
+    assert not any("failed" in line for line in rig.auto.status()["log"])
+
+
 def test_start_pressed_while_parking_starts_once_parked(rig):
     rig.settle_and_start()
     rig.auto.request("stop")
