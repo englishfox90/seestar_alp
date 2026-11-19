@@ -354,3 +354,51 @@ def test_site_settings_refuse_a_missing_folder_or_bad_building(page, tmp_path):
     page.post("/roof/site", "building=-3&image_dir=")
     assert page.saved == {}
     assert all(m.startswith("Save failed") for m in page.messages)
+
+
+def test_alert_limits_save_and_refuse_bad_values(page):
+    page.post(
+        "/roof/alerts/limits", "briefing_lead_min=90&battery_pct=25&storage_gb=10"
+    )
+    assert page.saved == {
+        "briefing_lead_min": 90.0,
+        "battery_alert_pct": 25.0,
+        "storage_alert_gb": 10.0,
+    }
+    page.saved.clear()
+    page.post(
+        "/roof/alerts/limits", "briefing_lead_min=500&battery_pct=25&storage_gb=10"
+    )
+    page.post("/roof/alerts/limits", "briefing_lead_min=&battery_pct=25&storage_gb=10")
+    assert page.saved == {}
+    assert all(m.startswith("Save failed") for m in page.messages[-2:])
+
+
+def test_send_briefing_now_needs_a_webhook_and_alerts_on(page, monkeypatch):
+    from roof import alerts as roof_alerts
+
+    monkeypatch.setattr(roof_alerts, "read_webhook", lambda path: "")
+    page.post("/roof/alerts/briefing")
+    assert page.messages[-1] == "Send failed: no webhook saved."
+    monkeypatch.setattr(
+        roof_alerts, "read_webhook", lambda path: "https://discord.com/api/webhooks/1/x"
+    )
+    page.post("/roof/alerts/briefing")
+    assert page.messages[-1] == "Send failed: turn alerts on first."
+
+    built = []
+
+    class Sender:
+        def send_built(self, build, label):
+            built.append(label)
+
+    class Alerts:
+        _sender = Sender()
+
+        def _fresh_health(self):
+            return None
+
+    page.automation._alerts = Alerts()
+    page.saved["discord_enabled"] = True
+    page.post("/roof/alerts/briefing")
+    assert built == ["briefing"] and page.messages[-1].startswith("Briefing on its way")

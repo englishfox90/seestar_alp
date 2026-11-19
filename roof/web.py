@@ -326,6 +326,36 @@ class AlertsTest(_Action):
         return "Test alert sent. Check the channel." if sent else f"Test failed: {status}"
 
 
+class AlertsBriefing(_Action):
+    """Post the coming night's briefing now, to see what it looks like."""
+
+    @staticmethod
+    def act(req):
+        import time as _time
+
+        from roof import night_brief
+        from roof.alerts import NightAlerts
+        from roof.sun import night_key
+
+        settings = roof_config.load()
+        if not roof_alerts.read_webhook(roof_alerts.webhook_path()):
+            return "Send failed: no webhook saved."
+        if not settings.discord_enabled:
+            return "Send failed: turn alerts on first."
+        if settings.lat == 0 and settings.lon == 0:
+            return "Send failed: set the site's latitude and longitude in Config first."
+        automation = get_automation()
+        alerts = getattr(automation, "_alerts", None)
+        sender = getattr(alerts, "_sender", None)
+        if sender is None:
+            return "Send failed: alerts aren't running."
+        now = _time.time()
+        night = night_key(now, settings.lon)
+        health = alerts._fresh_health() if hasattr(alerts, "_fresh_health") else None
+        sender.send_built(lambda: NightAlerts._finish(night_brief.briefing(night, now, health), ""), "briefing")
+        return "Briefing on its way. It takes a few seconds to put together."
+
+
 class AlertsEvents(_Action):
     @staticmethod
     def act(req):
@@ -445,6 +475,31 @@ class RoofMode(_Action):
         return "Dry run: automation only logs what it would do."
 
 
+class AlertsLimits(_Action):
+    """When the briefing posts, and the battery and storage warning levels."""
+
+    @staticmethod
+    def act(req):
+        form = _form(req)
+        limits = (("briefing_lead_min", 0, 240), ("battery_pct", 0, 100), ("storage_gb", 0, 10000))
+        values = {}
+        for key, low, high in limits:
+            try:
+                value = float(form.get(key, ""))
+            except (TypeError, ValueError):
+                return "Save failed: enter a number in each box."
+            if not low <= value <= high:
+                return f"Save failed: {value:g} is outside {low} to {high}."
+            values[key] = value
+        roof_config.save("briefing_lead_min", values["briefing_lead_min"])
+        roof_config.save("battery_alert_pct", values["battery_pct"])
+        roof_config.save("storage_alert_gb", values["storage_gb"])
+        return (
+            f"Saved: briefing {values['briefing_lead_min']:g} min before dark, battery warning below "
+            f"{values['battery_pct']:g}%, storage warning below {values['storage_gb']:g} GB."
+        )
+
+
 class DefaultDeviceMiddleware:
     """Send page URLs with no device number to the configured scope, and / to Tonight.
 
@@ -485,6 +540,8 @@ def install(app):
         "roof/alerts/webhook/remove": AlertsWebhookRemove,
         "roof/alerts/test": AlertsTest,
         "roof/alerts/events": AlertsEvents,
+        "roof/alerts/limits": AlertsLimits,
+        "roof/alerts/briefing": AlertsBriefing,
         "roof/safety/find": SafetyFind,
         "roof/safety/use": SafetyUse,
         "roof/safety/test": SafetyTest,

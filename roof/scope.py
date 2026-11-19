@@ -42,6 +42,46 @@ class ScopeState:
     wide_dropped: int = 0
     wide_lapse_s: float | None = None  # None when the events don't say
     wide_exposure_s: float = 0.0
+    # Battery, charging, temperature and storage, from the device state each tick
+    # already reads. None when the scope didn't say. See health_from.
+    health: dict | None = None
+
+
+def health_from(device_state: dict) -> dict | None:
+    """The scope's own health readings, or None when it reported none."""
+    pi = device_state.get("pi_status") if isinstance(device_state, dict) else None
+    storage = device_state.get("storage") if isinstance(device_state, dict) else None
+    if not isinstance(pi, dict) and not isinstance(storage, dict):
+        return None
+    pi = pi if isinstance(pi, dict) else {}
+
+    def number(value):
+        return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+    def flag(value):
+        return value if isinstance(value, bool) else None
+
+    free_gb = total_gb = None
+    if isinstance(storage, dict):
+        current = storage.get("cur_storage")
+        for volume in storage.get("storage_volume") or ():
+            if isinstance(volume, dict) and (volume.get("name") == current or current is None):
+                free = number(volume.get("free_mb"))
+                total = number(volume.get("total_mb"))
+                free_gb = None if free is None else free / 1024
+                total_gb = None if total is None else total / 1024
+                break
+    battery = number(pi.get("battery_capacity"))
+    return {
+        "battery": None if battery is None else int(battery),
+        "charging": flag(pi.get("charge_online")),
+        "charger": str(pi.get("charger_status") or ""),
+        "temp_c": number(pi.get("temp")),
+        "overtemp": flag(pi.get("is_overtemp")),
+        "battery_overtemp": flag(pi.get("battery_overtemp")),
+        "free_gb": free_gb,
+        "total_gb": total_gb,
+    }
 
 
 def _failed(res) -> str | None:
@@ -102,6 +142,7 @@ class RealScope:
                 mosaic_scale=float(mosaic["scale"]),
                 mosaic_estimate_h=float(estimate) if isinstance(estimate, (int, float)) else None,
             )
+        state = replace(state, health=health_from(device_state))
         state = self._wide(dev, state, items, number, device_state)
         app_state = self._rpc(dev, "iscope_get_app_state")
         view = app_state.get("View") or {}

@@ -49,12 +49,20 @@ PHOTO_NAME = "stack.jpg"
 TITLE_MAX, TEXT_MAX = 256, 4096
 
 WAIT_ALERT_S = 1800  # how long into the dark before saying imaging hasn't started
+# Health warnings. Thresholds the page doesn't set.
+BATTERY_REARM_MARGIN = 10  # percent above the limit before a low battery can warn again
+HEALTH_FRESH_S = 600  # a footer only shows readings this recent
+DEW_WARN_S = 15 * 60
+BRIEFING_LATE_S = 3600  # after dark, a briefing this late is still worth posting
+NIGHT_ALARMS_KEPT = 20
+FIELDS_MAX = 25  # Discord's limit per embed
 LOST_CONTACT_S = 120
 REPEAT_ALARM_S = 900
 
 # What the Automation page's switches control. Alarms and lost contact aren't here:
 # they always post, because they're how you hear that something needs you.
 KINDS = {
+    "briefing": ("Tonight's briefing", "Before dark: roof forecast, moon, the plan and the scope's health"),
     "session": ("Session started and ended", "With the reason, and frames per target"),
     "autofocus_passed": ("Autofocus passed", ""),
     "autofocus_failed": ("Autofocus failed", "Includes a run with no usable focus curve"),
@@ -62,7 +70,11 @@ KINDS = {
     "switching": ("Switching target", "With the last target's frames"),
     "stack_image": ("Stacked image", "A copy of the final stack when a target finishes"),
     "parked": ("Arm parked", ""),
-    "night": ("Night status", "Not imaging yet, no imaging tonight, and the night summary"),
+    "night": ("Night report", "Not imaging yet, and after dawn the night's report with its stacks"),
+    "battery": ("Battery and power", "Battery low while not charging, or charging stops"),
+    "temperature": ("Overheating", "When the scope or its battery reports overheating"),
+    "storage": ("Storage low", "When the scope's free space falls below your limit"),
+    "dew": ("Dew point reached", "Air at the dew point for 15 minutes with the heater on"),
 }
 ALWAYS = "always"
 
@@ -77,6 +89,25 @@ _last_delivery = None
 def redact(text) -> str:
     """Remove the webhook from text bound for a log: its token is a live secret."""
     return _WEBHOOK_PATH.sub("/api/webhooks/[REDACTED]", str(text))
+
+
+def health_text(health) -> str:
+    """The scope's health in one line, for a footer: battery, charging, temperature, space."""
+    if not health:
+        return ""
+    parts = []
+    if health.get("battery") is not None:
+        battery = f"Battery {health['battery']}%"
+        if health.get("charging") is True:
+            battery += ", charging" if health.get("charger") != "Full" else ", on power"
+        elif health.get("charging") is False:
+            battery += ", not charging"
+        parts.append(battery)
+    if health.get("temp_c") is not None:
+        parts.append(f"{health['temp_c']:.0f} °C")
+    if health.get("free_gb") is not None:
+        parts.append(f"{health['free_gb']:.0f} GB free")
+    return " · ".join(parts)
 
 
 def webhook_path() -> str:
@@ -139,22 +170,34 @@ def panel(settings) -> dict:
             for key, (label, help_text) in KINDS.items()
         ],
         "last": _last_delivery,
+        "briefing_lead_min": f"{getattr(settings, 'briefing_lead_min', 60):g}",
+        "battery_pct": f"{getattr(settings, 'battery_alert_pct', 20):g}",
+        "storage_gb": f"{getattr(settings, 'storage_alert_gb', 5):g}",
     }
 
 
-def payload(title: str, text: str, level: str, when: float) -> dict:
+def payload(title: str, text: str, level: str, when: float, fields=None, footer=None, image_name=None) -> dict:
+    embed = {
+        "title": title[:TITLE_MAX],
+        "description": text[:TEXT_MAX],
+        "color": _COLOURS.get(level, _COLOURS["info"]),
+        "timestamp": datetime.fromtimestamp(when, timezone.utc).isoformat(),
+    }
+    if fields:
+        embed["fields"] = [
+            {"name": str(f["name"])[:256], "value": str(f["value"])[:1024], "inline": bool(f.get("inline"))}
+            for f in fields[:FIELDS_MAX]
+            if f and f.get("value")
+        ]
+    if footer:
+        embed["footer"] = {"text": footer[:2048]}
+    if image_name:
+        embed["image"] = {"url": f"attachment://{image_name}"}
     return {
         "username": USERNAME,
         # A target name must never be able to ping anyone.
         "allowed_mentions": {"parse": []},
-        "embeds": [
-            {
-                "title": title[:TITLE_MAX],
-                "description": text[:TEXT_MAX],
-                "color": _COLOURS.get(level, _COLOURS["info"]),
-                "timestamp": datetime.fromtimestamp(when, timezone.utc).isoformat(),
-            }
-        ],
+        "embeds": [embed],
     }
 
 
@@ -210,10 +253,11 @@ def deliver(
             if photo is None:
                 reply = post(url, json=body, timeout=POST_TIMEOUT_S)
             else:
+                name, data, mime = photo if isinstance(photo, tuple) else (PHOTO_NAME, photo, "image/jpeg")
                 reply = post(
                     url,
                     data={"payload_json": json.dumps(body)},
-                    files={"files[0]": (PHOTO_NAME, photo, "image/jpeg")},
+                    files={"files[0]": (name, data, mime)},
                     timeout=UPLOAD_TIMEOUT_S,
                 )
         except requests.RequestException as e:
@@ -246,12 +290,30 @@ class DiscordSender:
         self._thread = None
         self._thread_lock = threading.Lock()
 
-    def send(self, title: str, text: str, level: str = "info") -> None:
-        """Queue a message and return straight away."""
+    def send(self, title: str, text: str, level: str = "info", fields=None, footer=None, image=None) -> None:
+        """Queue a message and return straight away. ``image`` is (name, bytes, mime)."""
         url = self._get_url()
         if not url:
             return
-        self._enqueue(url, payload(title, text, level, self._clock()))
+        body = payload(title, text, level, self._clock(), fields, footer, image[0] if image else None)
+        self._enqueue(url, body, image)
+
+    def send_built(self, build, label="message") -> None:
+        """Work out a message on a thread of its own, then queue it. Returns straight
+        away, so a slow forecast or plan can't hold up the automation loop.
+        ``build()`` returns send()'s keyword arguments, or None to send nothing."""
+        if not self._get_url():
+            return
+
+        def run():
+            try:
+                message = build()
+                if message:
+                    self.send(**message)
+            except Exception as e:
+                self._logger.warning("Discord: could not prepare the %s: %s", label, redact(e))
+
+        threading.Thread(target=run, daemon=True, name="RoofAlertBuild").start()
 
     def send_photo(self, title: str, text: str, find) -> None:
         """Post a saved image once ``find()`` returns its path. Returns straight away.
@@ -362,6 +424,17 @@ class _Target:
     def summary(self) -> str:
         return _totals(self.frames, self.dropped, self.seconds)
 
+    def card(self) -> str:
+        """The target's totals for a card field, one fact a line."""
+        if self.skip_reason:
+            return f"Skipped: {self.skip_reason}\n{self.summary()}"
+        if not self.frames:
+            return "No frames"
+        lines = [f"{self.frames} frames", _duration(self.seconds)]
+        if self.dropped:
+            lines.append(f"{self.dropped} dropped")
+        return "\n".join(lines)
+
 
 # reason -> (title, level, what happens next)
 _ENDINGS = {
@@ -388,10 +461,36 @@ _ENDINGS = {
 class NightAlerts:
     """Turns the automation's ticks and decisions into messages."""
 
-    def __init__(self, sender, state_path=None, clock=time.time, logger=None, muted=None, image_dir=None):
+    def __init__(
+        self,
+        sender,
+        state_path=None,
+        clock=time.time,
+        logger=None,
+        muted=None,
+        image_dir=None,
+        briefing=None,
+        report=None,
+        goal_for=None,
+        limits=None,
+    ):
         self._sender = sender
         self._muted = muted or (lambda: ())
         self._image_dir = image_dir or (lambda: "")
+        # Builders for the two long posts: (night, now, health) -> message or None, and
+        # (night state, now, health) -> message or None. See roof.night_brief.
+        self._briefing = briefing
+        self._report = report
+        self._goal_for = goal_for or (lambda name: None)  # target name -> "3.1 of 8 h", or None
+        # -> {"battery_pct": .., "storage_gb": .., "briefing_lead_min": ..}
+        self._limits = limits or (lambda: {})
+        self._health = None
+        self._health_at = None
+        self._battery_low_sent = False
+        self._was_charging = None
+        self._hot_sent = False
+        self._storage_sent = False
+        self._dew_since = None
         self._state_path = state_path
         self._clock = clock
         self._logger = logger or logging.getLogger("roof")
@@ -411,7 +510,8 @@ class NightAlerts:
     @staticmethod
     def _blank_night(key) -> dict:
         return {"night": key, "sessions": 0, "imaged": False, "waiting_sent": False,
-                "closed_sent": False, "targets": {}}  # fmt: skip
+                "closed_sent": False, "targets": {}, "briefed": False, "forecast": None,
+                "alarms": [], "stacks": [], "dew_sent": False, "last_note": ""}  # fmt: skip
 
     # ---- what the automation decides ------------------------------------------
 
@@ -423,14 +523,17 @@ class NightAlerts:
             self._session = {"targets": [], "adopted": False}
             self._current = None
             self._reset_contact()
-            lines = [f"Schedule: {schedule}"]
+            fields = [{"name": "Schedule", "value": schedule, "inline": True}]
             if names:
                 total = start_position + len(names) - 1
-                lines.append(f"First up: {names[0]} (target {start_position} of {total})")
+                fields.append({"name": "First up", "value": f"{names[0]} (target {start_position} of {total})", "inline": True})
+                goal = self._goal_for(names[0])
+                if goal:
+                    fields.append({"name": "Goal", "value": goal, "inline": True})
             if len(names) > 1:
-                lines.append("Then: " + ", ".join(names[1:]))
+                fields.append({"name": "Then", "value": ", ".join(names[1:])})
             title = "Imaging session resumed" if resumed else "Imaging session started"
-            self._send(title, "\n".join(lines), "success", "session")
+            self._send(title, "", "success", "session", fields=fields)
 
     def session_adopted(self, night):
         with self._lock:
@@ -457,14 +560,15 @@ class NightAlerts:
             title, level, next_step = _ENDINGS.get(
                 reason, (f"Imaging stopped: {reason}", "warning", "")
             )
-            lines = [f"{t.name}: {t.summary()}" for t in targets] or ["No target was reached."]
+            fields = [{"name": t.name, "value": t.card(), "inline": True} for t in targets]
+            lines = [] if targets else ["No target was reached."]
             if level == "success" and not any(t.frames for t in targets):
                 level = "warning"
             if more_tonight:
                 next_step = "The target list may have more for tonight."
             if next_step:
                 lines.append(next_step)
-            self._send(title, "\n".join(lines), level, "session")
+            self._send(title, "\n".join(lines), level, "session", fields=fields)
 
     def session_forgotten(self):
         with self._lock:
@@ -490,6 +594,10 @@ class NightAlerts:
                 m: at for m, at in self._alarms.items() if now - at < REPEAT_ALARM_S
             }
             self._alarms[message] = now
+            self._night["alarms"] = (self._night.get("alarms") or [])[-(NIGHT_ALARMS_KEPT - 1):] + [
+                {"at": now, "message": message}
+            ]
+            self._save()
             self._send("Seestar alarm", message, "error")
 
     def autofocus(self, run):
@@ -522,12 +630,17 @@ class NightAlerts:
 
     # ---- what each tick shows --------------------------------------------------
 
-    def observe(self, state, dark, night, phase, note, position, dry_run):
-        """Call once per tick. ``position`` is (target index, total), or (0, 0)."""
+    def observe(self, state, dark, night, phase, note, position, dry_run, dark_start=None):
+        """Call once per tick. ``position`` is (target index, total), or (0, 0).
+        ``dark_start`` is when tonight's dark begins, for the briefing."""
         with self._lock:
             self._dry_run = dry_run
             self._roll_night(night)
             now = self._clock()
+            if state.connected and getattr(state, "health", None):
+                self._health, self._health_at = state.health, now
+                self._watch_health(state.health)
+            self._maybe_brief(night, now, dark_start)
             stacking = (
                 state.view_state == "working" and state.view_stage == "Stack" and state.stacked > 0
             )
@@ -595,19 +708,22 @@ class NightAlerts:
         self._send(f"Switching target: {name}", "\n".join(lines), level, "switching")
 
     def _announce_stacking(self, target, state):
-        details = []
+        fields = []
         if state.exposure_s:
-            details.append(f"{state.exposure_s:g} s exposures")
+            fields.append({"name": "Exposure", "value": f"{state.exposure_s:g} s", "inline": True})
         if state.gain is not None:
-            details.append(f"gain {state.gain}")
+            fields.append({"name": "Gain", "value": str(state.gain), "inline": True})
         if state.mosaic_scale and state.mosaic_scale > 1:
-            details.append(f"framed at {state.mosaic_scale:g}x")
-        text = ", ".join(details) or "First frame stacked."
+            fields.append({"name": "Framing", "value": f"{state.mosaic_scale:g}x", "inline": True})
+        goal = self._goal_for(target.name)
+        if goal:
+            fields.append({"name": "Goal so far", "value": goal, "inline": True})
+        text = "" if fields else "First frame stacked."
         level = "success"
         if target.focus_doubt:
-            text += f"\nStacking anyway: {target.focus_doubt}, so focus isn't confirmed."
+            text = f"Stacking anyway: {target.focus_doubt}, so focus isn't confirmed."
             level = "warning"
-        self._send(f"Stacking {target.name}", text, level, "stacking")
+        self._send(f"Stacking {target.name}", text, level, "stacking", fields=fields)
 
     def _close_target(self):
         target, self._current = self._current, None
@@ -620,6 +736,8 @@ class NightAlerts:
         totals["frames"] += target.frames
         totals["dropped"] += target.dropped
         totals["seconds"] += target.seconds
+        if target.frames:
+            self._night.setdefault("stacks", []).append({"name": target.name, "started": target.started})
         self._save()
         self._send_stack_image(target)
 
@@ -638,6 +756,8 @@ class NightAlerts:
             self._dark_since = now
         if dark and phase == "idle" and note:
             self._last_note = note
+            if self._night.get("last_note") != note:
+                self._night["last_note"] = note
         night = self._night
         if (
             dark
@@ -661,6 +781,15 @@ class NightAlerts:
             return
         night["closed_sent"] = True
         self._save()
+        if self._report is not None:
+            if "night" in self._muted():
+                return
+            state = json.loads(json.dumps(night))
+            now, health, prefix = self._clock(), self._fresh_health(), self._prefix()
+            self._sender.send_built(
+                lambda: self._finish(self._report(state, now, health), prefix), "night report"
+            )
+            return
         if night["imaged"]:
             lines = [
                 f"{name}: {_totals(t['frames'], t['dropped'], t['seconds'])}"
@@ -697,11 +826,123 @@ class NightAlerts:
 
     # ---- plumbing ---------------------------------------------------------------
 
-    def _send(self, title, text, level="info", kind=ALWAYS):
+    def _send(self, title, text, level="info", kind=ALWAYS, fields=None):
         if kind in self._muted():
             return
-        prefix = "[DRY RUN] " if self._dry_run else ""
-        self._sender.send(prefix + title, text, level)
+        footer = health_text(self._fresh_health()) or None
+        self._sender.send(self._prefix() + title, text, level, fields=fields, footer=footer)
+
+    def _prefix(self):
+        return "[DRY RUN] " if self._dry_run else ""
+
+    def _fresh_health(self):
+        if self._health is None or self._health_at is None:
+            return None
+        return self._health if self._clock() - self._health_at <= HEALTH_FRESH_S else None
+
+    @staticmethod
+    def _finish(message, prefix):
+        """A builder's message as send()'s keyword arguments, or None."""
+        if not message:
+            return None
+        return {
+            "title": prefix + message["title"],
+            "text": message.get("text", ""),
+            "level": message.get("level", "info"),
+            "fields": message.get("fields"),
+            "footer": message.get("footer"),
+            "image": message.get("image"),
+        }
+
+    # ---- the briefing ----------------------------------------------------------
+
+    def _maybe_brief(self, night, now, dark_start):
+        if self._briefing is None or dark_start is None or self._night.get("briefed"):
+            return
+        lead = float(self._limits().get("briefing_lead_min", 60)) * 60
+        if not (dark_start - lead <= now <= dark_start + BRIEFING_LATE_S):
+            return
+        self._night["briefed"] = True
+        self._save()
+        if "briefing" in self._muted():
+            return
+        health, prefix = self._fresh_health(), self._prefix()
+
+        def build():
+            message = self._briefing(night, now, health)
+            if message and message.get("forecast"):
+                with self._lock:
+                    if self._night.get("night") == night:
+                        self._night["forecast"] = message["forecast"]
+                        self._save()
+            return self._finish(message, prefix)
+
+        self._sender.send_built(build, "briefing")
+
+    # ---- health ------------------------------------------------------------------
+
+    def _watch_health(self, health):
+        limits = self._limits()
+        battery, charging = health.get("battery"), health.get("charging")
+        low = float(limits.get("battery_pct", 20))
+        if battery is not None and charging is False and battery <= low and not self._battery_low_sent:
+            self._battery_low_sent = True
+            self._send(
+                "Scope battery low",
+                f"Battery at {battery}% and not charging. Check the scope's power.",
+                "error",
+                "battery",
+            )
+        elif battery is not None and (charging is True or battery > low + BATTERY_REARM_MARGIN):
+            self._battery_low_sent = False
+        if self._was_charging is True and charging is False:
+            self._send(
+                "Scope stopped charging",
+                f"It's running on its battery{f', at {battery}%' if battery is not None else ''}. "
+                "Its power supply may be off or unplugged.",
+                "warning",
+                "battery",
+            )
+        if charging is not None:
+            self._was_charging = charging
+        hot = [what for key, what in (("overtemp", "the scope"), ("battery_overtemp", "its battery")) if health.get(key)]
+        if hot and not self._hot_sent:
+            self._hot_sent = True
+            temp = f" ({health['temp_c']:.0f} °C)" if health.get("temp_c") is not None else ""
+            self._send("Scope overheating", f"The scope reports {' and '.join(hot)} overheating{temp}.", "error", "temperature")
+        elif not hot:
+            self._hot_sent = False
+        free, floor = health.get("free_gb"), float(limits.get("storage_gb", 5))
+        if free is not None and free < floor and not self._storage_sent:
+            self._storage_sent = True
+            self._send(
+                "Scope storage low",
+                f"{free:.1f} GB free, below your {floor:g} GB limit. Stacks may stop saving.",
+                "warning",
+                "storage",
+            )
+        elif free is not None and free >= floor * 1.2:
+            self._storage_sent = False
+
+    def dew(self, margin_c, heater_on):
+        """Each tick of a session the automation runs, with the dew margin it used."""
+        with self._lock:
+            now = self._clock()
+            if margin_c is None or not heater_on or margin_c > 0:
+                self._dew_since = None
+                return
+            if self._dew_since is None:
+                self._dew_since = now
+            if now - self._dew_since >= DEW_WARN_S and not self._night.get("dew_sent"):
+                self._night["dew_sent"] = True
+                self._save()
+                self._send(
+                    "Dew point reached",
+                    f"The air has been at its dew point ({margin_c:+.1f} °C margin) for "
+                    f"{DEW_WARN_S // 60} minutes with the heater on. Watch for dew on the lens.",
+                    "warning",
+                    "dew",
+                )
 
     def _load(self):
         if not self._state_path:

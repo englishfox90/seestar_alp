@@ -26,6 +26,9 @@ WRITABLE_KEYS = {
     "dew_sentinel_url",
     "site_building",
     "discord_image_dir",
+    "briefing_lead_min",
+    "battery_alert_pct",
+    "storage_alert_gb",
 }
 
 
@@ -51,6 +54,9 @@ class Settings:
     pier_status_url: str = "http://127.0.0.1:8080/status"
     discord_enabled: bool = False
     discord_muted: tuple = ()  # alert kinds switched off; see roof.alerts.KINDS
+    briefing_lead_min: float = 60.0  # Tonight's briefing posts this long before dark
+    battery_alert_pct: float = 20.0  # warn below this while the scope isn't charging
+    storage_alert_gb: float = 5.0  # warn when the scope has less free than this
     # The Starfront building this scope is in, for its public roof state. 0 turns it off.
     site_building: int = 0
     # Where the scope's share keeps its stacks (its MyWorks folder), for the Stacked
@@ -112,6 +118,9 @@ def load() -> Settings:
         pier_status_url=str(get("pier_status_url", Settings.pier_status_url)),
         discord_enabled=get("discord_enabled", False) is True,
         discord_muted=_string_list(get("discord_muted", [])),
+        briefing_lead_min=min(240.0, max(0.0, _number("briefing_lead_min", 60.0))),
+        battery_alert_pct=min(100.0, max(0.0, _number("battery_alert_pct", 20.0))),
+        storage_alert_gb=max(0.0, _number("storage_alert_gb", 5.0)),
         site_building=_number("site_building", Settings.site_building, int),
         typical_open_chance=min(1.0, max(0.0, _number("typical_open_chance", Settings.typical_open_chance))),
         discord_image_dir=os.path.expanduser(str(get("discord_image_dir", Settings.discord_image_dir))),

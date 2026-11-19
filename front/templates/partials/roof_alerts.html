@@ -30,6 +30,10 @@
       <p class="plan-inline__text">Post a test message to the channel</p>
       {{ ui.button("Send test", "secondary", "submit") }}
     </form>
+    <form class="plan-inline" method="post" action="{{ root_path }}{{ page_root }}/alerts/briefing">
+      <p class="plan-inline__text">Post tonight's briefing now, to see how it looks</p>
+      {{ ui.button("Send briefing now", "secondary", "submit") }}
+    </form>
     <form class="plan-inline" method="post" action="{{ root_path }}{{ page_root }}/alerts/webhook/remove">
       <p class="plan-inline__text">Forget this webhook</p>
       {{ ui.button("Remove", "secondary", "submit") }}
@@ -43,5 +47,15 @@
     {% endfor %}
     <p class="ssc-footnote">Alarms and lost contact with the scope always post. Roof open and close aren't posted here; leave those to your safety monitor's alerts.</p>
     <div class="plan-actions">{{ ui.button("Save choices", "secondary", "submit") }}</div>
+  </form>
+
+  <form class="plan-panel" method="post" action="{{ root_path }}{{ page_root }}/alerts/limits">
+    {{ form.field("Post tonight's briefing (minutes before dark)", "roof-alerts-lead", "briefing_lead_min", value=alerts.briefing_lead_min, type="number",
+        help="When the briefing posts: forecast, moon, the plan and the scope's health. Up to 240.", attrs='min="0" max="240" step="5" required') }}
+    {{ form.field("Warn when the battery is below (%)", "roof-alerts-battery", "battery_pct", value=alerts.battery_pct, type="number",
+        help="Only while the scope isn't charging.", attrs='min="0" max="100" step="1" required') }}
+    {{ form.field("Warn when free storage is below (GB)", "roof-alerts-storage", "storage_gb", value=alerts.storage_gb, type="number",
+        attrs='min="0" step="1" required') }}
+    <div class="plan-actions">{{ ui.button("Save", "secondary", "submit") }}</div>
   </form>
 </section>

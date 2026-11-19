@@ -104,6 +104,7 @@ Your safety monitor's own alerts cover the roof opening and closing (PFR Sentine
 
 | Event | When |
 |---|---|
+| Tonight's briefing | Before dark (60 min by default): roof forecast, dark hours, moon, dew, the plan with each target's goal progress, the scope's health, and a timeline picture of the night |
 | Imaging session started / resumed | The schedule launches, with the targets ahead |
 | Autofocus passed / failed / no usable fit | Each run during a session |
 | Stacking *target* | The first frame is stacked; warns if focus isn't confirmed |
@@ -111,9 +112,17 @@ Your safety monitor's own alerts cover the roof opening and closing (PFR Sentine
 | Imaging finished / stopped | With the reason (dawn, roof unsafe, Stop + Park, ...) and frames per target |
 | Arm parked | The firmware confirms it |
 | Not imaging yet | 30 min into the dark with no session, and why |
-| No imaging tonight / Night summary | At dawn |
+| Night report | At dawn: per target frames, dropped frames and goal progress; roof open hours against the forecast; the night's alarms; the next night's outlook and plan; and the night's stacks in one picture (needs the MyWorks folder) |
 | Lost / back in contact | No reply from the scope for 2 min during a session |
 | Seestar alarm | Anything the automation raises as an alarm, such as a park it can't confirm |
+| Battery low / stopped charging | Battery under your limit while not charging, or charging stops (power lost) |
+| Overheating | The scope or its battery reports overheating |
+| Storage low | Free space under your limit |
+| Dew point reached | The air at its dew point for 15 minutes with the heater on |
+
+Cards show their details as fields, and a footer with the scope's battery, temperature
+and free space. **Send briefing now** posts the coming night's briefing straight away.
+The briefing time and the battery and storage limits are set below the switches.
 
 Set it up under **Discord alerts** on the Automation page: paste the webhook, send a test,
 turn alerts on, and choose which kinds post. Alarms and lost contact always post. Changes

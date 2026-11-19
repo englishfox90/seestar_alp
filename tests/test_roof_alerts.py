@@ -17,11 +17,23 @@ STACKING = {"view_state": "working", "view_stage": "Stack"}
 
 
 class RecordingSender:
+    """Keeps (title, text, level). Fields are folded into the text as "name: value"
+    lines, so a test reads a message the way a person would; ``extras`` keeps the rest."""
+
     def __init__(self):
         self.sent = []
+        self.extras = []
 
-    def send(self, title, text, level="info"):
-        self.sent.append((title, text, level))
+    def send(self, title, text, level="info", fields=None, footer=None, image=None):
+        lines = [text] if text else []
+        lines += [f"{f['name']}: {f['value']}" for f in fields or ()]
+        self.sent.append((title, "\n".join(lines), level))
+        self.extras.append({"fields": fields, "footer": footer, "image": image})
+
+    def send_built(self, build, label="message"):
+        message = build()
+        if message:
+            self.send(**message)
 
     def titles(self):
         return [title for title, _, _ in self.sent]
@@ -167,7 +179,7 @@ def test_stacking_is_announced_once_per_target_at_the_first_frame(rig):
     rig.stack("A", 2, 1)
     rig.stack("A", 2, 2)
     assert rig.sender.titles().count("Stacking A") == 1
-    assert "30 s exposures" in rig.sender.find("Stacking A")[1]
+    assert "Exposure: 30 s" in rig.sender.find("Stacking A")[1]
 
 
 def test_switching_target_reports_the_last_targets_frames(rig):
@@ -233,7 +245,7 @@ def test_session_end_gives_the_reason_and_frames_per_target(rig):
     rig.tick(10)
     title, text, level = rig.sender.find("Imaging stopped: roof unsafe")
     assert level == "warning"
-    assert "A: 100 frames, 50 min" in text and "B: 20 frames, 10 min" in text
+    assert "A: 100 frames\n50 min" in text and "B: 20 frames\n10 min" in text
     assert rig.sender.titles().count("Imaging stopped: roof unsafe") == 1
 
 
@@ -425,7 +437,7 @@ def test_dawn_after_imaging_sums_up_the_night_across_sessions(rig):
     rig.sun = -10.0
     rig.tick(10)
     title, text, level = rig.sender.find("Imaging finished: dawn")
-    assert "A: 120 frames, 1 h 0 min" in text
+    assert "A: 120 frames\n1 h 0 min" in text
     assert "No imaging tonight" not in rig.sender.titles()
     assert "A: 120 frames, 1 h 0 min" in rig.sender.find("Night summary")[1]
     assert "Total: 1 h 0 min" in rig.sender.find("Night summary")[1]

@@ -24,7 +24,7 @@ from logging.handlers import RotatingFileHandler
 
 from roof import config as roof_config
 from roof import alerts as roof_alerts
-from roof import focus, planner, schedule_tools
+from roof import focus, night_brief, planner, schedule_tools
 from roof import sentinel
 from roof.queue import FramingEstimates, TargetQueue
 from roof.dew import DewMonitor
@@ -262,6 +262,7 @@ class RoofAutomation:
             self._note,
             self._target_position(state),
             s.dry_run,
+            self._dark_start(night, s),
         )
         self._publish(s, safety, sun, dark, night, state, now)
         self._last_tick = now
@@ -272,6 +273,19 @@ class RoofAutomation:
                 f"{'?' if sun is None else f'{sun:.1f}'} phase={self.phase} "
                 f"enabled={s.enabled}"
             )
+
+    def _dark_start(self, night, s):
+        """When tonight's dark begins, for the briefing. None without a site."""
+        if s.lat == 0 and s.lon == 0:
+            return None
+        key = (night, s.lat, s.lon, s.sun_max_deg)
+        if getattr(self, "_dark_key", None) != key:
+            self._dark_key = key
+            try:
+                self._dark_at = planner.night_times(night, s.lat, s.lon, s.sun_max_deg).get("dark_start")
+            except Exception:
+                self._dark_at = None
+        return self._dark_at
 
     def _select_scope(self, s):
         if self._dry_run is not None and self._dry_run != s.dry_run:
@@ -1027,6 +1041,8 @@ class RoofAutomation:
         if not state.connected:
             return
         running = self.phase == IMAGING and not self._adopted
+        if running:
+            self._alert("dew", self._dew.margin_c if self._dew else None, self._heater_on is True)
         if not running:
             # Unknown counts too: a restart can leave it on from the last session.
             if self.phase == IDLE and self._heater_on is not False and state.parked is True:
@@ -1300,6 +1316,26 @@ def _default_scopes(s):
 _instance = None
 
 
+def _goal_text(targets, log, name) -> str | None:
+    """A target-list target's hours toward its goal, for alert cards. None off the list."""
+    from roof.sessions import base_name
+
+    key = base_name(name)
+    for target in targets.all():
+        if base_name(target.name) == key:
+            have = target.prior_hours + log.progress(target).counted_hours
+            return f"{have:.1f} of {target.goal_hours:g} h"
+    return None
+
+
+def _alert_limits(s) -> dict:
+    return {
+        "battery_pct": s.battery_alert_pct,
+        "storage_gb": s.storage_alert_gb,
+        "briefing_lead_min": s.briefing_lead_min,
+    }
+
+
 def target_queue() -> TargetQueue:
     get_automation()
     return _target_queue
@@ -1344,6 +1380,10 @@ def get_automation() -> RoofAutomation:
             logger=logger,
             muted=lambda: roof_config.load().discord_muted,
             image_dir=lambda: roof_config.load().discord_image_dir,
+            briefing=lambda night, now, health: night_brief.briefing(night, now, health),
+            report=lambda state, now, health: night_brief.morning_report(state, now, health),
+            goal_for=lambda name: _goal_text(targets, log, name),
+            limits=lambda: _alert_limits(roof_config.load()),
         )
         focus.focus_log(roof_config.load().device_num).on_finish = alerts.autofocus
         _instance = RoofAutomation(
