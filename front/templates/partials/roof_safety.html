@@ -50,6 +50,16 @@
     <div class="plan-actions">{{ ui.button("Save", "secondary", "submit") }}</div>
   </form>
 
+  <form class="plan-panel" method="post" action="{{ root_path }}{{ page_root }}/site">
+    {{ form.field("Starfront building (optional)", "roof-site-building", "building", value=safety.building, type="number",
+        help="Hosted at Starfront? Your building number shows its public roof state, camera and the site's announcements on Tonight. 0 turns it off.",
+        attrs='min="0" step="1"') }}
+    {{ form.field("Scope's MyWorks folder (optional)", "roof-site-images", "image_dir", value=safety.image_dir,
+        help="Where this computer sees the scope's saved stacks, for example a mounted share. Used for the stacked-image alert and to check framed mosaics. Leave blank if it can't.",
+        attrs='spellcheck="false"') }}
+    <div class="plan-actions">{{ ui.button("Save", "secondary", "submit") }}</div>
+  </form>
+
   <div class="plan-panel">
     {% if safety.site_set %}
     <p class="plan-inline__text">Site: {{ "%.2f"|format(safety.lat) }}, {{ "%.2f"|format(safety.lon) }}. <a href="{{ root_path }}{{ config_url }}">Change it in Config</a>.</p>

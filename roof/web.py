@@ -60,7 +60,7 @@ def shell_context(context, status=None) -> dict:
 
 # The last "Find safety monitors" result, shown until the next search.
 _found_monitors: list[dict] | None = None
-SENTINEL_WEB_DEFAULT = "http://127.0.0.1:8085"
+SENTINEL_WEB_DEFAULT = "http://127.0.0.1:8080"
 RUNNING_PHASES = ("opening", "imaging", "parking")
 
 
@@ -101,6 +101,8 @@ def safety_panel(settings, status) -> dict:
         "lon": settings.lon,
         "blockers": live_blockers(settings, status),
         "running": _session_running(status),
+        "building": settings.site_building,
+        "image_dir": settings.discord_image_dir,
     }
 
 
@@ -384,7 +386,7 @@ class SentinelWeb(_Action):
             return "PFR Sentinel web server turned off. Dew control uses the Open-Meteo forecast."
         base = sentinel.normalise_url(text)
         if not base:
-            return "Save failed: enter an address such as http://127.0.0.1:8085."
+            return "Save failed: enter an address such as http://127.0.0.1:8080."
         roof_config.save("pier_image_url", f"{base}/latest")
         roof_config.save("pier_status_url", f"{base}/status")
         roof_config.save("dew_sentinel_url", f"{base}/status")
@@ -395,6 +397,30 @@ class SentinelWeb(_Action):
         except Exception as e:
             return f"Saved, but {base} didn't answer ({str(e)[:80]}). Is its web server output on?"
         return f"Saved. {base} answers; the pier camera shows on Tonight."
+
+
+class SiteSettings(_Action):
+    """Starfront building and the scope's MyWorks folder."""
+
+    @staticmethod
+    def act(req):
+        import os
+
+        form = _form(req)
+        try:
+            building = int(form.get("building") or 0)
+        except (TypeError, ValueError):
+            building = -1
+        if building < 0:
+            return "Save failed: the building number must be a whole number, or 0 for none."
+        folder = (form.get("image_dir") or "").strip()
+        if folder and not os.path.isdir(os.path.expanduser(folder)):
+            return f"Save failed: {folder} isn't a folder on this computer."
+        roof_config.save("site_building", building)
+        roof_config.save("discord_image_dir", folder)
+        parts = [f"Starfront building {building}" if building else "no Starfront building"]
+        parts.append(f"stacks from {folder}" if folder else "no stacks folder")
+        return "Saved: " + ", ".join(parts) + "."
 
 
 class RoofMode(_Action):
@@ -464,6 +490,7 @@ def install(app):
         "roof/safety/test": SafetyTest,
         "roof/safety/sentinel-web": SentinelWeb,
         "roof/mode": RoofMode,
+        "roof/site": SiteSettings,
         **dashboard.PAGES,
         **tonight.PAGES,
         **queue_web.PAGES,

@@ -340,3 +340,17 @@ def test_the_example_files_placeholder_site_counts_as_no_site(monkeypatch):
     assert (roof_config.load().lat, roof_config.load().lon) == (0.0, 0.0)
     values.update(lat=31.0, long=-99.0)
     assert (roof_config.load().lat, roof_config.load().lon) == (31.0, -99.0)
+
+
+def test_site_settings_save_building_and_folder(page, tmp_path):
+    page.post("/roof/site", f"building=12&image_dir={tmp_path}")
+    assert page.saved == {"site_building": 12, "discord_image_dir": str(tmp_path)}
+    page.post("/roof/site", "building=0&image_dir=")
+    assert page.saved == {"site_building": 0, "discord_image_dir": ""}
+
+
+def test_site_settings_refuse_a_missing_folder_or_bad_building(page, tmp_path):
+    page.post("/roof/site", f"building=12&image_dir={tmp_path}/nope")
+    page.post("/roof/site", "building=-3&image_dir=")
+    assert page.saved == {}
+    assert all(m.startswith("Save failed") for m in page.messages)

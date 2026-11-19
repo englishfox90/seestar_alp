@@ -12,14 +12,18 @@ Everything is on the Automation page (`/roof`); nothing needs editing by hand.
 2. **Safety monitor.** Under Roof safety, press **Find safety monitors** and **Use**
    the one that gates your roof, or enter its Alpaca address and device number.
    **Test** shows what it reads now. Any Alpaca SafetyMonitor works:
-   - [PFR Sentinel](https://github.com/englishfox90/PFRSentinel): turn on its Alpaca
-     Safety Monitor (it serves `http://127.0.0.1:11111`, device 0, by default).
+   - [PFR Sentinel](https://github.com/englishfox90/PFRSentinel) 3.8 or later: turn on
+     Enable ML Analysis and Alpaca Safety Monitor in its ML Models card (Image
+     Processing tab). It serves `http://127.0.0.1:11111`, device 0, by default.
    - Hardware or software with its own Alpaca server.
    - A classic ASCOM driver on Windows, served on the network with ASCOM Remote.
    - The ASCOM Alpaca Simulators' SafetyMonitor, to try it all out safely.
-3. **PFR Sentinel web server (optional).** Enter its address (default
-   `http://127.0.0.1:8085`) for the pier camera on Tonight and its weather in dew
+3. **PFR Sentinel web server (optional).** Turn on Enable Web Server in PFR
+   Sentinel (Web Server card, Output Settings tab), then enter its address here (default
+   `http://127.0.0.1:8080`) for the pier camera on Tonight and its weather in dew
    control. Leave it blank otherwise; dew control then uses the Open-Meteo forecast.
+   A plain webcam image URL works for the pier camera too.
+   **Starfront building** and the **scope's MyWorks folder** are set just below.
 4. **Pick what to image** under Image source, then **Enable automation**.
 5. It starts in a **dry run**, logging what it would do. **Go live** appears once the
    site is set and the safety monitor answers; **Back to dry run** is always there
@@ -73,7 +77,7 @@ dew_enabled = false     # automatic dew heater during sessions
 dew_on_margin_c = 4.0   # on when temperature minus dew point falls to this
 dew_off_margin_c = 6.0  # off when it rises to this
 dew_power = 30          # percent
-dew_sentinel_url = "http://127.0.0.1:8085/status"
+dew_sentinel_url = "http://127.0.0.1:8080/status"
 poll_s = 10
 start_settle_s = 120
 stop_grace_s = 30
@@ -82,8 +86,8 @@ discord_muted = []      # alert kinds switched off; also the page's switches
 site_building = 0       # Starfront building number: its public roof state and camera on Tonight; 0 is off
 discord_image_dir = ""  # the scope's MyWorks folder (e.g. a mounted share): stacked-image alerts
                         # and judging framed mosaics; "" turns both off
-pier_image_url = "http://127.0.0.1:8085/latest"   # PFR Sentinel's pier camera, for Tonight
-pier_status_url = "http://127.0.0.1:8085/status"
+pier_image_url = "http://127.0.0.1:8080/latest"   # PFR Sentinel's pier camera, for Tonight
+pier_status_url = "http://127.0.0.1:8080/status"
 ```
 
 A new install copies `device/config.toml.example` to `device/config.toml` on first

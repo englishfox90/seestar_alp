@@ -24,6 +24,8 @@ WRITABLE_KEYS = {
     "pier_image_url",
     "pier_status_url",
     "dew_sentinel_url",
+    "site_building",
+    "discord_image_dir",
 }
 
 
@@ -44,9 +46,9 @@ class Settings:
     dew_on_margin_c: float = 4.0
     dew_off_margin_c: float = 6.0
     dew_power: int = 30
-    dew_sentinel_url: str = "http://127.0.0.1:8085/status"
-    pier_image_url: str = "http://127.0.0.1:8085/latest"
-    pier_status_url: str = "http://127.0.0.1:8085/status"
+    dew_sentinel_url: str = "http://127.0.0.1:8080/status"
+    pier_image_url: str = "http://127.0.0.1:8080/latest"
+    pier_status_url: str = "http://127.0.0.1:8080/status"
     discord_enabled: bool = False
     discord_muted: tuple = ()  # alert kinds switched off; see roof.alerts.KINDS
     # The Starfront building this scope is in, for its public roof state. 0 turns it off.
