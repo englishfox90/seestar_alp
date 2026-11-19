@@ -31,7 +31,7 @@ from roof.sessions import SessionLog
 from roof.sun import night_key
 from tests.test_roof import NIGHT_START, Rig
 
-LON = -99.37
+LON = -99.0
 NIGHT = night_key(NIGHT_START, LON)
 START, END = night_window(NIGHT, LON)
 OK = SafetyReading(True, True, True, "safe")
@@ -486,7 +486,7 @@ def _refuse(*args, **kwargs):
 def client(monkeypatch, tmp_path, history):
     log = _log(tmp_path, [_row("M 42", 120, dropped=40)])
     target = Target(id="a", name="M 42", ra=1, dec=2, goal_hours=10)
-    settings = Settings(lon=LON, lat=31.5)
+    settings = Settings(lon=LON, lat=31.0)
     monkeypatch.setattr(roof_web, "get_automation", lambda: _FakeAutomation())
     monkeypatch.setattr(dashboard, "_stores", {})
     monkeypatch.setattr(night_web.roof_config, "load", lambda: settings)

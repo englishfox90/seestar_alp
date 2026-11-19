@@ -14,7 +14,7 @@ import pytest
 from roof import sky_window
 
 ROOT = Path(__file__).parent.parent
-SITE = SimpleNamespace(lat=31.501, lon=-99.3734, sun_max_deg=-18.0, min_target_alt_deg=20.0)
+SITE = SimpleNamespace(lat=31.0, lon=-99.0, sun_max_deg=-18.0, min_target_alt_deg=20.0)
 NOW = 1793938000.0  # the evening of 2026-11-05 at the site
 
 

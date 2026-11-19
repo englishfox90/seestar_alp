@@ -89,8 +89,8 @@ class Rig:
             enabled=True,
             dry_run=False,
             schedule="Good.json",
-            lat=31.5,
-            lon=-99.37,
+            lat=31.0,
+            lon=-99.0,
             start_settle_s=120,
             stop_grace_s=30,
             **settings,
@@ -167,7 +167,7 @@ def test_waits_for_settle_then_opens_without_alignment(rig):
     rig.tick(119)
     assert rig.scope.calls == []
     rig.tick(2)
-    assert rig.scope.calls == [("open_arm", 31.5, -99.37)]
+    assert rig.scope.calls == [("open_arm", 31.0, -99.0)]
     assert rig.auto.phase == OPENING
 
 
@@ -557,7 +557,7 @@ def test_start_failures_stop_retrying_after_the_limit(rig):
     rig.tick()
     for _ in range(8):
         rig.tick(130)
-    assert rig.scope.calls.count(("open_arm", 31.5, -99.37)) == 3
+    assert rig.scope.calls.count(("open_arm", 31.0, -99.0)) == 3
 
 
 def test_rejected_schedule_never_commands_the_scope(rig):
@@ -729,10 +729,10 @@ def test_real_scope_treats_sync_timeout_as_failure_and_unknown_mount():
 
 def test_real_scope_open_arm_never_aligns():
     dev = ResultDev()
-    assert RealScope(lambda: dev).open_arm(31.5, -99.37) is None
+    assert RealScope(lambda: dev).open_arm(31.0, -99.0) is None
     assert dev.calls[0] == {
-        "lat": 31.5,
-        "lon": -99.37,
+        "lat": 31.0,
+        "lon": -99.0,
         "3ppa": False,
         "auto_focus": False,
         "dark_frames": False,
@@ -831,14 +831,14 @@ def test_sun_matches_astropy(hour):
     coords = pytest.importorskip("astropy.coordinates")
     units = pytest.importorskip("astropy.units")
     when = datetime(2026, 11, 5, hour, 0, tzinfo=timezone.utc)
-    site = coords.EarthLocation(lat=31.5010 * units.deg, lon=-99.3734 * units.deg)
+    site = coords.EarthLocation(lat=31.0 * units.deg, lon=-99.0 * units.deg)
     t = astropy_time.Time(when)
     expected = coords.get_sun(t).transform_to(coords.AltAz(obstime=t, location=site)).alt.deg
-    assert sun_altitude_deg(31.5010, -99.3734, when) == pytest.approx(expected, abs=1.0)
+    assert sun_altitude_deg(31.0, -99.0, when) == pytest.approx(expected, abs=1.0)
 
 
 def test_night_key_spans_midnight_and_changes_at_solar_noon():
-    lon = -99.37
+    lon = -99.0
     evening = datetime(2026, 11, 5, 2, 0, tzinfo=timezone.utc).timestamp()
     before_dawn = datetime(2026, 11, 5, 11, 0, tzinfo=timezone.utc).timestamp()
     next_evening = datetime(2026, 11, 6, 2, 0, tzinfo=timezone.utc).timestamp()
@@ -981,7 +981,7 @@ def test_form_save_keeps_the_roof_section(tmp_path, monkeypatch):
 
     path = tmp_path / "config.toml"
     monkeypatch.setitem(Config._dict, "roof", {"schedule": "X.json", "dry_run": True})
-    Config.set_toml("seestar_initialization", "lat", 31.5)
+    Config.set_toml("seestar_initialization", "lat", 31.0)
     Config.save_toml(str(path))
     text = path.read_text()
     assert "[roof]" in text and 'schedule = "X.json"' in text
@@ -1119,13 +1119,13 @@ def test_target_altitude_matches_astropy_altaz():
     from roof.targets import target_altitude_deg
 
     when = datetime(2026, 11, 5, 8, 0, tzinfo=timezone.utc)
-    site = coords.EarthLocation(lat=31.5 * units.deg, lon=-99.37 * units.deg)
+    site = coords.EarthLocation(lat=31.0 * units.deg, lon=-99.0 * units.deg)
     t = time_mod.Time(when)
     m42 = coords.SkyCoord(ra=5.588 * units.hourangle, dec=-5.39 * units.deg, frame="icrs")
     expected = m42.transform_to(coords.AltAz(obstime=t, location=site)).alt.deg
     params = {"ra": 5.588, "dec": -5.39, "is_j2000": True}
-    assert target_altitude_deg(params, 31.5, -99.37, when) == pytest.approx(expected, abs=0.2)
-    assert target_altitude_deg({"ra": -1, "dec": -1}, 31.5, -99.37, when) is None
+    assert target_altitude_deg(params, 31.0, -99.0, when) == pytest.approx(expected, abs=0.2)
+    assert target_altitude_deg({"ra": -1, "dec": -1}, 31.0, -99.0, when) is None
 
 
 def test_headline_says_what_it_is_doing(rig):
@@ -1586,13 +1586,13 @@ def test_a_control_request_says_which_device_sent_it():
 
     from roof.web import _client
 
-    def req(agent, addr="10.147.17.40"):
+    def req(agent, addr="192.168.1.40"):
         return SimpleNamespace(remote_addr=addr, get_header=lambda name: agent)
 
     iphone = "Mozilla/5.0 (iPhone; CPU iPhone OS 27_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.1 Mobile/15E148 Safari/604.1"
     home = "Mozilla/5.0 (iPhone; CPU iPhone OS 27_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
     mac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36"
-    assert _client(req(iphone)) == "10.147.17.40 (iPhone, Safari)"
-    assert _client(req(home)) == "10.147.17.40 (iPhone, Home Screen app)"
-    assert _client(req(mac)) == "10.147.17.40 (Mac, Chrome)"
-    assert _client(req("")) == "10.147.17.40 (unknown device, no browser named)"
+    assert _client(req(iphone)) == "192.168.1.40 (iPhone, Safari)"
+    assert _client(req(home)) == "192.168.1.40 (iPhone, Home Screen app)"
+    assert _client(req(mac)) == "192.168.1.40 (Mac, Chrome)"
+    assert _client(req("")) == "192.168.1.40 (unknown device, no browser named)"

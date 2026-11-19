@@ -2,7 +2,12 @@
 # Run ALP (with roof automation) as a login service that survives a reboot.
 #   roof/service.sh install | uninstall | start | stop | restart [--force] | status | logs
 set -u
-LABEL="com.englishfox90.seestar-alp"
+# An install keeps the label it was made with; a new one gets the default.
+LABEL="${SEESTAR_ALP_LABEL:-}"
+if [ -z "$LABEL" ]; then
+  EXISTING="$(ls /Library/LaunchDaemons/*.seestar-alp.plist 2>/dev/null | head -1)"
+  LABEL="$(basename "${EXISTING:-local.seestar-alp.plist}" .plist)"
+fi
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 PLIST="/Library/LaunchDaemons/$LABEL.plist"
 BIND="$(sed -n "s/^ip_address *= *['\"]\([^'\"]*\)['\"].*/\1/p" "$REPO/device/config.toml" | head -1)"

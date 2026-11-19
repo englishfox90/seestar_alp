@@ -12,7 +12,7 @@ from roof import forecast as f
 from roof.planner import night_times
 
 TZ = ZoneInfo("America/Chicago")
-SITE = SimpleNamespace(lat=31.501, lon=-99.3734, sun_max_deg=-18.0, typical_open_chance=0.5)
+SITE = SimpleNamespace(lat=31.0, lon=-99.0, sun_max_deg=-18.0, typical_open_chance=0.5)
 
 
 def at(text):

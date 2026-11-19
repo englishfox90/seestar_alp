@@ -26,7 +26,7 @@ from roof.sun import night_key
 
 SAFE = SafetyReading(True, True, True, "safe")
 UNSAFE = SafetyReading(False, True, False, "IsSafe is not true")
-CFG = PlanConfig(lat=31.501, lon=-99.3734)
+CFG = PlanConfig(lat=31.0, lon=-99.0)
 NIGHT = "2026-11-05"  # moon about 11%, dark about 19:10 to 05:30 CST
 
 
@@ -588,7 +588,7 @@ def page(monkeypatch, tmp_path):
     monkeypatch.setattr(
         queue_web.roof_config,
         "load",
-        lambda: Settings(lat=31.501, lon=-99.3734, min_target_alt_deg=20.0),
+        lambda: Settings(lat=31.0, lon=-99.0, min_target_alt_deg=20.0),
     )
     monkeypatch.setattr(queue_web.planner, "config_from_settings", lambda s: CFG)
     monkeypatch.chdir(tmp_path)

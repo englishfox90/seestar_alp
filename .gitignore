@@ -11,6 +11,7 @@ device/roof_sessions.json
 device/roof_framing.json
 device/roof_night_history.json
 device/roof_alerts.json
+device/roof_state.json
 device/discord_webhook.txt
 schedule/target_list_plan.json
 schedule/target_list_plan.times
@@ -26,6 +27,7 @@ alpycadevice.code-workspace
 skeletons/AlpycaDeviceSkeletons.code-workspace
 alpyca.log*
 roof_framing_diag.log
+roof_automation.log
 docker/config.toml
 docker/getopts_long
 front/twilight_times.json
@@ -45,3 +47,8 @@ emulator/sim/data/*.npy
 emulator/sim/shared/*
 !emulator/sim/shared/.gitkeep
 .venv-mcp/
+
+# Your own schedules and plans. The automation writes target_list_plan.* itself.
+schedule/*.json
+schedule/*.times
+plans/

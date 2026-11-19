@@ -79,6 +79,24 @@ horizon_file = ''
 horizon_skip_hidden_targets = false # scheduler: skip a mosaic target below the horizon when its turn comes
 horizon_margin = 0.0                # degrees a target must clear above the horizon for the scheduler
 
+[roof]
+# Roof automation: runs a schedule while an Alpaca SafetyMonitor reads the roof
+# safe and it's dark. See roof/README.md. Off, and a dry run, until you turn it on.
+enabled = false         # also the Roof page's toggle
+dry_run = true          # only a literal false lets it command the scope
+schedule = ""           # a .json in schedule/, or "target-list"; also the page's selector
+device_num = 1
+sentinel_url = "http://127.0.0.1:11111"   # Alpaca server with the SafetyMonitor
+safety_device = 0
+sun_max_deg = -18.0     # astronomical darkness; also parks when the sun rises past it
+min_target_alt_deg = 20.0  # 0 turns this off
+dew_enabled = false     # automatic dew heater during sessions
+dew_power = 30          # percent
+discord_enabled = false # post the night's imaging events to Discord; also the page's toggle
+discord_muted = []
+site_building = 0       # Starfront building number, for its public roof state and camera; 0 is off
+discord_image_dir = ""  # the scope's MyWorks folder, for stacked-image alerts; "" is off
+
 [logging]
 log_level = 'INFO'   #'WARN' only if trouble    #'INFO' to output more logging      #'DEBUG' still more output
 log_prefix = ''

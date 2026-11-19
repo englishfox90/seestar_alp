@@ -80,7 +80,7 @@ def _form(html, action):
 def rig(monkeypatch, tmp_path):
     state = SimpleNamespace(
         status=dict(IMAGING), requests=[],
-        settings=Settings(lat=31.5, lon=-99.37, device_num=1, enabled=True, dry_run=False, schedule=""),
+        settings=Settings(lat=31.0, lon=-99.0, device_num=1, enabled=True, dry_run=False, schedule=""),
     )
     automation = SimpleNamespace(status=lambda: state.status, start=lambda: None, request=state.requests.append)
     monkeypatch.setattr(roof_web, "get_automation", lambda: automation)

@@ -54,7 +54,17 @@ start_settle_s = 120
 stop_grace_s = 30
 discord_enabled = false # post the night's imaging events to Discord; also the page's toggle
 discord_muted = []      # alert kinds switched off; also the page's switches
+site_building = 0       # Starfront building number: its public roof state and camera on Tonight; 0 is off
+discord_image_dir = ""  # the scope's MyWorks folder (e.g. a mounted share): stacked-image alerts
+                        # and judging framed mosaics; "" turns both off
+pier_image_url = "http://127.0.0.1:8085/latest"   # PFR Sentinel's pier camera, for Tonight
+pier_status_url = "http://127.0.0.1:8085/status"
 ```
+
+A new install copies `device/config.toml.example` to `device/config.toml` on first
+start, so this section is already there, switched off. Your schedules (`schedule/*.json`),
+plans (`plans/`), `config.toml` and the automation's state files stay on your machine:
+they're git-ignored, and the app creates the state files itself.
 
 Changes to this section apply on the next tick, with no restart.
 

@@ -39,9 +39,10 @@ class Settings:
     discord_enabled: bool = False
     discord_muted: tuple = ()  # alert kinds switched off; see roof.alerts.KINDS
     # The Starfront building this scope is in, for its public roof state. 0 turns it off.
-    site_building: int = 19
-    # Where the scope's share keeps its stacks, for the Stacked image alert.
-    discord_image_dir: str = "~/Library/Application Support/NINA Data Sync/seestar-share/MyWorks"
+    site_building: int = 0
+    # Where the scope's share keeps its stacks (its MyWorks folder), for the Stacked
+    # image alert and for judging framed mosaics. Empty turns both off.
+    discord_image_dir: str = ""
     # Chance the roof is open on a night no forecast covers, for the Plan page.
     # A starting guess; tune it once the roof record covers a season.
     typical_open_chance: float = 0.5

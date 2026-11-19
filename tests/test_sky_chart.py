@@ -7,7 +7,7 @@ from roof import sky_chart as sc
 from roof.planner import night_times
 
 TZ = ZoneInfo("America/Chicago")
-LAT, LON = 31.501, -99.3734
+LAT, LON = 31.0, -99.0
 
 
 def at(text):

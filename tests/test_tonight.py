@@ -319,9 +319,9 @@ def test_night_line_labels_at_most_three_on_a_phone():
 
 
 def test_night_times_matches_the_planners_dark_window():
-    cfg = planner.PlanConfig(lat=31.5, lon=-99.37, sun_max_deg=-18.0)
+    cfg = planner.PlanConfig(lat=31.0, lon=-99.0, sun_max_deg=-18.0)
     plan = planner.plan_night([], {}, "2026-11-05", cfg)
-    times = planner.night_times("2026-11-05", 31.5, -99.37, -18.0)
+    times = planner.night_times("2026-11-05", 31.0, -99.0, -18.0)
     assert times["dark_start"] == plan.dark_start
     assert times["dark_end"] == plan.dark_end
     assert times["sunset"] < times["dark_start"] < times["dark_end"] < times["sunrise"]
@@ -588,7 +588,7 @@ def test_webui_accent_is_a_variable_and_gets_a_readable_partner(client, monkeypa
 # ---- the roof on the Night Line -----------------------------------------------------------------
 
 NIGHT = "2026-11-05"
-LON = -99.37
+LON = -99.0
 NIGHT_START, NIGHT_END = night_history.night_window(NIGHT, LON)
 
 
@@ -708,7 +708,7 @@ def test_overlapping_blocks_do_not_both_get_a_label():
 
 
 def test_state_draws_the_record_it_is_given(client, monkeypatch, tmp_path):
-    settings = SimpleNamespace(lat=31.5, lon=LON, device_num=1, sun_max_deg=-18.0, site_building=0)
+    settings = SimpleNamespace(lat=31.0, lon=LON, device_num=1, sun_max_deg=-18.0, site_building=0)
     monkeypatch.setattr(tonight.roof_config, "load", lambda: settings)
     monkeypatch.setattr(tonight, "_now", lambda: NOW)
     monkeypatch.setattr(tonight, "_window_cache", {})
@@ -721,7 +721,7 @@ def test_state_draws_the_record_it_is_given(client, monkeypatch, tmp_path):
 
 
 def test_state_with_no_history_shows_the_night_so_far_as_unknown(client, monkeypatch):
-    settings = SimpleNamespace(lat=31.5, lon=LON, device_num=1, sun_max_deg=-18.0, site_building=0)
+    settings = SimpleNamespace(lat=31.0, lon=LON, device_num=1, sun_max_deg=-18.0, site_building=0)
     monkeypatch.setattr(tonight.roof_config, "load", lambda: settings)
     monkeypatch.setattr(tonight, "_now", lambda: NOW)
     monkeypatch.setattr(tonight, "_window_cache", {})
@@ -887,18 +887,18 @@ def test_skipped_targets_collapse_behind_a_count():
 
 
 def test_the_site_section_follows_the_building_setting(client, monkeypatch):
-    settings = {"now": roof_config.Settings(lat=31.5, lon=LON, device_num=1, site_building=19)}
+    settings = {"now": roof_config.Settings(lat=31.0, lon=LON, device_num=1, site_building=7)}
     monkeypatch.setattr(tonight.roof_config, "load", lambda: settings["now"])
     monkeypatch.setattr(tonight, "_now", lambda: NOW)
     monkeypatch.setattr(tonight, "_window_cache", {})
     html = _get(client, "/1/dashboard")
-    assert 'id="t-site"' in html and "StrfrntObsTXcsk.gif" in html and "building-0019" in html
-    settings["now"] = roof_config.Settings(lat=31.5, lon=LON, device_num=1, site_building=0)
+    assert 'id="t-site"' in html and "StrfrntObsTXcsk.gif" in html and "building-0007" in html
+    settings["now"] = roof_config.Settings(lat=31.0, lon=LON, device_num=1, site_building=0)
     assert 'id="t-site"' not in _get(client, "/1/dashboard")
 
 
 def test_site_json_reports_without_touching_the_scope(client, monkeypatch):
-    settings = roof_config.Settings(lat=31.5, lon=LON, device_num=1, site_building=19)
+    settings = roof_config.Settings(lat=31.0, lon=LON, device_num=1, site_building=7)
     monkeypatch.setattr(night_web.roof_config, "load", lambda: settings)
     monkeypatch.setattr(night_web, "get_automation", lambda: SimpleNamespace(status=lambda: {"safe": True}))
     monkeypatch.setattr(

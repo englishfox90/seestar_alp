@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from roof import site_status, sky_window
 
-SITE = SimpleNamespace(lat=31.501, lon=-99.3734, sun_max_deg=-18.0, min_target_alt_deg=20.0, site_building=19)
+SITE = SimpleNamespace(lat=31.0, lon=-99.0, sun_max_deg=-18.0, min_target_alt_deg=20.0, site_building=7)
 NOW = 1793938000.0  # the evening of 2026-11-05 at the site
 
 
@@ -12,24 +12,24 @@ def clock(when):
     return f"t{int(when)}"
 
 
-def _row(number=19, is_open=False, updated="2026-11-06T04:00:00Z"):
+def _row(number=7, is_open=False, updated="2026-11-06T04:00:00Z"):
     return {"device_number": number, "name": f"Building {number}", "is_open": is_open, "state_update": updated}
 
 
 def test_picks_out_this_building():
-    found = site_status.building_roof([_row(1, True), _row(19)], 19, clock, 1793938000.0)
-    assert found["name"] == "Building 19" and found["open"] is False
+    found = site_status.building_roof([_row(1, True), _row(7)], 7, clock, 1793938000.0)
+    assert found["name"] == "Building 7" and found["open"] is False
 
 
 def test_an_old_reading_is_called_stale():
-    found = site_status.building_roof([_row(updated="2026-11-01T00:00:00Z")], 19, clock, NOW)
+    found = site_status.building_roof([_row(updated="2026-11-01T00:00:00Z")], 7, clock, NOW)
     assert found["stale"] is True
 
 
 def test_a_missing_building_or_bad_feed_gives_nothing():
-    assert site_status.building_roof([_row(1)], 19, clock, NOW) is None
-    assert site_status.building_roof(None, 19, clock, NOW) is None
-    assert site_status.building_roof(["nonsense"], 19, clock, NOW) is None
+    assert site_status.building_roof([_row(1)], 7, clock, NOW) is None
+    assert site_status.building_roof(None, 7, clock, NOW) is None
+    assert site_status.building_roof(["nonsense"], 7, clock, NOW) is None
 
 
 def test_news_is_newest_first_limited_and_toned():
