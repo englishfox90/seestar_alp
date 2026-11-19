@@ -1,8 +1,8 @@
 """Settings for roof automation: the [roof] section of config.toml.
 
-Read fresh every tick, so a hand edit takes effect without a restart. The web
-page only ever writes the keys in WRITABLE_KEYS; ``dry_run`` is file-only, and
-only a literal ``dry_run = false`` arms the automation.
+Read on every tick, so a change saved from a page applies at once (a hand edit to the file needs a restart). The web
+page only ever writes the keys in WRITABLE_KEYS. Only a literal
+``dry_run = false`` arms the automation; the page sets it only after its checks.
 """
 
 import os
@@ -13,7 +13,18 @@ import tomlkit
 from device.config import Config
 
 SECTION = "roof"
-WRITABLE_KEYS = {"enabled", "schedule", "discord_enabled", "discord_muted"}
+WRITABLE_KEYS = {
+    "enabled",
+    "schedule",
+    "discord_enabled",
+    "discord_muted",
+    "dry_run",
+    "sentinel_url",
+    "safety_device",
+    "pier_image_url",
+    "pier_status_url",
+    "dew_sentinel_url",
+}
 
 
 @dataclass(frozen=True)
@@ -65,6 +76,17 @@ def _string_list(value) -> tuple:
     return tuple(str(v) for v in value) if isinstance(value, (list, tuple)) else ()
 
 
+# config.toml.example's placeholder site. Read as no site, so a new install never
+# images on someone else's sky times.
+EXAMPLE_SITE = (37.12, -123.45)
+
+
+def _site():
+    lat = float(_unwrap(Config.get_toml("seestar_initialization", "lat", 0)) or 0)
+    lon = float(_unwrap(Config.get_toml("seestar_initialization", "long", 0)) or 0)
+    return (0.0, 0.0) if (lat, lon) == EXAMPLE_SITE else (lat, lon)
+
+
 def load() -> Settings:
     get = lambda key, default: _unwrap(Config.get_toml(SECTION, key, default))  # noqa: E731
     return Settings(
@@ -91,8 +113,8 @@ def load() -> Settings:
         site_building=_number("site_building", Settings.site_building, int),
         typical_open_chance=min(1.0, max(0.0, _number("typical_open_chance", Settings.typical_open_chance))),
         discord_image_dir=os.path.expanduser(str(get("discord_image_dir", Settings.discord_image_dir))),
-        lat=float(_unwrap(Config.get_toml("seestar_initialization", "lat", 0)) or 0),
-        lon=float(_unwrap(Config.get_toml("seestar_initialization", "long", 0)) or 0),
+        lat=_site()[0],
+        lon=_site()[1],
     )
 
 

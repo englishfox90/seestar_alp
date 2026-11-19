@@ -13,9 +13,23 @@
   <div id="plan-auth" class="plan-stack no-htmx-fx" hx-get="{{ root }}/tonight/auth" hx-trigger="every 15s [!document.hidden]" hx-sync="this:drop" hx-swap="innerHTML">{% if needs_auth_warning %}{% include 'ssc/auth_notice.html' %}{% endif %}</div>
 
   {% if settings.dry_run %}
-  <p class="ssc-notice plan-mode" id="roof-mode" data-tone="attention">{{ ui.icon("warning", 20) }}<span><strong>Dry run.</strong> Everything below only logs what it would do; no commands reach the scope. To go live, set <code>dry_run = false</code> under <code>[roof]</code> in config.toml.</span></p>
+  <div class="plan-stack" id="roof-mode">
+    <p class="ssc-notice plan-mode" data-tone="attention">{{ ui.icon("warning", 20) }}<span><strong>Dry run.</strong> Everything below only logs what it would do; no commands reach the scope.</span></p>
+    {% if safety.blockers %}
+    {% for why in safety.blockers %}<p class="plan-warning">{{ ui.icon("warning", 16) }}<span>Before going live: {{ why|e }}</span></p>{% endfor %}
+    {% else %}
+    <div class="plan-actions">{{ ui.button("Go live", "primary", "button", 'data-open-sheet="roof-live-sheet"') }}</div>
+    {% endif %}
+  </div>
   {% else %}
-  <p class="ssc-notice plan-mode" id="roof-mode" data-tone="neutral">{{ ui.icon("info", 20) }}<span><strong>Live.</strong> Automation and these buttons command the scope.</span></p>
+  <div class="plan-stack" id="roof-mode">
+    <p class="ssc-notice plan-mode" data-tone="neutral">{{ ui.icon("info", 20) }}<span><strong>Live.</strong> Automation and these buttons command the scope.</span></p>
+    <form class="plan-inline" method="post" action="{{ root_path }}{{ page_root }}/mode">
+      <input type="hidden" name="live" value="false">
+      <p class="plan-inline__text">{% if safety.running %}Stop &amp; park before switching to a dry run{% else %}Only log what it would do{% endif %}</p>
+      {% if not safety.running %}{{ ui.button("Back to dry run", "secondary", "submit") }}{% endif %}
+    </form>
+  </div>
   {% endif %}
 
   <div id="roof-status" class="plan-stack no-htmx-fx" hx-get="{{ root_path }}{{ page_root }}/status" hx-trigger="every 5s [!document.hidden]" hx-sync="this:drop" hx-swap="innerHTML">
@@ -71,6 +85,8 @@
     </form>
   </section>
 
+  {% include 'partials/roof_safety.html' %}
+
   {% include 'partials/roof_alerts.html' %}
 
   <div id="roof-targets" class="plan-stack no-htmx-fx">{{ parts.targets(status)|trim }}</div>
@@ -80,6 +96,15 @@
     <div class="plan-panel"><pre class="plan-log" id="roof-log" tabindex="0">{{ parts.log_lines(status) }}</pre></div>
   </section>
 </main>
+
+{% call ui.sheet("roof-live-sheet", "Let automation move the scope?") %}
+  <p class="ssc-sheet__text">From now on, automation opens the arm and images whenever the safety monitor reads safe and it's dark, and parks when it reads unsafe or at dawn. The buttons on this page command the scope too.</p>
+  <form method="post" action="{{ root_path }}{{ page_root }}/mode">
+    <input type="hidden" name="live" value="true">
+    <button class="ssc-button" data-kind="primary" data-tall="1" type="submit">Go live</button>
+  </form>
+  <button class="ssc-button" data-kind="secondary" data-tall="1" type="button" data-close-sheet autofocus>Stay in dry run</button>
+{% endcall %}
 
 {% call ui.sheet("roof-stop-sheet", "Stop & park?") %}
   <p class="ssc-sheet__text">The scope stops imaging and closes its arm. Automation then holds until Start or the next night.{% if settings.dry_run %} This is a dry run, so the scope will not move.{% endif %}</p>

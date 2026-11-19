@@ -183,15 +183,18 @@ def test_sheets_sit_outside_every_polled_region(rig):
 
 def test_live_is_calm_and_dry_run_warns(rig):
     html = _get(rig, "/1/roof")
-    assert '<p class="ssc-notice plan-mode" id="roof-mode" data-tone="neutral">' in html
+    assert 'id="roof-mode"' in html and '<p class="ssc-notice plan-mode" data-tone="neutral">' in html
     assert "<strong>Live.</strong>" in html
     assert "Armed" not in html and "ssc-band" not in html
 
     rig.settings = replace(rig.settings, dry_run=True)
     rig.status = {**IMAGING, "dry_run": True}
     html = _get(rig, "/1/roof")
-    assert '<p class="ssc-notice plan-mode" id="roof-mode" data-tone="attention">' in html
-    assert "<strong>Dry run.</strong>" in html and "dry_run = false" in html
+    assert '<p class="ssc-notice plan-mode" data-tone="attention">' in html
+    assert "<strong>Dry run.</strong>" in html
+    # Going live is on the page now, behind its checks, not a config.toml edit.
+    assert "dry_run = false" not in html
+    assert 'data-open-sheet="roof-live-sheet"' in html or "Before going live" in html
     assert "Live." not in html
     assert html.count("This is a dry run, so the scope will not move") == 2, "both sheets say so"
 

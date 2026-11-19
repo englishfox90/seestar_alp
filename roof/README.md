@@ -1,7 +1,32 @@
 # Roof automation (fork-only)
 
-Runs one stored schedule whenever PFR Sentinel reads the roof safe and it's dark,
-and stops + parks when it isn't. Page: `http://localhost:5432/roof`.
+Runs one stored schedule whenever an ASCOM Alpaca safety monitor reads the roof
+safe and it's dark, and stops + parks when it isn't. Page: `http://localhost:5432/roof`.
+
+## Setting up
+
+Everything is on the Automation page (`/roof`); nothing needs editing by hand.
+
+1. **Site location.** Set latitude and longitude on the Config page (linked from
+   Roof safety). Without it, it never counts as dark.
+2. **Safety monitor.** Under Roof safety, press **Find safety monitors** and **Use**
+   the one that gates your roof, or enter its Alpaca address and device number.
+   **Test** shows what it reads now. Any Alpaca SafetyMonitor works:
+   - [PFR Sentinel](https://github.com/englishfox90/PFRSentinel): turn on its Alpaca
+     Safety Monitor (it serves `http://127.0.0.1:11111`, device 0, by default).
+   - Hardware or software with its own Alpaca server.
+   - A classic ASCOM driver on Windows, served on the network with ASCOM Remote.
+   - The ASCOM Alpaca Simulators' SafetyMonitor, to try it all out safely.
+3. **PFR Sentinel web server (optional).** Enter its address (default
+   `http://127.0.0.1:8085`) for the pier camera on Tonight and its weather in dew
+   control. Leave it blank otherwise; dew control then uses the Open-Meteo forecast.
+4. **Pick what to image** under Image source, then **Enable automation**.
+5. It starts in a **dry run**, logging what it would do. **Go live** appears once the
+   site is set and the safety monitor answers; **Back to dry run** is always there
+   when no session is running.
+
+The safety monitor reads unsafe whenever it doesn't answer, isn't connected or says
+anything but safe, so a missing or broken one keeps the scope parked.
 
 ## Behaviour
 
@@ -66,12 +91,12 @@ start, so this section is already there, switched off. Your schedules (`schedule
 plans (`plans/`), `config.toml` and the automation's state files stay on your machine:
 they're git-ignored, and the app creates the state files itself.
 
-Changes to this section apply on the next tick, with no restart.
+Changes made on the Automation and Config pages apply at once. A hand edit to config.toml takes effect after a restart.
 
 ## Discord alerts
 
 Posts what the scope is doing as the `Seestar` webhook user. It doesn't repeat what
-PFR Sentinel already posts: the roof opening and closing, weather and all-sky images.
+Your safety monitor's own alerts cover the roof opening and closing (PFR Sentinel posts those, with weather and all-sky images).
 
 | Event | When |
 |---|---|

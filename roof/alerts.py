@@ -1,6 +1,6 @@
 """Discord alerts for what the scope does through the night.
 
-Covers imaging only. PFR Sentinel already posts the roof opening and closing,
+Covers imaging only. The safety monitor's own alerts (PFR Sentinel's, say) post the roof opening and closing,
 weather and all-sky images, so nothing here announces those; a roof closing only
 appears as the reason a session ended.
 

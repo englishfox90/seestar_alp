@@ -6,7 +6,7 @@ import falcon
 
 from roof import alerts as roof_alerts
 from roof import config as roof_config
-from roof import dashboard, focus, schedule_tools, tonight
+from roof import dashboard, focus, schedule_tools, sentinel, tonight
 from roof.automation import get_automation
 from roof.sun import sun_altitude_deg
 
@@ -58,6 +58,60 @@ def shell_context(context, status=None) -> dict:
     }
 
 
+# The last "Find safety monitors" result, shown until the next search.
+_found_monitors: list[dict] | None = None
+SENTINEL_WEB_DEFAULT = "http://127.0.0.1:8085"
+RUNNING_PHASES = ("opening", "imaging", "parking")
+
+
+def _sentinel_web(settings) -> str:
+    """The PFR Sentinel web server the pier camera and weather come from, or ""."""
+    url = settings.pier_image_url
+    return url[: -len("/latest")] if url.endswith("/latest") else url
+
+
+def _session_running(status) -> bool:
+    return status.get("phase") in RUNNING_PHASES or status.get("sched_state") == "working"
+
+
+def live_blockers(settings, status) -> list[str]:
+    """Why the automation can't go live yet. Empty when it can."""
+    blockers = []
+    if settings.lat == 0 and settings.lon == 0:
+        blockers.append("Set the site's latitude and longitude, so the automation knows when it's dark.")
+    if status.get("safety_detail") == "not read yet":
+        blockers.append("Wait a moment for the first safety monitor reading.")
+    elif "read failed" in str(status.get("safety_detail", "")) or "not connected" in str(status.get("safety_detail", "")):
+        blockers.append("Connect a safety monitor that answers: find one or enter its address below, then Test.")
+    return blockers
+
+
+def safety_panel(settings, status) -> dict:
+    """What the Roof safety section shows."""
+    return {
+        "url": settings.sentinel_url,
+        "device": settings.safety_device,
+        "safe": status.get("safe"),
+        "detail": status.get("safety_detail", ""),
+        "found": _found_monitors,
+        "sentinel_web": _sentinel_web(settings),
+        "sentinel_web_default": SENTINEL_WEB_DEFAULT,
+        "site_set": not (settings.lat == 0 and settings.lon == 0),
+        "lat": settings.lat,
+        "lon": settings.lon,
+        "blockers": live_blockers(settings, status),
+        "running": _session_running(status),
+    }
+
+
+def _describe(reading) -> str:
+    if reading.safe:
+        return "connected, and reads safe"
+    if reading.connected:
+        return f"connected, and reads unsafe ({reading.detail})"
+    return reading.detail
+
+
 class RoofPage:
     @staticmethod
     def on_get(req, resp, telescope_id=1):
@@ -74,8 +128,10 @@ class RoofPage:
             target_list=schedule_tools.TARGET_LIST,
             target_list_label=schedule_tools.TARGET_LIST_LABEL,
             targets_url=f"/{telescope_id}/targets",
+            config_url=f"/{telescope_id}/config",
             settings=settings,
             alerts=roof_alerts.panel(settings),
+            safety=safety_panel(settings, status),
             status=status,
             polled=False,
             page_root=f"/{telescope_id}/roof",
@@ -277,6 +333,92 @@ class AlertsEvents(_Action):
         return "Alert choices saved."
 
 
+class SafetyFind(_Action):
+    @staticmethod
+    def act(req):
+        global _found_monitors
+        _found_monitors = sentinel.discover()
+        n = len(_found_monitors)
+        if not n:
+            return "Search failed: no Alpaca safety monitor answered. Check it's running, or enter its address."
+        return f"Found {n} safety monitor{'s' if n != 1 else ''}. Choose one below."
+
+
+class SafetyUse(_Action):
+    @staticmethod
+    def act(req):
+        form = _form(req)
+        url = sentinel.normalise_url(form.get("url", ""))
+        if not url:
+            return "Save failed: enter an address such as http://127.0.0.1:11111."
+        try:
+            device = int(form.get("device", 0))
+        except (TypeError, ValueError):
+            device = -1
+        if device < 0:
+            return "Save failed: the device number must be 0 or more."
+        roof_config.save("sentinel_url", url)
+        roof_config.save("safety_device", device)
+        get_automation().request("poke")
+        return f"Safety monitor saved: {url}, device {device} is {_describe(sentinel.read(url, device))}."
+
+
+class SafetyTest(_Action):
+    @staticmethod
+    def act(req):
+        s = roof_config.load()
+        reading = sentinel.read(s.sentinel_url, s.safety_device)
+        verdict = "Test" if reading.connected else "Test failed:"
+        return f"{verdict} {s.sentinel_url}, device {s.safety_device} is {_describe(reading)}."
+
+
+class SentinelWeb(_Action):
+    """PFR Sentinel's web server: the pier camera on Tonight, and its weather for dew."""
+
+    @staticmethod
+    def act(req):
+        text = _form(req).get("url", "").strip()
+        if not text:
+            for key in ("pier_image_url", "pier_status_url", "dew_sentinel_url"):
+                roof_config.save(key, "")
+            return "PFR Sentinel web server turned off. Dew control uses the Open-Meteo forecast."
+        base = sentinel.normalise_url(text)
+        if not base:
+            return "Save failed: enter an address such as http://127.0.0.1:8085."
+        roof_config.save("pier_image_url", f"{base}/latest")
+        roof_config.save("pier_status_url", f"{base}/status")
+        roof_config.save("dew_sentinel_url", f"{base}/status")
+        try:
+            import requests
+
+            requests.get(f"{base}/status", timeout=3).raise_for_status()
+        except Exception as e:
+            return f"Saved, but {base} didn't answer ({str(e)[:80]}). Is its web server output on?"
+        return f"Saved. {base} answers; the pier camera shows on Tonight."
+
+
+class RoofMode(_Action):
+    """Go live, or back to a dry run, from the page."""
+
+    @staticmethod
+    def act(req):
+        live = _form(req).get("live") == "true"
+        settings = roof_config.load()
+        status = get_automation().status()
+        if live:
+            blockers = live_blockers(settings, status)
+            if blockers:
+                return "Go live failed: " + " ".join(blockers)
+            roof_config.save("dry_run", False)
+            get_automation().request("poke")
+            return "Live: automation and the buttons on this page now command the scope."
+        if not settings.dry_run and _session_running(status):
+            return "Dry run refused: a session is running. Stop & park first, so the scope isn't left imaging unwatched."
+        roof_config.save("dry_run", True)
+        get_automation().request("poke")
+        return "Dry run: automation only logs what it would do."
+
+
 class DefaultDeviceMiddleware:
     """Send page URLs with no device number to the configured scope, and / to Tonight.
 
@@ -317,6 +459,11 @@ def install(app):
         "roof/alerts/webhook/remove": AlertsWebhookRemove,
         "roof/alerts/test": AlertsTest,
         "roof/alerts/events": AlertsEvents,
+        "roof/safety/find": SafetyFind,
+        "roof/safety/use": SafetyUse,
+        "roof/safety/test": SafetyTest,
+        "roof/safety/sentinel-web": SentinelWeb,
+        "roof/mode": RoofMode,
         **dashboard.PAGES,
         **tonight.PAGES,
         **queue_web.PAGES,

@@ -1,0 +1,60 @@
+{# Roof safety on the Automation page: which Alpaca SafetyMonitor gates the roof,
+   PFR Sentinel's web server, and the site location the dark check needs. #}
+{% import 'ssc/ui.html' as ui %}
+{% import 'ssc/form.html' as form %}
+<section class="plan-section" id="roof-safety">
+  <h2 class="ssc-section">Roof safety</h2>
+  <div class="plan-panel">
+    <p class="plan-inline__text">Automation images only while an ASCOM Alpaca safety monitor reads safe: PFR Sentinel's roof monitor, or any other.</p>
+    {% if safety.safe %}
+    <p class="ssc-notice" data-tone="neutral">{{ ui.icon("info", 20) }}<span><strong>Safe.</strong> {{ safety.url|e }}, device {{ safety.device }}.</span></p>
+    {% else %}
+    <p class="ssc-notice" data-tone="attention">{{ ui.icon("warning", 20) }}<span><strong>Unsafe.</strong> {{ safety.url|e }}, device {{ safety.device }}: {{ safety.detail|e }}</span></p>
+    {% endif %}
+    <form class="plan-inline" method="post" action="{{ root_path }}{{ page_root }}/safety/test">
+      <p class="plan-inline__text">Ask the safety monitor now</p>
+      {{ ui.button("Test", "secondary", "submit") }}
+    </form>
+    <form class="plan-inline" method="post" action="{{ root_path }}{{ page_root }}/safety/find">
+      <p class="plan-inline__text">Look for safety monitors on this computer and network</p>
+      {{ ui.button("Find safety monitors", "secondary", "submit") }}
+    </form>
+  </div>
+
+  {% if safety.found %}
+  <div class="plan-panel" id="roof-safety-found">
+    {% if safety.found|rejectattr("local")|list %}<p class="plan-warning">{{ ui.icon("warning", 16) }}<span>Some of these are on other computers. On a shared network, such as a hosting site, they can belong to someone else: use only the one that watches your roof.</span></p>{% endif %}
+    {% for m in safety.found %}
+    <form class="plan-inline" method="post" action="{{ root_path }}{{ page_root }}/safety/use">
+      <input type="hidden" name="url" value="{{ m.url|e }}">
+      <input type="hidden" name="device" value="{{ m.device }}">
+      <p class="plan-inline__text"><strong>{{ m.name|e }}</strong><br><span class="ssc-footnote">{% if m.local %}On this computer: {% endif %}{{ m.url|e }}, device {{ m.device }}{% if m.url == safety.url and m.device == safety.device %} (in use){% endif %}</span></p>
+      {{ ui.button("Use", "primary" if not (m.url == safety.url and m.device == safety.device) else "secondary", "submit") }}
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <form class="plan-panel" method="post" action="{{ root_path }}{{ page_root }}/safety/use">
+    {{ form.field("Safety monitor address", "roof-safety-url", "url", value=safety.url,
+        help="Its Alpaca server, for example http://127.0.0.1:11111 for PFR Sentinel on this computer. For a classic ASCOM driver on Windows, serve it with ASCOM Remote.",
+        attrs='required spellcheck="false" inputmode="url"') }}
+    {{ form.field("Device number", "roof-safety-device", "device", value=safety.device, type="number", attrs='min="0" step="1" required') }}
+    <div class="plan-actions">{{ ui.button("Save and test", "secondary", "submit") }}</div>
+  </form>
+
+  <form class="plan-panel" method="post" action="{{ root_path }}{{ page_root }}/safety/sentinel-web">
+    {{ form.field("PFR Sentinel web server (optional)", "roof-sentinel-web", "url", value=safety.sentinel_web,
+        help="Shows its pier camera on Tonight and adds its weather to dew control. Turn on Web Server output in PFR Sentinel; it listens on " ~ safety.sentinel_web_default ~ " by default. Leave blank if you don't use it.",
+        attrs='spellcheck="false" inputmode="url" placeholder="' ~ safety.sentinel_web_default ~ '"') }}
+    <div class="plan-actions">{{ ui.button("Save", "secondary", "submit") }}</div>
+  </form>
+
+  <div class="plan-panel">
+    {% if safety.site_set %}
+    <p class="plan-inline__text">Site: {{ "%.2f"|format(safety.lat) }}, {{ "%.2f"|format(safety.lon) }}. <a href="{{ root_path }}{{ config_url }}">Change it in Config</a>.</p>
+    {% else %}
+    <p class="plan-warning">{{ ui.icon("warning", 16) }}<span>No site location yet, so it never counts as dark. <a href="{{ root_path }}{{ config_url }}">Set latitude and longitude in Config</a>.</span></p>
+    {% endif %}
+  </div>
+</section>

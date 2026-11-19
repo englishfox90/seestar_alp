@@ -707,7 +707,7 @@ class PierStore:
         try:
             reply = requests.get(image_url, timeout=PIER_TIMEOUT_S)
             reply.raise_for_status()
-            age = requests.get(status_url, timeout=PIER_TIMEOUT_S).json().get("image_age_seconds")
+            age = _image_age(status_url)
             tag = reply.headers.get("ETag") or str(hash(reply.content))
             if self._image and self._image["tag"] == tag:
                 return True
@@ -738,6 +738,16 @@ class PierStore:
             "captured_at": image["captured_at"],
             "stale": self._clock() - image["captured_at"] > PIER_STALE_S,
         }
+
+
+def _image_age(status_url):
+    """Seconds since PFR Sentinel took the image. None for a camera with no status."""
+    if not status_url:
+        return None
+    try:
+        return requests.get(status_url, timeout=PIER_TIMEOUT_S).json().get("image_age_seconds")
+    except Exception:
+        return None
 
 
 _pier_store = PierStore()

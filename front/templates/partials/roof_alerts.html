@@ -41,7 +41,7 @@
     {% for kind in alerts.kinds %}
     {{ form.toggle(kind.label, "roof-alert-" ~ kind.key, "event_" ~ kind.key, checked=kind.on, help=kind.help) }}
     {% endfor %}
-    <p class="ssc-footnote">Alarms and lost contact with the scope always post. Roof open and close stay with PFR Sentinel.</p>
+    <p class="ssc-footnote">Alarms and lost contact with the scope always post. Roof open and close aren't posted here; leave those to your safety monitor's alerts.</p>
     <div class="plan-actions">{{ ui.button("Save choices", "secondary", "submit") }}</div>
   </form>
 </section>
