@@ -91,8 +91,12 @@ class RoofAutomation:
         framing_estimates=None,
         night_history=None,
         alerts=None,
+        stacks_folder=None,
     ):
         self._load_settings = load_settings
+        # -> the MyWorks folder's state, checked off this thread (roof.alerts.FolderWatch).
+        # None looks at the folder directly.
+        self._stacks_folder = stacks_folder
         self._read_safety = read_safety or (
             lambda s: sentinel.read(s.sentinel_url, s.safety_device)
         )
@@ -1110,7 +1114,8 @@ class RoofAutomation:
             return
         self._coverage_at = now
         try:
-            judged = self._session_log.review(s.discord_image_dir, now)
+            folder = self._stacks_folder() if self._stacks_folder else None
+            judged = self._session_log.review(s.discord_image_dir, now, folder=folder)
             if judged:
                 self._log(f"judged {judged} framed run(s) by their saved image")
         except Exception as e:
@@ -1375,6 +1380,7 @@ def get_automation() -> RoofAutomation:
         targets = TargetQueue(os.path.join(base, "roof_targets.json"))
         global _target_queue
         _target_queue = targets
+        stacks_folder = roof_alerts.FolderWatch(lambda: roof_config.load().discord_image_dir)
         alerts = roof_alerts.NightAlerts(
             roof_alerts.DiscordSender(
                 lambda: roof_alerts.read_webhook(roof_alerts.webhook_path())
@@ -1389,6 +1395,7 @@ def get_automation() -> RoofAutomation:
             report=lambda state, now, health: night_brief.morning_report(state, now, health),
             goal_for=lambda name: _goal_text(targets, log, name),
             limits=lambda: _alert_limits(roof_config.load()),
+            folder=stacks_folder,
         )
         focus.focus_log(roof_config.load().device_num).on_finish = alerts.autofocus
         _instance = RoofAutomation(
@@ -1397,6 +1404,7 @@ def get_automation() -> RoofAutomation:
             session_log=log,
             night_history=NightHistory(os.path.join(base, "roof_night_history.json")),
             alerts=alerts,
+            stacks_folder=stacks_folder.state,
             framing_estimates=FramingEstimates(os.path.join(base, "roof_framing.json")),
             plan_targets=lambda s, now, exclude=(): planner.write_night_plan(
                 s,

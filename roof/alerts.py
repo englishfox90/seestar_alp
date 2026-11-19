@@ -55,6 +55,7 @@ HEALTH_FRESH_S = 600  # a footer only shows readings this recent
 DEW_WARN_S = 15 * 60
 BRIEFING_LATE_S = 3600  # after dark, a briefing this late is still worth posting
 NIGHT_ALARMS_KEPT = 20
+FOLDER_CHECK_S = 300  # how often to look whether the MyWorks folder is connected
 FIELDS_MAX = 25  # Discord's limit per embed
 LOST_CONTACT_S = 120
 REPEAT_ALARM_S = 900
@@ -75,6 +76,10 @@ KINDS = {
     "temperature": ("Overheating", "When the scope or its battery reports overheating"),
     "storage": ("Storage low", "When the scope's free space falls below your limit"),
     "dew": ("Dew point reached", "Air at the dew point for 15 minutes with the heater on"),
+    "stacks_folder": (
+        "Stacks folder not connected",
+        "The scope's MyWorks folder is missing or empty, so stack pictures and framing checks wait",
+    ),
 }
 ALWAYS = "always"
 
@@ -201,6 +206,68 @@ def payload(title: str, text: str, level: str, when: float, fields=None, footer=
     }
 
 
+def folder_state(directory: str) -> str:
+    """Whether the scope's MyWorks folder can be read: "off" when none is set,
+    "missing" when it isn't there, "empty" when it's there with nothing in it, else "ok".
+
+    The folder is the scope's share mounted on this Mac. Unmounted, its path is gone or
+    an empty mount point, and either means the share isn't connected: on 2026-11-18 it
+    was gone all night, and every stack picture and framing check quietly went without.
+    """
+    if not directory:
+        return "off"
+    try:
+        names = os.listdir(os.path.expanduser(directory))
+    except OSError:
+        return "missing"
+    return "ok" if any(not name.startswith(".") for name in names) else "empty"
+
+
+class FolderWatch:
+    """The MyWorks folder's state, checked on a thread of its own at most every
+    ``every_s``, so a share that stops answering can't hold up the automation loop.
+
+    ``state()`` returns at once with the last answer: "unknown" until the first check.
+    """
+
+    def __init__(self, directory, every_s=FOLDER_CHECK_S, clock=time.time, check=folder_state, run=None):
+        self._directory = directory  # -> the configured folder, or ""
+        self._every_s = every_s
+        self._clock = clock
+        self._check = check
+        self._run = run or (
+            lambda fn: threading.Thread(target=fn, name="StacksFolderCheck", daemon=True).start()
+        )
+        self._lock = threading.Lock()
+        self._state = "unknown"
+        self._checked_for = None
+        self._checked_at = None
+        self._checking = False
+
+    def state(self) -> str:
+        directory = self._directory()
+        now = self._clock()
+        with self._lock:
+            if directory != self._checked_for:
+                self._state = "off" if not directory else "unknown"
+                self._checked_for, self._checked_at = directory, None
+            due = self._checked_at is None or now - self._checked_at >= self._every_s
+            if directory and due and not self._checking:
+                self._checking = True
+                self._run(lambda: self._refresh(directory))
+            return self._state
+
+    def _refresh(self, directory):
+        try:
+            state = self._check(directory)
+        except Exception:
+            state = "missing"
+        with self._lock:
+            self._checking = False
+            if directory == self._checked_for:
+                self._state, self._checked_at = state, self._clock()
+
+
 def find_stack(directory: str, name: str, since: float) -> str | None:
     """The newest saved stack of a target, if it's from this run. None until it appears.
 
@@ -208,6 +275,7 @@ def find_stack(directory: str, name: str, since: float) -> str | None:
     """
     if not directory or not name or os.path.basename(name) != name:
         return None
+    directory = os.path.expanduser(directory)
     found = []
     for folder in (name, f"{name}_mosaic"):
         for path in glob.glob(os.path.join(glob.escape(directory), glob.escape(folder), "Stacked_*.jpg")):
@@ -473,10 +541,14 @@ class NightAlerts:
         report=None,
         goal_for=None,
         limits=None,
+        folder=None,
     ):
         self._sender = sender
         self._muted = muted or (lambda: ())
         self._image_dir = image_dir or (lambda: "")
+        # -> the MyWorks folder's state; see FolderWatch. Checked off this thread.
+        self._folder = folder or FolderWatch(self._image_dir)
+        self._folder_sent = False
         # Builders for the two long posts: (night, now, health) -> message or None, and
         # (night state, now, health) -> message or None. See roof.night_brief.
         self._briefing = briefing
@@ -649,6 +721,7 @@ class NightAlerts:
                 self._save()
             if self._session is not None:
                 self._watch_contact(state, now)
+                self._watch_folder()
                 self._follow_target(state, stacking, position)
             self._watch_the_dark(dark, phase, note, now)
 
@@ -745,6 +818,9 @@ class NightAlerts:
         directory = self._image_dir()
         if not target.frames or self._dry_run or not directory or "stack_image" in self._muted():
             return
+        if self._folder.state() in ("missing", "empty"):
+            self._logger.info("Discord: no stack picture for %s: the MyWorks folder isn't connected", target.name)
+            return
         self._sender.send_photo(
             f"Stacked: {target.name}",
             f"{target.summary()}.",
@@ -822,6 +898,7 @@ class NightAlerts:
         if self._night["night"] != key:
             self._night = self._blank_night(key)
             self._last_note = ""
+            self._folder_sent = False
             self._save()
 
     # ---- plumbing ---------------------------------------------------------------
@@ -923,6 +1000,26 @@ class NightAlerts:
             )
         elif free is not None and free >= floor * 1.2:
             self._storage_sent = False
+
+    def _watch_folder(self):
+        """Once a night, while imaging, say so if the MyWorks folder isn't connected."""
+        state = self._folder.state()
+        if state in ("missing", "empty") and not self._folder_sent:
+            self._folder_sent = True
+            where = self._image_dir()
+            how = "isn't there" if state == "missing" else "is empty"
+            self._logger.warning("the MyWorks folder %s: %s", how, where)
+            self._send(
+                "Stacks folder not connected",
+                f"{where} {how}, so the scope's share probably isn't mounted on this Mac. "
+                "Stacked cards go without pictures, and framed runs wait to be judged "
+                "until it's back.",
+                "warning",
+                "stacks_folder",
+            )
+        elif state == "ok" and self._folder_sent:
+            self._folder_sent = False
+            self._logger.info("the MyWorks folder is connected again")
 
     def dew(self, margin_c, heater_on):
         """Each tick of a session the automation runs, with the dew margin it used."""

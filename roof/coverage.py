@@ -44,6 +44,7 @@ def run_stack(directory: str, name: str, ended: float) -> str | None:
     half an hour, so a later run's stack of the same target isn't taken for it."""
     if not directory or not name or os.path.basename(name) != name:
         return None
+    directory = os.path.expanduser(directory)
     found = []
     for folder in (name, f"{name}_mosaic"):
         for path in glob.glob(os.path.join(glob.escape(directory), glob.escape(folder), "Stacked_*.jpg")):

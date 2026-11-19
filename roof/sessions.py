@@ -19,8 +19,13 @@ from dataclasses import dataclass
 SAVE_EVERY_S = 60
 # A framed run is judged on its saved image once it has ended this long ago, to let the
 # scope write it and the share sync it. After the give-up time it's judged on length.
+# The give-up clock only runs while the MyWorks folder is connected: with the share
+# unmounted, nothing could appear, so runs wait for it to come back.
 COVERAGE_WAIT_S = 5 * 60
 COVERAGE_GIVE_UP_S = 6 * 3600
+# A run judged on length is looked at again for this long, in case its image turns up
+# later (the share mounted after the give-up time, say).
+COVERAGE_RECHECK_S = 3 * 86400
 # Without an image to judge, a framed run counts once it has run this long.
 UNJUDGED_MIN_S = 3600
 SAME_RUN_TOLERANCE_S = 300
@@ -186,24 +191,41 @@ class SessionLog:
         except OSError:
             pass  # retried on the next tick; never let this reach the automation loop
 
-    def review(self, directory: str, now: float, find=None, measure=None) -> int:
+    def review(self, directory: str, now: float, find=None, measure=None, folder=None) -> int:
         """Judge ended framed runs by their saved image. Returns how many it judged.
 
-        Done once per run, after it ends. Slow only the first time it meets old runs.
+        Done once per run, after it ends, and again for a run judged on length if its
+        image turns up within COVERAGE_RECHECK_S. Slow only the first time it meets old
+        runs. ``folder`` is the folder's state (see roof.alerts.folder_state); while it's
+        "missing" or "empty" no run is given up on.
         """
-        from roof import coverage
+        from roof import alerts, coverage
 
         find = find or coverage.run_stack
         measure = measure or coverage.black_share
+        if folder is None:
+            folder = alerts.folder_state(directory)
+        if folder in ("missing", "empty", "unknown"):
+            return 0  # the share isn't connected: wait for it rather than give up
         judged = 0
         with self._lock:
             for row in self._rows:
-                if row.get("scale", 1.0) <= 1.0 or "covered" in row:
+                if row.get("scale", 1.0) <= 1.0:
                     continue
                 ended = row.get("last_seen", 0)
+                again = "covered" in row
+                if again and (
+                    row["covered"] is not None
+                    or "stack" in row
+                    or not directory
+                    or now - ended >= COVERAGE_RECHECK_S
+                ):
+                    continue
                 if now - ended < COVERAGE_WAIT_S:
                     continue
                 path = find(directory, row.get("name") or row["target"], ended) if directory else None
+                if again and not path:
+                    continue
                 if path:
                     share = measure(path)
                     row["black"] = round(share, 3)

@@ -457,7 +457,7 @@ def _ended_run(log, lapse, stacked=74, exposure=30.0, at=10000):
 def test_a_covered_framing_counts_however_short(tmp_path):
     log = SessionLog(str(tmp_path / "s.json"))
     _ended_run(log, lapse=1200)
-    judged = log.review("share", 10000 + 600, find=lambda d, n, e: "/x/Stacked_74.jpg", measure=lambda p: 0.07)
+    judged = log.review("share", 10000 + 600, folder="ok", find=lambda d, n, e: "/x/Stacked_74.jpg", measure=lambda p: 0.07)
     assert judged == 1
     progress = log.progress(framed())
     assert progress.counted_hours == pytest.approx(74 * 30 / 3600) and progress.partial_hours == 0
@@ -467,7 +467,7 @@ def test_a_covered_framing_counts_however_short(tmp_path):
 def test_a_framing_with_holes_does_not_count_however_long(tmp_path):
     log = SessionLog(str(tmp_path / "s.json"))
     _ended_run(log, lapse=5 * 3600)
-    log.review("share", 10000 + 600, find=lambda d, n, e: "/x/s.jpg", measure=lambda p: 0.83)
+    log.review("share", 10000 + 600, folder="ok", find=lambda d, n, e: "/x/s.jpg", measure=lambda p: 0.83)
     progress = log.progress(framed())
     assert progress.counted_hours == 0 and progress.partial_hours > 0
 
@@ -479,10 +479,10 @@ def test_review_waits_for_the_file_then_falls_back_to_length(tmp_path):
     _ended_run(log, lapse=2 * 3600)
     ended = log.rows()[0]["last_seen"]
     none = lambda d, n, e: None  # noqa: E731
-    assert log.review("share", ended + COVERAGE_WAIT_S - 1, find=none) == 0  # too soon
-    assert log.review("share", ended + COVERAGE_WAIT_S, find=none) == 0  # not saved yet
+    assert log.review("share", ended + COVERAGE_WAIT_S - 1, folder="ok", find=none) == 0  # too soon
+    assert log.review("share", ended + COVERAGE_WAIT_S, folder="ok", find=none) == 0  # not saved yet
     assert "covered" not in log.rows()[0]
-    assert log.review("share", ended + COVERAGE_GIVE_UP_S, find=none) == 1
+    assert log.review("share", ended + COVERAGE_GIVE_UP_S, folder="ok", find=none) == 1
     assert log.rows()[0]["covered"] is None
     assert log.progress(framed()).counted_hours > 0  # two hours, so its length counts
 
@@ -493,8 +493,8 @@ def test_review_leaves_single_frames_and_judged_runs_alone(tmp_path):
     log.observe(ScopeState(), "n", 1010)
     _ended_run(log, lapse=1200, at=20000)
     seen = []
-    log.review("share", 30000, find=lambda d, n, e: seen.append(n) or "/x/s.jpg", measure=lambda p: 0.1)
-    log.review("share", 40000, find=lambda d, n, e: seen.append(n) or "/x/s.jpg", measure=lambda p: 0.1)
+    log.review("share", 30000, folder="ok", find=lambda d, n, e: seen.append(n) or "/x/s.jpg", measure=lambda p: 0.1)
+    log.review("share", 40000, folder="ok", find=lambda d, n, e: seen.append(n) or "/x/s.jpg", measure=lambda p: 0.1)
     assert len(seen) == 1
 
 
@@ -1142,7 +1142,7 @@ def test_goal_text_leaves_out_framed_runs_with_holes(tmp_path):
     log = SessionLog(str(tmp_path / "s.json"))
     log.observe(stacking(stacked=180, lapse=3600, exposure=20, scale=1.7), "n", 10000)
     log.observe(ScopeState(), "n", 10010)
-    log.review("share", 11000, find=lambda d, n, e: "/x/s.jpg", measure=lambda p: 0.8)
+    log.review("share", 11000, folder="ok", find=lambda d, n, e: "/x/s.jpg", measure=lambda p: 0.8)
     assert dash.goal_text(framed(goal_hours=15.0), log) == "0.0 of 15 h, plus 1.0 h not counted, framing not covered"
     assert dash.goal_text(framed(goal_hours=15.0, prior_hours=2.0), log).startswith("2.0 of 15 h")
 
