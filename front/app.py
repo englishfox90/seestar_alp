@@ -45,6 +45,7 @@ from device.config import Config  # type: ignore
 from device.log import init_logging, get_logger  # type: ignore
 from device.version import Version  # type: ignore
 from device import horizon, telescope
+from front import object_lookup
 import threading
 import pydash
 
@@ -114,11 +115,6 @@ def get_platform():
 
 
 base_url = "http://" + get_listening_ip() + ":" + str(Config.port)
-# Tried in order: the CDS host stopped answering from the observatory on 2026-11-05.
-simbad_urls = (
-    "https://simbad.cds.unistra.fr/simbad/sim-id?output.format=ASCII&obj.bibsel=off&Ident=",
-    "https://simbad.harvard.edu/simbad/sim-id?output.format=ASCII&obj.bibsel=off&Ident=",
-)
 messages: list[str] = []
 online = None
 client_master = True
@@ -5082,68 +5078,15 @@ class SystemServicesResource:
 class SimbadResource:
     @staticmethod
     def on_get(req, resp, telescope_id=1):
-        objName = urllib.parse.quote_plus(
-            req.get_param("name")
-        )  # get the name to lookup from the request
-        r = None
-        for simbad_url in simbad_urls:
-            try:
-                r = requests.get(simbad_url + objName, timeout=5)
-                break
-            except Exception:
-                continue
-        if r is None:
-            resp.status = falcon.HTTP_500
-            resp.content_type = "application/text"
-            resp.text = "Request had communications error."
-            return
-
-        html_content = r.text
-
-        # Find the start of the RA/Dec (J2000.0) information
-        start_index = html_content.find("Coordinates(ICRS,ep=J2000,eq=2000):")
-
-        # Find the end of the RA/Dec (J2000.0) information (end of the line)
-        end_index = html_content.find(
-            "(", start_index + 13
-        )  # "Coordinates(IC".count)   # skip past the first (
-
-        ra_dec_j2000 = html_content[start_index:end_index]
-
-        # Clean up the extracted information
-        ra_dec_j2000 = ra_dec_j2000.replace(
-            "Coordinates(ICRS,ep=J2000,eq=2000):", ""
-        ).strip()
-        elements = re.split(r"\s+", ra_dec_j2000.strip())
-
-        if len(elements) < 6:
+        # SIMBAD first, then Sesame's mirrors; see front/object_lookup.py.
+        found = object_lookup.lookup(req.get_param("name") or "")
+        resp.content_type = "application/text"
+        if found is None:
             resp.status = falcon.HTTP_404
-            resp.content_type = "application/text"
             resp.text = "Object not found"
             return
-
-        elements[2] = round(float(elements[2]), 1)
-        elements[5] = round(float(elements[5]), 1)
-        ra_dec_j2000 = f"{elements[0]}h{elements[1]}m{elements[2]}s {elements[3]}d{elements[4]}m{elements[5]}s"
-
-        # see if we should recommand the LP Filter
-        substrings = ["---  ISM  ---", "---  HII  ---", "---  SNR  ---", "---  PN  ---"]
-
-        lpFilter = False
-        for substring in substrings:
-            if substring in html_content:
-                lpFilter = True
-                break
-        lpStr = " off"
-        if lpFilter:
-            lpStr = " on"
-
-        ra_dec_j2000 += lpStr
-
         resp.status = falcon.HTTP_200
-        resp.content_type = "application/text"
-        resp.text = ra_dec_j2000
-        return
+        resp.text = found
 
 
 # convert decimal RA into HMS format
